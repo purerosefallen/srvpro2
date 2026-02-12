@@ -68,6 +68,7 @@ export class WsServer {
   private handleConnection(ws: WebSocket, req: IncomingMessage): void {
     const client = new WsClient(this.ctx, ws, req);
     if (this.ctx.get(IpResolver).setClientIp(client, client.xffIp())) return;
+    client.hostname = req.headers.host?.split(':')[0] || '';
     const handler = this.ctx.get(ClientHandler);
     handler.handleClient(client).catch((err) => {
       this.logger.error({ err }, 'Error handling client');

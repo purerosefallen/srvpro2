@@ -35,7 +35,7 @@ export abstract class Client {
     this.disconnect$ = merge(
       this.disconnectSubject.asObservable(),
       this._onDisconnect(),
-    ).pipe(take(1));
+    ).pipe(take(1), share());
     this.receive$ = this._receive().pipe(
       YGOProProtoPipe(YGOProCtos, {
         onError: (error) => {
@@ -108,7 +108,10 @@ export abstract class Client {
     return this.ip || this.physicalIp() || 'unknown';
   }
 
+  hostname = '';
   name = '';
   vpass = '';
   name_vpass = '';
+
+  established = false;
 }
