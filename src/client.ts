@@ -59,6 +59,7 @@ export abstract class Client {
       takeUntil(this.disconnect$),
       share(),
     );
+    return this;
   }
 
   disconnect() {

@@ -36,10 +36,8 @@ export class ClientHandler {
   private logger = this.ctx.createLogger('ClientHandler');
 
   async handleClient(client: Client): Promise<void> {
-    client.init();
     try {
-      client.init();
-      client.receive$.subscribe(async (msg) => {
+      client.init().receive$.subscribe(async (msg) => {
         try {
           await this.ctx.dispatch(msg, client);
         } catch (e) {
