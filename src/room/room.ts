@@ -12,6 +12,7 @@ import {
   YGOProCtosHsToDuelist,
   YGOProCtosKick,
   YGOProCtosHsNotReady,
+  YGOProCtosHsStart,
   YGOProStocDeckCount,
   YGOProStocDeckCount_DeckInfo,
   YGOProStocSelectTp,
@@ -22,6 +23,7 @@ import {
   YGOProCtosUpdateDeck,
   OcgcoreCommonConstants,
   YGOProStocErrorMsg,
+  ErrorMessageType,
   YGOProStocGameMsg,
   YGOProStocReplay,
   YGOProStocDuelEnd,
@@ -29,6 +31,9 @@ import {
   YGOProStocWaitingSide,
   YGOProCtosTpResult,
   TurnPlayerResult,
+  YGOProCtosHandResult,
+  YGOProStocHandResult,
+  HandResult,
 } from 'ygopro-msg-encode';
 import { DefaultHostInfoProvider } from './default-hostinfo-provder';
 import { CardReaderFinalized } from 'koishipro-core.js';
@@ -50,7 +55,6 @@ import { OnRoomGameStart } from './room-event/on-room-game-start';
 import YGOProDeck from 'ygopro-deck-encode';
 import { checkDeck, checkChangeSide } from '../utility/check-deck';
 import { DuelRecord } from './duel-record';
-import { RoomEvent } from './room-event/room-event';
 import { generateSeed } from '../utility/generate-seed';
 import { OnRoomDuelStart } from './room-event/on-room-duel-start';
 
@@ -62,6 +66,8 @@ export class Room {
     public name: string,
     private partialHostinfo: Partial<HostInfo> = {},
   ) {}
+
+  private logger = this.ctx.createLogger(`Room:${this.name}`);
 
   hostinfo = this.ctx
     .get(() => DefaultHostInfoProvider)
@@ -80,7 +86,8 @@ export class Room {
   get opt() {
     const DUEL_PSEUDO_SHUFFLE = 16;
     const DUEL_TAG_MODE = 32;
-    let opt = 0;
+    // duel_rule is stored in high 16 bits
+    let opt = this.hostinfo.duel_rule << 16;
     if (this.hostinfo.no_shuffle_deck) {
       opt |= DUEL_PSEUDO_SHUFFLE;
     }
@@ -305,11 +312,11 @@ export class Room {
 
   async sendReplays(client: Client) {
     for (let i = 0; i < this.duelRecords.length; i++) {
+      const duelRecord = this.duelRecords[i];
       await client.sendChat(
         `#{replay_hint_part1}${i + 1}#{replay_hint_part2}`,
         ChatColor.BABYBLUE,
       );
-      const duelRecord = this.duelRecords[i];
       await client.send(
         new YGOProStocReplay().fromPartial({
           replay: duelRecord.toYrp(this),
@@ -390,7 +397,7 @@ export class Room {
 
   @RoomMethod()
   private async onDisconnect(client: Client, _msg: YGOProCtosDisconnect) {
-    if (this.duelStage === DuelStage.End || this.finalizing) {
+    if (this.finalizing) {
       return;
     }
     const wasObserver = client.pos === NetPlayerType.OBSERVER;
@@ -571,23 +578,15 @@ export class Room {
     return this.kick(targetPlayer);
   }
 
-  @RoomMethod()
+  @RoomMethod({ allowInDuelStages: [DuelStage.Begin, DuelStage.Siding] })
   private async onUpdateDeck(client: Client, msg: YGOProCtosUpdateDeck) {
     // 只有玩家可以更新卡组
     if (client.pos === NetPlayerType.OBSERVER) {
       return;
     }
 
-    // 在 Siding 阶段已经准备好的玩家不能再更新
-    if (this.duelStage === DuelStage.Siding && client.deck) {
-      return;
-    }
-
-    // 不在 Begin 或 Siding 阶段不能更新卡组
-    if (
-      this.duelStage !== DuelStage.Begin &&
-      this.duelStage !== DuelStage.Siding
-    ) {
+    // 已经 ready（有 deck）的玩家不能再更新
+    if (client.deck) {
       return;
     }
 
@@ -609,13 +608,11 @@ export class Room {
       }
     }
 
-    // Check deck if needed
-    if (!this.hostinfo.no_check_deck) {
-      let deckError;
-
-      if (this.duelStage === DuelStage.Begin) {
-        // First duel: check deck validity
-        deckError = checkDeck(deck, this.cardReader, {
+    // Check deck based on stage
+    if (this.duelStage === DuelStage.Begin) {
+      // Begin stage: check deck validity (lflist, etc.) if no_check_deck is false
+      if (!this.hostinfo.no_check_deck) {
+        const deckError = checkDeck(deck, this.cardReader, {
           ot: this.hostinfo.rule,
           lflist: this.lflist,
           minMain: parseInt(this.ctx.getConfig('DECK_MAIN_MIN', '40')),
@@ -625,30 +622,42 @@ export class Room {
           maxCopies: parseInt(this.ctx.getConfig('DECK_MAX_COPIES', '3')),
         });
 
+        this.logger.debug(
+          {
+            deckError,
+            name: client.name,
+            deckErrorPayload: deckError?.toPayload(),
+          },
+          'Deck check result',
+        );
+
         if (deckError) {
-          client.send(
+          // 先发送 PlayerChange NotReady 给自己 (client.deck 未设置，自动为 NOTREADY)
+          await client.send(client.prepareChangePacket());
+          // 然后发送错误消息给自己
+          await client.send(
             new YGOProStocErrorMsg().fromPartial({
-              msg: 1, // ERRMSG_DECKERROR
+              msg: ErrorMessageType.DECKERROR,
               code: deckError.toPayload(),
             }),
           );
           return;
         }
-      } else if (this.duelStage === DuelStage.Siding) {
-        // Side deck change: check if cards match original deck
-        if (!client.startDeck) {
-          return;
-        }
+      }
+    } else if (this.duelStage === DuelStage.Siding) {
+      // Siding stage: ALWAYS check if cards match original deck (无条件检查)
+      if (!client.startDeck) {
+        return;
+      }
 
-        if (!checkChangeSide(client.startDeck, deck)) {
-          client.send(
-            new YGOProStocErrorMsg().fromPartial({
-              msg: 1, // ERRMSG_DECKERROR
-              code: 0,
-            }),
-          );
-          return;
-        }
+      if (!checkChangeSide(client.startDeck, deck)) {
+        await client.send(
+          new YGOProStocErrorMsg().fromPartial({
+            msg: ErrorMessageType.SIDEERROR,
+            code: 0,
+          }),
+        );
+        return;
       }
     }
 
@@ -658,7 +667,10 @@ export class Room {
     // In Begin stage, also save as startDeck for side deck checking
     if (this.duelStage === DuelStage.Begin) {
       client.startDeck = deck;
-      // TODO: In Begin stage, may need to send PlayerChange or auto-ready
+
+      // Auto-ready: send PlayerChange READY to all players (client.deck 已设置，自动为 READY)
+      const changeMsg = client.prepareChangePacket();
+      this.allPlayers.forEach((p) => p.send(changeMsg));
     } else if (this.duelStage === DuelStage.Siding) {
       // In Siding stage, send DUEL_START to the player who submitted deck
       client.send(new YGOProStocDuelStart());
@@ -673,13 +685,8 @@ export class Room {
     }
   }
 
-  @RoomMethod()
+  @RoomMethod({ allowInDuelStages: DuelStage.Begin })
   private async onUnready(client: Client, _msg: YGOProCtosHsNotReady) {
-    // 游戏已经开始，不允许取消准备
-    if (this.duelStage !== DuelStage.Begin) {
-      return;
-    }
-
     // 只有玩家可以取消准备
     if (client.pos === NetPlayerType.OBSERVER) {
       return;
@@ -689,9 +696,26 @@ export class Room {
     client.deck = undefined;
     client.startDeck = undefined;
 
-    // 发送 PlayerChange 给所有人
-    const changeMsg = client.prepareChangePacket(PlayerChangeState.NOTREADY);
+    // 发送 PlayerChange 给所有人 (client.deck 已清除，自动为 NOTREADY)
+    const changeMsg = client.prepareChangePacket();
     this.allPlayers.forEach((p) => p.send(changeMsg));
+  }
+
+  @RoomMethod({ allowInDuelStages: DuelStage.Begin })
+  private async onHsStart(client: Client, _msg: YGOProCtosHsStart) {
+    // 只有房主可以开始游戏
+    if (!client.isHost) {
+      return;
+    }
+
+    // 检查所有玩家是否都 ready
+    const allReady = this.playingPlayers.every((p) => p.deck);
+    if (!allReady) {
+      return;
+    }
+
+    // 开始游戏（startGame 会自动转到 Finger 阶段）
+    await this.startGame();
   }
 
   @RoomMethod()
@@ -704,6 +728,7 @@ export class Room {
   }
 
   firstgoPlayer?: Client;
+  private handResult = [0, 0];
 
   private async toFirstGo(firstgoPos: number) {
     this.firstgoPlayer = this.getDuelPosPlayers(firstgoPos)[0];
@@ -713,14 +738,80 @@ export class Room {
 
   private async toFinger() {
     this.duelStage = DuelStage.Finger;
+    // 只有每方的第一个玩家猜拳
     const fingerPlayers = [0, 1].map((p) => this.getDuelPosPlayers(p)[0]);
     fingerPlayers.forEach((p) => {
       p.send(new YGOProStocSelectHand());
     });
   }
 
+  @RoomMethod({ allowInDuelStages: DuelStage.Finger })
+  private async onHandResult(client: Client, msg: YGOProCtosHandResult) {
+    // 检查 res 是否有效
+    if (msg.res < HandResult.ROCK || msg.res > HandResult.PAPER) {
+      return;
+    }
+
+    // 获取客户端的对战位置（0 或 1）
+    const duelPos = this.getDuelPos(client);
+    if (duelPos < 0 || duelPos > 1) {
+      return;
+    }
+
+    // 保存猜拳结果
+    this.handResult[duelPos] = msg.res;
+
+    // 检查是否两个玩家都已出拳
+    if (!this.handResult[0] || !this.handResult[1]) {
+      return;
+    }
+
+    // 发送猜拳结果给玩家 0 及其队友（自己的结果在前）
+    const result0 = new YGOProStocHandResult().fromPartial({
+      res1: this.handResult[0],
+      res2: this.handResult[1],
+    });
+    this.getDuelPosPlayers(0).forEach((p) => p.send(result0));
+    // 也发送给观众（观众看到的是玩家0的视角）
+    this.watchers.forEach((w) => w.send(result0));
+
+    // 发送猜拳结果给玩家 1 及其队友（自己的结果在前）
+    const result1 = new YGOProStocHandResult().fromPartial({
+      res1: this.handResult[1],
+      res2: this.handResult[0],
+    });
+    this.getDuelPosPlayers(1).forEach((p) => p.send(result1));
+
+    // 如果平局，重新猜拳
+    if (this.handResult[0] === this.handResult[1]) {
+      this.handResult = [0, 0];
+      await this.toFinger();
+      return;
+    }
+
+    // 判断谁赢了（按照 C++ 的逻辑）
+    let winnerPos: number;
+    if (
+      (this.handResult[0] === 1 && this.handResult[1] === 2) ||
+      (this.handResult[0] === 2 && this.handResult[1] === 3) ||
+      (this.handResult[0] === 3 && this.handResult[1] === 1)
+    ) {
+      // 玩家 1 赢了，玩家 1 选先后攻
+      winnerPos = 1;
+    } else {
+      // 玩家 0 赢了，玩家 0 选先后攻
+      winnerPos = 0;
+    }
+
+    // 清空猜拳结果
+    this.handResult = [0, 0];
+
+    // 进入先后攻选择阶段
+    await this.toFirstGo(winnerPos);
+  }
+
   async startGame(firstgoPos?: number) {
-    if (![DuelStage.Finger, DuelStage.Siding].includes(this.duelStage)) {
+    if (![DuelStage.Begin, DuelStage.Siding].includes(this.duelStage)) {
       return false;
     }
     if (this.duelRecords.length === 0) {

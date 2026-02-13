@@ -1,10 +1,12 @@
 import 'reflect-metadata';
 import { Context } from '../app';
 import { getSpecificFields } from '../utility/metadata';
+import { RoomMethodOptions } from '../utility/decorators';
 import { Room } from './room';
 import { Client } from '../client/client';
 import { YGOProCtosBase } from 'ygopro-msg-encode';
 import { RoomManager } from './room-manager';
+import { makeArray } from 'nfkit';
 
 export class RoomEventRegister {
   private logger = this.ctx.createLogger('RoomEventRegister');
@@ -15,7 +17,7 @@ export class RoomEventRegister {
 
   private registerRoomEvents() {
     const roomMethods = getSpecificFields('roomMethod', Room);
-    for (const { key: method } of roomMethods) {
+    for (const { key: method, metadata } of roomMethods) {
       // 获取方法的参数类型
       const paramTypes: any[] =
         Reflect.getMetadata('design:paramtypes', Room.prototype, method) || [];
@@ -48,6 +50,9 @@ export class RoomEventRegister {
         continue;
       }
 
+      // 获取方法选项
+      const options: RoomMethodOptions = metadata;
+
       // 注册 middleware
       this.ctx.middleware(ctosParamType, async (msg, client, next) => {
         // 如果 client 没有关联的 room，直接跳过
@@ -60,6 +65,14 @@ export class RoomEventRegister {
         const room = roomManager.findByName(client.roomName);
         if (!room || room.finalizing) {
           return next();
+        }
+
+        // 检查 DuelStage 限制
+        if (options?.allowInDuelStages) {
+          const allowedStages = makeArray(options.allowInDuelStages);
+          if (!allowedStages.includes(room.duelStage)) {
+            return next();
+          }
         }
 
         // 构造参数数组

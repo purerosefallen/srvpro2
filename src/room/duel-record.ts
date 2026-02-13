@@ -14,6 +14,7 @@ export class DuelRecord {
     public seed: number[],
     public players: { name: string; deck: YGOProDeck }[],
   ) {}
+  date = new Date();
   winPosition?: number;
   responses: Buffer[] = [];
 
@@ -29,6 +30,8 @@ export class DuelRecord {
       header.flag |= REPLAY_TAG;
     }
     header.seedSequence = this.seed;
+    // Set start_time (stored in hash field) as Unix timestamp in seconds
+    header.hash = Math.floor(this.date.getTime() / 1000);
 
     // Build YGOProYrp object
     // Note: players array is already swapped

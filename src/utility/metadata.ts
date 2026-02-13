@@ -1,7 +1,8 @@
 import { MetadataSetter, Reflector } from 'typed-reflector';
+import type { RoomMethodOptions } from './decorators';
 
 interface MetadataMap {
-  roomMethod: boolean;
+  roomMethod: RoomMethodOptions;
 }
 
 type MetadataArrayMap = {
