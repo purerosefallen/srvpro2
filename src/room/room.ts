@@ -47,6 +47,7 @@ import {
   YGOProMsgUpdateCard,
   CardQuery,
   YGOProCtosResponse,
+  YGOProCtosSurrender,
 } from 'ygopro-msg-encode';
 import { DefaultHostInfoProvider } from './default-hostinfo-provder';
 import {
@@ -379,6 +380,7 @@ export class Room {
 
   async win(winMsg: Partial<YGOProMsgWin>, forceWinMatch = false) {
     await this.ocgcore?.dispose();
+    this.ocgcore = undefined;
     if (this.duelStage === DuelStage.Siding) {
       this.playingPlayers
         .filter((p) => !p.deck)
@@ -455,7 +457,7 @@ export class Room {
     } else {
       this.score[this.getDuelPos(client)] = -9;
       await this.win(
-        { player: this.getIngameDuelPos(client), type: 0x4 },
+        { player: 1 - this.getIngameDuelPos(client), type: 0x4 },
         true,
       );
     }
@@ -1190,6 +1192,13 @@ export class Room {
   }
 
   localGameMsgDispatcher = new ProtoMiddlewareDispatcher()
+    .middleware(YGOProMsgBase, async (message, next) => {
+      this.logger.debug(
+        { msgName: message.constructor.name },
+        'Received game message',
+      );
+      return next();
+    })
     .middleware(YGOProMsgNewTurn, async (message, next) => {
       // check new turn
       const player = message.player;
@@ -1255,6 +1264,7 @@ export class Room {
             );
           }
         }
+
         await this.handleGameMsg(message);
         if (message instanceof YGOProMsgWin) {
           return this.win(message);
@@ -1282,5 +1292,19 @@ export class Room {
     this.responsePos = undefined;
     await this.ocgcore.setResponse(msg.response);
     return this.advance();
+  }
+
+  @RoomMethod({
+    allowInDuelStages: DuelStage.Dueling,
+  })
+  private async onSurrender(client: Client, _msg: YGOProCtosSurrender) {
+    if (client.pos === NetPlayerType.OBSERVER) {
+      return;
+    }
+    // TODO: teammate surrender in tag duel
+    return this.win(
+      { player: 1 - this.getIngameDuelPos(client), type: 0x0 },
+      true,
+    );
   }
 }
