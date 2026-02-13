@@ -10,7 +10,7 @@ import { DefaultHostInfoProvider } from './default-hostinfo-provder';
 import { CardReaderFinalized } from 'koishipro-core.js';
 import { YGOProResourceLoader } from '../services/ygopro-resource-loader';
 import { blankLFList } from '../utility/blank-lflist';
-import { Client } from '../client';
+import { Client } from '../client/client';
 
 export type RoomFinalizor = (self: Room) => Awaitable<any>;
 
@@ -93,6 +93,7 @@ export class Room {
   }
 
   async join(client: Client) {
+    client.roomName = this.name;
     client.disconnect$.subscribe(({ bySystem }) =>
       this.onPlayerDisconnect(client, bySystem),
     );
@@ -122,7 +123,7 @@ export class Room {
     }
   }
 
-  async onPlayerDisconnect(client: Client, bySystem: boolean) {
+  async onPlayerDisconnect(client: Client) {
     if (client.pos === NetPlayerType.OBSERVER) {
       this.watchers.delete(client);
       for (const p of this.allPlayers) {
@@ -130,5 +131,6 @@ export class Room {
       }
       return;
     }
+    client.roomName = undefined;
   }
 }

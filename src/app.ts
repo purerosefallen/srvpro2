@@ -3,7 +3,7 @@ import { ConfigService } from './services/config';
 import { Logger } from './services/logger';
 import { Emitter } from './services/emitter';
 import { SSLFinder } from './services/ssl-finder';
-import { ClientHandler } from './services/client-handler';
+import { ClientHandler } from './client/client-handler';
 import { IpResolver } from './services/ip-resolver';
 import { HttpClient } from './services/http-client';
 import { Chnroute } from './services/chnroute';
@@ -14,6 +14,7 @@ import { WsServer } from './transport/ws/server';
 import { ClientVersionCheck } from './services/client-version-check';
 import { AragamiService } from './services/aragami';
 import { RoomManager } from './room/room-manager';
+import { RoomEventRegister } from './room/room-event-register';
 import { DefaultHostInfoProvider } from './room/default-hostinfo-provder';
 import { YGOProResourceLoader } from './services/ygopro-resource-loader';
 
@@ -41,6 +42,7 @@ export const app = core
   .provide(DefaultHostInfoProvider)
   .provide(YGOProResourceLoader)
   .provide(RoomManager)
+  .provide(RoomEventRegister)
   .define();
 
 app.middleware(YGOProCtosJoinGame, async (msg, client, _next) => {

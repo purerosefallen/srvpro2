@@ -4,7 +4,7 @@ import { Observable, fromEvent, merge } from 'rxjs';
 import { map, take } from 'rxjs/operators';
 import WebSocket, { RawData } from 'ws';
 import { Context } from '../../app';
-import { Client } from '../../client';
+import { Client } from '../../client/client';
 
 export class WsClient extends Client {
   constructor(

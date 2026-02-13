@@ -34,7 +34,7 @@ export class YGOProResourceLoader {
       const lflist = new YGOProLFList().fromText(
         Buffer.from(buf).toString('utf-8'),
       );
-      for (const item of lflist.items) { 
+      for (const item of lflist.items) {
         yield item;
       }
     }

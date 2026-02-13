@@ -6,8 +6,8 @@ import {
   YGOProCtosPlayerInfo,
 } from 'ygopro-msg-encode';
 import { Context } from '../app';
-import { Client } from '../client';
-import { IpResolver } from './ip-resolver';
+import { Client } from './client';
+import { IpResolver } from '../services/ip-resolver';
 import { WsClient } from '../transport/ws/client';
 import { forkJoin, filter, takeUntil, timeout, firstValueFrom } from 'rxjs';
 

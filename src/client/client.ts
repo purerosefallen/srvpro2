@@ -1,6 +1,6 @@
 import { filter, merge, Observable, Subject } from 'rxjs';
 import { map, share, take, takeUntil } from 'rxjs/operators';
-import { Context } from './app';
+import { Context } from '../app';
 import {
   YGOProCtos,
   YGOProStocBase,
@@ -13,9 +13,9 @@ import {
   YGOProStocHsPlayerChange,
   PlayerChangeState,
 } from 'ygopro-msg-encode';
-import { YGOProProtoPipe } from './utility/ygopro-proto-pipe';
-import { I18nService } from './services/i18n';
-import { Chnroute } from './services/chnroute';
+import { YGOProProtoPipe } from '../utility/ygopro-proto-pipe';
+import { I18nService } from '../services/i18n';
+import { Chnroute } from '../services/chnroute';
 import YGOProDeck from 'ygopro-deck-encode';
 
 export abstract class Client {
@@ -124,6 +124,7 @@ export abstract class Client {
   established = false;
 
   // in room
+  roomName?: string;
   isHost = false;
   pos = -1;
   deck?: YGOProDeck;

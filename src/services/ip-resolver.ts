@@ -1,5 +1,5 @@
 import { Context } from '../app';
-import { Client } from '../client';
+import { Client } from '../client/client';
 import * as ipaddr from 'ipaddr.js';
 import { convertStringArray } from '../utility/convert-string-array';
 
@@ -13,7 +13,7 @@ export class IpResolver {
     const proxies = convertStringArray(
       this.ctx.getConfig('TRUSTED_PROXIES', '127.0.0.0/8,::1/128'),
     );
-    
+
     for (const trusted of proxies) {
       try {
         this.trustedProxies.push(ipaddr.parseCIDR(trusted));

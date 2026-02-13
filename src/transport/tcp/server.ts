@@ -1,6 +1,6 @@
 import { Server as NetServer, Socket, createServer } from 'node:net';
 import { Context } from '../../app';
-import { ClientHandler } from '../../services/client-handler';
+import { ClientHandler } from '../../client/client-handler';
 import { TcpClient } from './client';
 
 export class TcpServer {

@@ -2,7 +2,7 @@ import { IncomingMessage, createServer as createHttpServer } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { Server as WebSocketServer } from 'ws';
 import { Context } from '../../app';
-import { ClientHandler } from '../../services/client-handler';
+import { ClientHandler } from '../../client/client-handler';
 import { SSLFinder } from '../../services/ssl-finder';
 import { WsClient } from './client';
 import { WebSocket } from 'ws';
@@ -67,7 +67,8 @@ export class WsServer {
 
   private handleConnection(ws: WebSocket, req: IncomingMessage): void {
     const client = new WsClient(this.ctx, ws, req);
-    if (this.ctx.get(() => IpResolver).setClientIp(client, client.xffIp())) return;
+    if (this.ctx.get(() => IpResolver).setClientIp(client, client.xffIp()))
+      return;
     client.hostname = req.headers.host?.split(':')[0] || '';
     const handler = this.ctx.get(() => ClientHandler);
     handler.handleClient(client).catch((err) => {
