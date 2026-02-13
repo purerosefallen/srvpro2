@@ -28,6 +28,13 @@ import { DuelStage } from './duel-stage';
 import { OnRoomJoin } from './room-event/on-room-join';
 import { OnRoomLeave } from './room-event/on-room-leave';
 import { OnRoomWin } from './room-event/on-room-win';
+import { OnRoomJoinPlayer } from './room-event/on-room-join-player';
+import { OnRoomJoinObserver } from './room-event/on-room-join-observer';
+import { OnRoomLeavePlayer } from './room-event/on-room-leave-player';
+import { OnRoomLeaveObserver } from './room-event/on-room-leave-observer';
+import { OnRoomMatchStart } from './room-event/on-room-match-start';
+import { OnRoomGameStart } from './room-event/on-room-game-start';
+// import { OnRoomDuelStart } from './room-event/on-room-duel-start'; // 备用事件，暂未使用
 import YGOProDeck from 'ygopro-deck-encode';
 
 export type RoomFinalizor = (self: Room) => Awaitable<any>;
@@ -175,7 +182,9 @@ export class Room {
     client.roomName = this.name;
     client.isHost = !this.allPlayers.length;
     const firstEmptyPlayerSlot = this.players.findIndex((p) => !p);
-    if (firstEmptyPlayerSlot >= 0) {
+    const isPlayer = firstEmptyPlayerSlot >= 0;
+
+    if (isPlayer) {
       this.players[firstEmptyPlayerSlot] = client;
       client.pos = firstEmptyPlayerSlot;
     } else {
@@ -205,6 +214,13 @@ export class Room {
       });
 
     await this.ctx.dispatch(new OnRoomJoin(this), client);
+
+    // 触发具体的加入事件
+    if (isPlayer) {
+      await this.ctx.dispatch(new OnRoomJoinPlayer(this), client);
+    } else {
+      await this.ctx.dispatch(new OnRoomJoinObserver(this), client);
+    }
   }
 
   duelStage = DuelStage.Begin;
@@ -226,7 +242,10 @@ export class Room {
 
   @RoomMethod()
   private async onDisconnect(client: Client, _msg: YGOProCtosDisconnect) {
-    if (client.pos === NetPlayerType.OBSERVER) {
+    const wasObserver = client.pos === NetPlayerType.OBSERVER;
+    const oldPos = client.pos;
+
+    if (wasObserver) {
       this.watchers.delete(client);
       for (const p of this.allPlayers) {
         p.send(this.watcherSizeMessage);
@@ -249,6 +268,14 @@ export class Room {
     }
 
     await this.ctx.dispatch(new OnRoomLeave(this), client);
+
+    // 触发具体的离开事件
+    if (wasObserver) {
+      await this.ctx.dispatch(new OnRoomLeaveObserver(this), client);
+    } else {
+      await this.ctx.dispatch(new OnRoomLeavePlayer(this, oldPos), client);
+    }
+
     client.roomName = undefined;
   }
 
@@ -286,6 +313,10 @@ export class Room {
 
     // 发送观战者数量更新
     this.allPlayers.forEach((p) => p.send(this.watcherSizeMessage));
+
+    // 触发事件
+    await this.ctx.dispatch(new OnRoomLeavePlayer(this, oldPos), client);
+    await this.ctx.dispatch(new OnRoomJoinObserver(this), client);
   }
 
   @RoomMethod()
@@ -319,6 +350,10 @@ export class Room {
 
       // 发送观战者数量更新
       this.allPlayers.forEach((p) => p.send(this.watcherSizeMessage));
+
+      // 触发事件
+      await this.ctx.dispatch(new OnRoomLeaveObserver(this), client);
+      await this.ctx.dispatch(new OnRoomJoinPlayer(this), client);
     } else if (this.isTag) {
       // TAG 模式下，已经是玩家，切换到另一个空位
       // 如果已经 ready，不允许切换
@@ -342,6 +377,10 @@ export class Room {
 
       // 发送 TypeChange 给客户端
       await client.sendTypeChange();
+
+      // 触发事件 (玩家切换位置)
+      await this.ctx.dispatch(new OnRoomLeavePlayer(this, oldPos), client);
+      await this.ctx.dispatch(new OnRoomJoinPlayer(this), client);
     }
   }
 
@@ -448,11 +487,25 @@ export class Room {
         );
       });
     }
+
     if (firstgoPos != null) {
       await this.toFirstGo(firstgoPos);
     } else {
-      this.duelStage = DuelStage.Finger;
+      await this.toFinger();
     }
+
+    // 触发事件
+    if (this.duelCount === 1) {
+      // 触发比赛开始事件（第一局）
+      await this.ctx.dispatch(
+        new OnRoomMatchStart(this),
+        this.playingPlayers[0],
+      );
+    }
+
+    // 触发游戏开始事件（每局游戏）
+    await this.ctx.dispatch(new OnRoomGameStart(this), this.playingPlayers[0]);
+
     return true;
   }
 }
