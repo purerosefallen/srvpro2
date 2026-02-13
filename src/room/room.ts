@@ -179,7 +179,10 @@ export class Room {
     ]);
   }
 
-  private finalizors: RoomFinalizor[] = [() => this.cleanPlayers()];
+  private finalizors: RoomFinalizor[] = [
+    () => this.cleanPlayers(),
+    () => this.ocgcore?.dispose(),
+  ];
 
   addFinalizor(finalizor: RoomFinalizor, atEnd = false) {
     if (atEnd) {
@@ -375,6 +378,7 @@ export class Room {
   }
 
   async win(winMsg: Partial<YGOProMsgWin>, forceWinMatch = false) {
+    await this.ocgcore?.dispose();
     if (this.duelStage === DuelStage.Siding) {
       this.playingPlayers
         .filter((p) => !p.deck)
@@ -850,6 +854,10 @@ export class Room {
     if (![DuelStage.Begin, DuelStage.Siding].includes(this.duelStage)) {
       return false;
     }
+    if (this.playingPlayers.some((p) => !p.deck)) {
+      return false;
+    }
+
     if (this.duelRecords.length === 0) {
       this.allPlayers.forEach((p) => p.send(new YGOProStocDuelStart()));
       const displayCountDecks = [0, 1].map(
@@ -1202,23 +1210,31 @@ export class Room {
       }
       return next();
     })
-    .middleware(YGOProMsgBase, async (message, next) => {
-      //
-      if (this.pendingResponse && !(message instanceof YGOProMsgRetry)) {
-        // player made valid response
-        const resp = this.pendingResponse;
-        this.pendingResponse = undefined;
-        this.lastDuelRecord.responses.push(resp);
+    .middleware(
+      YGOProMsgBase,
+      async (message, next) => {
+        //
+        if (this.pendingResponse && !(message instanceof YGOProMsgRetry)) {
+          // player made valid response
+          const resp = this.pendingResponse;
+          this.pendingResponse = undefined;
+          this.lastDuelRecord.responses.push(resp);
 
-        // TODO: clear timer
-      }
-      return next();
-    })
-    .middleware(YGOProMsgResponseBase, async (message, next) => {
-      this.responsePos = message.responsePlayer();
-      // TODO: set timer
-      return next();
-    });
+          // TODO: clear timer
+        }
+        return next();
+      },
+      true,
+    )
+    .middleware(
+      YGOProMsgResponseBase,
+      async (message, next) => {
+        this.responsePos = message.responsePlayer();
+        // TODO: set timer
+        return next();
+      },
+      true,
+    );
 
   private pendingResponse?: Buffer;
   private responsePos?: number;

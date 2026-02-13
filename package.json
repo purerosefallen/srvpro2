@@ -9,7 +9,7 @@
     "build": "tsc",
     "gen:config-example": "npm run build && node dist/src/scripts/gen-config-example.js",
     "test": "jest --passWithNoTests",
-    "dev": "ts-node index.ts",
+    "dev": "npm run build && npm start",
     "start": "node dist/index.js"
   },
   "repository": {
@@ -52,7 +52,6 @@
     "jest": "^30.2.0",
     "prettier": "^3.8.1",
     "ts-jest": "^29.4.6",
-    "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   },
   "dependencies": {

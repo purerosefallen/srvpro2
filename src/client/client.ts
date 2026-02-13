@@ -95,6 +95,9 @@ export abstract class Client {
   }
 
   async sendChat(msg: string, type: number = ChatColor.BABYBLUE) {
+    if (type >= ChatColor.RED) {
+      msg = `[Server]: ${msg}`;
+    }
     return this.send(
       new YGOProStocChat().fromPartial({
         msg:
