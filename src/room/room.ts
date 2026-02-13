@@ -41,6 +41,7 @@ import {
   YGOProMsgBase,
   YGOProMsgResponseBase,
   YGOProMsgRetry,
+  YGOProMsgResetTime,
   RequireQueryLocation,
   RequireQueryCardLocation,
   YGOProMsgUpdateData,
@@ -48,7 +49,9 @@ import {
   CardQuery,
   YGOProCtosResponse,
   YGOProCtosSurrender,
+  YGOProCtosTimeConfirm,
   YGOProMsgWaiting,
+  YGOProStocTimeLimit,
 } from 'ygopro-msg-encode';
 import { DefaultHostInfoProvider } from './default-hostinfo-provder';
 import {
@@ -85,6 +88,9 @@ import {
 } from '../utility/refresh-query';
 import { shuffleDecksBySeed } from '../utility/shuffle-decks-by-seed';
 import { isUpdateMessage } from '../utility/is-update-message';
+import { getMessageIdentifier } from '../utility/get-message-identifier';
+import { canIncreaseTime } from '../utility/can-increase-time';
+import { TimerState } from './timer-state';
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 
@@ -201,6 +207,7 @@ export class Room {
       return;
     }
     this.finalizing = true;
+    this.resetResponseState();
     await this.cleanPlayers(sendReplays);
     while (this.finalizors.length) {
       const finalizor = this.finalizors.pop()!;
@@ -381,6 +388,7 @@ export class Room {
   }
 
   async win(winMsg: Partial<YGOProMsgWin>, forceWinMatch = false) {
+    this.resetResponseState();
     await this.ocgcore?.dispose();
     this.ocgcore = undefined;
     if (this.duelStage === DuelStage.Siding) {
@@ -922,8 +930,137 @@ export class Room {
   private ocgcore?: OcgcoreWorker;
   private registry: Record<string, string> = {};
   turnCount = 0;
-  turnPos = 0;
+  turnIngamePos = 0;
   phase = undefined;
+  private timerState = new TimerState();
+  private lastResponseRequestMsgType = 0;
+  private pendingResponseRequestMsgType = 0;
+  private get hasTimeLimit() {
+    return this.hostinfo.time_limit > 0;
+  }
+
+  private resetDuelTimerState() {
+    const initialTime = this.hasTimeLimit
+      ? Math.max(0, this.hostinfo.time_limit) * 1000
+      : 0;
+    this.timerState.reset(initialTime);
+    this.lastResponseRequestMsgType = 0;
+    this.pendingResponseRequestMsgType = 0;
+  }
+
+  private clearResponseTimer(settleElapsed = false) {
+    this.timerState.clear(settleElapsed);
+  }
+
+  private resetResponseState(options: { timedOutPlayer?: number } = {}) {
+    this.clearResponseTimer();
+    if (
+      options.timedOutPlayer != null &&
+      [0, 1].includes(options.timedOutPlayer)
+    ) {
+      this.timerState.leftMs[options.timedOutPlayer] = 0;
+    }
+    this.pendingResponse = undefined;
+    this.pendingResponsePos = undefined;
+    this.pendingResponseRequestMsgType = 0;
+    this.responsePos = undefined;
+  }
+
+  private increaseResponseTime(
+    originalDuelPos: number,
+    gameMsg: number,
+    response?: Buffer,
+  ) {
+    const maxTimeMs = Math.max(0, this.hostinfo.time_limit || 0) * 1000;
+    if (
+      !this.hasTimeLimit ||
+      ![0, 1].includes(originalDuelPos) ||
+      this.timerState.backedMs[originalDuelPos] <= 0 ||
+      this.timerState.leftMs[originalDuelPos] >= maxTimeMs ||
+      !canIncreaseTime(gameMsg, response)
+    ) {
+      return;
+    }
+    this.timerState.leftMs[originalDuelPos] = Math.min(
+      maxTimeMs,
+      this.timerState.leftMs[originalDuelPos] + 1000,
+    );
+    this.timerState.compensatorMs[originalDuelPos] += 1000;
+    this.timerState.backedMs[originalDuelPos] -= 1000;
+  }
+
+  private async sendTimeLimit(originalDuelPos: number) {
+    if (!this.hasTimeLimit || ![0, 1].includes(originalDuelPos)) {
+      return;
+    }
+    const leftTime = Math.max(0, this.timerState.leftMs[originalDuelPos] || 0);
+    const ingameDuelPos = this.getIngameDuelPosByDuelPos(originalDuelPos);
+    const msg = new YGOProStocTimeLimit().fromPartial({
+      player: ingameDuelPos,
+      left_time: Math.ceil(leftTime / 1000),
+    });
+    await Promise.all(this.playingPlayers.map((p) => p.send(msg)));
+  }
+
+  private async onResponseTimeout(originalDuelPos: number) {
+    if (this.timerState.runningPos !== originalDuelPos || this.finalizing) {
+      return;
+    }
+    this.resetResponseState({ timedOutPlayer: originalDuelPos });
+    const winnerOriginalDuelPos = 1 - originalDuelPos;
+    await this.win({
+      player: this.getIngameDuelPosByDuelPos(winnerOriginalDuelPos),
+      type: 0x3,
+    });
+  }
+
+  private async setResponseTimer(
+    originalDuelPos: number,
+    options: {
+      settlePrevious?: boolean;
+      sendTimeLimit?: boolean;
+      awaitingConfirm?: boolean;
+    } = {},
+  ) {
+    const {
+      settlePrevious = true,
+      sendTimeLimit = true,
+      awaitingConfirm = true,
+    } = options;
+    this.clearResponseTimer(settlePrevious);
+    if (!this.hasTimeLimit || ![0, 1].includes(originalDuelPos)) {
+      return;
+    }
+    const leftTime = Math.max(0, this.timerState.leftMs[originalDuelPos] || 0);
+    if (sendTimeLimit) {
+      await this.sendTimeLimit(originalDuelPos);
+    }
+    if (leftTime <= 0) {
+      return this.onResponseTimeout(originalDuelPos);
+    }
+    this.timerState.schedule(originalDuelPos, leftTime, awaitingConfirm, () => {
+      void this.onResponseTimeout(originalDuelPos).catch((error) => {
+        this.logger.warn({ error }, 'Failed to handle response timeout');
+      });
+    });
+  }
+
+  private async handleResetTime(message: YGOProMsgResetTime) {
+    const player = this.getIngameDuelPosByDuelPos(message.player);
+    if (!this.hasTimeLimit || ![0, 1].includes(player)) {
+      return;
+    }
+    this.timerState.leftMs[player] = message.time
+      ? message.time * 1000
+      : Math.max(0, this.hostinfo.time_limit) * 1000;
+    if (this.timerState.runningPos === player) {
+      await this.setResponseTimer(player, {
+        settlePrevious: false,
+        sendTimeLimit: false,
+        awaitingConfirm: this.timerState.awaitingConfirm,
+      });
+    }
+  }
 
   @RoomMethod({ allowInDuelStages: DuelStage.FirstGo })
   private async onDuelStart(client: Client, msg: YGOProCtosTpResult) {
@@ -1063,13 +1200,14 @@ export class Room {
     });
 
     this.turnCount = 0;
-    this.turnPos = 0;
+    this.turnIngamePos = 0;
     this.phase = undefined;
+    this.resetDuelTimerState();
 
     await this.handleGameMsg(watcherMsg.msg);
     await this.ctx.dispatch(
       new OnRoomDuelStart(this),
-      this.getOpreatingPlayer(this.turnPos),
+      this.getOperatingPlayer(this.turnIngamePos),
     );
 
     await Promise.all([
@@ -1088,15 +1226,24 @@ export class Room {
 
   private async onNewTurn(tp: number) {
     ++this.turnCount;
-    this.turnPos = tp;
+    this.turnIngamePos = tp;
+    if (!this.hasTimeLimit) {
+      return;
+    }
+    const recoverMs = Math.max(0, this.hostinfo.time_limit) * 1000;
+    for (const player of [0, 1] as const) {
+      this.timerState.leftMs[player] = recoverMs;
+      this.timerState.compensatorMs[player] = recoverMs;
+      this.timerState.backedMs[player] = recoverMs;
+    }
   }
 
   private async onNewPhase(phase: number) {
     this.phase = phase;
   }
 
-  getOpreatingPlayer(duelPos: number): Client | undefined {
-    const players = this.getIngameDuelPosPlayers(duelPos);
+  getOperatingPlayer(ingameDuelPos: number): Client | undefined {
+    const players = this.getIngameDuelPosPlayers(ingameDuelPos);
     if (!this.isTag) {
       return players[0];
     }
@@ -1108,11 +1255,11 @@ export class Room {
     // duelPos 0: start from players[0], toggle every two turns from turn 3
     // duelPos 1: start from players[1], toggle every two turns from turn 2
     const tc = Math.max(0, this.turnCount);
-    if (duelPos === 0) {
+    if (ingameDuelPos === 0) {
       const idx = Math.floor(Math.max(0, tc - 1) / 2) % 2;
       return players[idx];
     }
-    if (duelPos === 1) {
+    if (ingameDuelPos === 1) {
       const idx = 1 - (Math.floor(tc / 2) % 2);
       return players[idx];
     }
@@ -1213,7 +1360,7 @@ export class Room {
             players.map((c) => {
               const duelPos = this.getIngameDuelPos(c);
               const playerView = message.playerView(duelPos);
-              const operatingPlayer = this.getOpreatingPlayer(duelPos);
+              const operatingPlayer = this.getOperatingPlayer(duelPos);
               return sendGameMsg(
                 c,
                 c === operatingPlayer ? playerView : playerView.teammateView(),
@@ -1233,7 +1380,7 @@ export class Room {
     const msg1 = await this.localGameMsgDispatcher.dispatch(message);
     const msg2 = await this.ctx.dispatch(
       msg1,
-      this.getOpreatingPlayer(this.turnPos),
+      this.getOperatingPlayer(this.turnIngamePos),
     );
     if (route) {
       await this.routeGameMsg(msg2);
@@ -1264,6 +1411,10 @@ export class Room {
       await this.onNewPhase(message.phase);
       return next();
     })
+    .middleware(YGOProMsgResetTime, async (message, next) => {
+      await this.handleResetTime(message);
+      return next();
+    })
     .middleware(YGOProMsgBase, async (message, next) => {
       // record messages for replay
       if (!(message instanceof YGOProMsgResponseBase)) {
@@ -1274,14 +1425,23 @@ export class Room {
     .middleware(
       YGOProMsgBase,
       async (message, next) => {
-        //
-        if (this.pendingResponse && !(message instanceof YGOProMsgRetry)) {
-          // player made valid response
+        if (this.pendingResponse) {
           const resp = this.pendingResponse;
+          const responsePos = this.pendingResponsePos;
           this.pendingResponse = undefined;
-          this.lastDuelRecord.responses.push(resp);
+          this.pendingResponsePos = undefined;
+          this.pendingResponseRequestMsgType = 0;
 
-          // TODO: clear timer
+          if (message instanceof YGOProMsgRetry) {
+            if (responsePos != null) {
+              this.responsePos = responsePos;
+              this.lastResponseRequestMsgType =
+                OcgcoreCommonConstants.MSG_RETRY;
+              await this.setResponseTimer(responsePos);
+            }
+          } else {
+            this.lastDuelRecord.responses.push(resp);
+          }
         }
         return next();
       },
@@ -1290,8 +1450,7 @@ export class Room {
     .middleware(
       YGOProMsgResponseBase,
       async (message, next) => {
-        this.responsePos = message.responsePlayer();
-        const op = this.getOpreatingPlayer(this.responsePos);
+        const op = this.getOperatingPlayer(message.responsePlayer());
         const noOps = this.playingPlayers.filter((p) => p !== op);
         await Promise.all(
           noOps.map((p) =>
@@ -1302,14 +1461,27 @@ export class Room {
             ),
           ),
         );
-        // TODO: set timer
+        return next();
+      },
+      true,
+    )
+    .middleware(
+      YGOProMsgResponseBase,
+      async (message, next) => {
+        this.lastResponseRequestMsgType = getMessageIdentifier(message);
+        this.responsePos = this.getIngameDuelPosByDuelPos(
+          message.responsePlayer(),
+        );
+        await this.setResponseTimer(this.responsePos);
         return next();
       },
       true,
     )
     .middleware(YGOProMsgRetry, async (message, next) => {
       if (this.responsePos != null) {
-        const op = this.getOpreatingPlayer(this.responsePos);
+        const op = this.getOperatingPlayer(
+          this.getIngameDuelPosByDuelPos(this.responsePos),
+        );
         await op.send(
           new YGOProStocGameMsg().fromPartial({
             msg: message,
@@ -1320,6 +1492,7 @@ export class Room {
     });
 
   private pendingResponse?: Buffer;
+  private pendingResponsePos?: number;
   private responsePos?: number;
 
   private async advance() {
@@ -1363,15 +1536,72 @@ export class Room {
   @RoomMethod({
     allowInDuelStages: DuelStage.Dueling,
   })
+  private async onTimeConfirm(client: Client, _msg: YGOProCtosTimeConfirm) {
+    if (
+      !this.hasTimeLimit ||
+      this.responsePos == null ||
+      this.timerState.runningPos == null ||
+      !this.timerState.awaitingConfirm
+    ) {
+      return;
+    }
+    if (this.timerState.runningPos !== this.responsePos) {
+      return;
+    }
+    if (
+      client !==
+      this.getOperatingPlayer(this.getIngameDuelPosByDuelPos(this.responsePos))
+    ) {
+      return;
+    }
+
+    const elapsedMs = this.timerState.elapsedMs();
+    const player = this.timerState.runningPos;
+    if (
+      elapsedMs < 10_000 &&
+      elapsedMs <= this.timerState.compensatorMs[player]
+    ) {
+      this.timerState.compensatorMs[player] -= elapsedMs;
+    } else {
+      this.timerState.leftMs[player] = Math.max(
+        0,
+        this.timerState.leftMs[player] - elapsedMs,
+      );
+    }
+    this.timerState.awaitingConfirm = false;
+    await this.setResponseTimer(player, {
+      settlePrevious: false,
+      sendTimeLimit: false,
+      awaitingConfirm: false,
+    });
+  }
+
+  @RoomMethod({
+    allowInDuelStages: DuelStage.Dueling,
+  })
   private async onResponse(client: Client, msg: YGOProCtosResponse) {
     if (
       this.responsePos == null ||
-      client !== this.getOpreatingPlayer(this.responsePos) ||
+      client !==
+        this.getOperatingPlayer(
+          this.getIngameDuelPosByDuelPos(this.responsePos),
+        ) ||
       !this.ocgcore
     ) {
       return;
     }
+    const responsePos = this.responsePos;
+    this.pendingResponsePos = responsePos;
+    this.pendingResponseRequestMsgType = this.lastResponseRequestMsgType;
     this.pendingResponse = Buffer.from(msg.response);
+    if (this.hasTimeLimit) {
+      this.clearResponseTimer(true);
+      this.increaseResponseTime(
+        responsePos,
+        this.pendingResponseRequestMsgType,
+        this.pendingResponse,
+      );
+    }
     this.responsePos = undefined;
     await this.ocgcore.setResponse(msg.response);
     return this.advance();
