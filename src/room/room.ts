@@ -84,6 +84,7 @@ import {
   splitRefreshLocations,
 } from '../utility/refresh-query';
 import { shuffleDecksBySeed } from '../utility/shuffle-decks-by-seed';
+import { isUpdateMessage } from '../utility/is-update-message';
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 
@@ -183,10 +184,7 @@ export class Room {
     ]);
   }
 
-  private finalizors: RoomFinalizor[] = [
-    () => this.cleanPlayers(),
-    () => this.ocgcore?.dispose(),
-  ];
+  private finalizors: RoomFinalizor[] = [() => this.ocgcore?.dispose()];
 
   addFinalizor(finalizor: RoomFinalizor, atEnd = false) {
     if (atEnd) {
@@ -198,11 +196,12 @@ export class Room {
   }
 
   finalizing = false;
-  async finalize() {
+  async finalize(sendReplays = false) {
     if (this.finalizing) {
       return;
     }
     this.finalizing = true;
+    await this.cleanPlayers(sendReplays);
     while (this.finalizors.length) {
       const finalizor = this.finalizors.pop()!;
       await finalizor(this);
@@ -408,6 +407,9 @@ export class Room {
     if (lastDuelRecord) {
       lastDuelRecord.winPosition = duelPos;
     }
+    this.logger.debug(
+      `Player ${duelPos} wins the duel. Current score: ${this.score.join('-')}`,
+    );
     const winMatch = forceWinMatch || this.score[duelPos] >= this.winMatchCount;
     if (!winMatch) {
       await this.changeSide();
@@ -417,8 +419,7 @@ export class Room {
       this.getDuelPosPlayers(duelPos)[0],
     );
     if (winMatch) {
-      await this.cleanPlayers(true);
-      return this.finalize();
+      return this.finalize(true);
     }
   }
 
@@ -1071,6 +1072,17 @@ export class Room {
       this.getOpreatingPlayer(this.turnPos),
     );
 
+    await Promise.all([
+      this.refreshLocations({
+        player: 0,
+        location: OcgcoreScriptConstants.LOCATION_EXTRA,
+      }),
+      this.refreshLocations({
+        player: 1,
+        location: OcgcoreScriptConstants.LOCATION_EXTRA,
+      }),
+    ]);
+
     return this.advance();
   }
 
@@ -1166,10 +1178,25 @@ export class Room {
     }
   }
 
+  private async refreshForMessage(message: YGOProMsgBase) {
+    await Promise.all([
+      ...message.getRequireRefreshCards().map((loc) => this.refreshSingle(loc)),
+      ...message
+        .getRequireRefreshZones()
+        .map((loc) => this.refreshLocations(loc)),
+    ]);
+  }
+
   private async routeGameMsg(message: YGOProMsgBase) {
     if (!message) {
       return;
     }
+    const shouldRefreshFirst =
+      message instanceof YGOProMsgResponseBase && !isUpdateMessage(message);
+    if (shouldRefreshFirst) {
+      await this.refreshForMessage(message);
+    }
+
     const sendTargets = message.getSendTargets();
     const sendGameMsg = (c: Client, msg: YGOProMsgBase) =>
       c.send(new YGOProStocGameMsg().fromPartial({ msg }));
@@ -1181,32 +1208,25 @@ export class Room {
             [...this.watchers].map((w) => sendGameMsg(w, observerView)),
           );
         } else {
-          const playerView = message.playerView(pos);
           const players = this.getIngameDuelPosPlayers(pos);
-          const operatingPlayer = this.getOpreatingPlayer(pos);
           await Promise.all(
-            players.map((c) =>
-              sendGameMsg(
+            players.map((c) => {
+              const duelPos = this.getIngameDuelPos(c);
+              const playerView = message.playerView(duelPos);
+              const operatingPlayer = this.getOpreatingPlayer(duelPos);
+              return sendGameMsg(
                 c,
                 c === operatingPlayer ? playerView : playerView.teammateView(),
-              ),
-            ),
+              );
+            }),
           );
         }
       }),
     );
-    if (
-      message instanceof YGOProMsgUpdateData ||
-      message instanceof YGOProMsgUpdateCard
-    ) {
+    if (isUpdateMessage(message) || shouldRefreshFirst) {
       return;
     }
-    await Promise.all([
-      ...message.getRequireRefreshCards().map((loc) => this.refreshSingle(loc)),
-      ...message
-        .getRequireRefreshZones()
-        .map((loc) => this.refreshLocations(loc)),
-    ]);
+    await this.refreshForMessage(message);
   }
 
   private async handleGameMsg(message: YGOProMsgBase, route = false) {
@@ -1319,6 +1339,15 @@ export class Room {
           }
         }
 
+        if (message instanceof YGOProMsgUpdateCard) {
+          await this.refreshSingle({
+            player: message.controller,
+            location: message.location,
+            sequence: message.sequence,
+          });
+          continue;
+        }
+
         const handled = await this.handleGameMsg(message);
         if (handled instanceof YGOProMsgWin) {
           return this.win(handled);
@@ -1356,9 +1385,6 @@ export class Room {
       return;
     }
     // TODO: teammate surrender in tag duel
-    return this.win(
-      { player: 1 - this.getIngameDuelPos(client), type: 0x0 },
-      true,
-    );
+    return this.win({ player: 1 - this.getIngameDuelPos(client), type: 0x0 });
   }
 }

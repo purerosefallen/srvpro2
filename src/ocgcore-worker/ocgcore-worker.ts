@@ -32,7 +32,7 @@ import { OcgcoreWorkerOptions } from './ocgcore-worker-options';
 import { Subject } from 'rxjs';
 import { calculateDuelOptions } from '../utility/calculate-duel-options';
 import initSqlJs from 'sql.js';
-import { YGOProMessages } from 'ygopro-msg-encode';
+import { YGOProMessages, YGOProMsgResponseBase, YGOProMsgRetry } from 'ygopro-msg-encode';
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 
@@ -308,11 +308,22 @@ export class OcgcoreWorker {
   async *advance() {
     while (true) {
       const res = await this.process();
-      if (!res.raw.length) {
+
+      if (res.raw.length === 0) {
         continue;
       }
+
       yield res;
-      if (res.status > 0) {
+
+      if (res.status === 2) {
+        break;
+      }
+
+      if (res.message instanceof YGOProMsgRetry) {
+        break;
+      }
+
+      if (res.message instanceof YGOProMsgResponseBase) {
         break;
       }
     }
