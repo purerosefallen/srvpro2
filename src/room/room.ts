@@ -934,7 +934,6 @@ export class Room {
   phase = undefined;
   private timerState = new TimerState();
   private lastResponseRequestMsgType = 0;
-  private pendingResponseRequestMsgType = 0;
   private get hasTimeLimit() {
     return this.hostinfo.time_limit > 0;
   }
@@ -945,7 +944,6 @@ export class Room {
       : 0;
     this.timerState.reset(initialTime);
     this.lastResponseRequestMsgType = 0;
-    this.pendingResponseRequestMsgType = 0;
   }
 
   private clearResponseTimer(settleElapsed = false) {
@@ -960,9 +958,6 @@ export class Room {
     ) {
       this.timerState.leftMs[options.timedOutPlayer] = 0;
     }
-    this.pendingResponse = undefined;
-    this.pendingResponsePos = undefined;
-    this.pendingResponseRequestMsgType = 0;
     this.responsePos = undefined;
   }
 
@@ -1334,6 +1329,20 @@ export class Room {
     ]);
   }
 
+  private async sendWaitingToNonOperator(ingameDuelPos: number) {
+    const operatingPlayer = this.getOperatingPlayer(ingameDuelPos);
+    const noOps = this.playingPlayers.filter((p) => p !== operatingPlayer);
+    await Promise.all(
+      noOps.map((p) =>
+        p.send(
+          new YGOProStocGameMsg().fromPartial({
+            msg: new YGOProMsgWaiting(),
+          }),
+        ),
+      ),
+    );
+  }
+
   private async routeGameMsg(message: YGOProMsgBase) {
     if (!message) {
       return;
@@ -1370,10 +1379,37 @@ export class Room {
         }
       }),
     );
-    if (isUpdateMessage(message) || shouldRefreshFirst) {
+    if (!isUpdateMessage(message) && !shouldRefreshFirst) {
+      await this.refreshForMessage(message);
+    }
+
+    if (message instanceof YGOProMsgResponseBase) {
+      this.lastResponseRequestMsgType = getMessageIdentifier(message);
+      this.responsePos = this.getIngameDuelPosByDuelPos(
+        message.responsePlayer(),
+      );
+      await this.sendWaitingToNonOperator(message.responsePlayer());
+      await this.setResponseTimer(this.responsePos);
       return;
     }
-    await this.refreshForMessage(message);
+    if (message instanceof YGOProMsgRetry && this.responsePos != null) {
+      if (this.lastDuelRecord.responses.length > 0) {
+        this.lastDuelRecord.responses.pop();
+      }
+      this.lastResponseRequestMsgType = OcgcoreCommonConstants.MSG_RETRY;
+      await this.sendWaitingToNonOperator(
+        this.getIngameDuelPosByDuelPos(this.responsePos),
+      );
+      await this.setResponseTimer(this.responsePos);
+      return;
+    }
+    if (
+      this.responsePos != null &&
+      this.lastResponseRequestMsgType === 0 &&
+      !(message instanceof YGOProMsgResponseBase)
+    ) {
+      this.responsePos = undefined;
+    }
   }
 
   private async handleGameMsg(message: YGOProMsgBase, route = false) {
@@ -1422,61 +1458,6 @@ export class Room {
       }
       return next();
     })
-    .middleware(
-      YGOProMsgBase,
-      async (message, next) => {
-        if (this.pendingResponse) {
-          const resp = this.pendingResponse;
-          const responsePos = this.pendingResponsePos;
-          this.pendingResponse = undefined;
-          this.pendingResponsePos = undefined;
-          this.pendingResponseRequestMsgType = 0;
-
-          if (message instanceof YGOProMsgRetry) {
-            if (responsePos != null) {
-              this.responsePos = responsePos;
-              this.lastResponseRequestMsgType =
-                OcgcoreCommonConstants.MSG_RETRY;
-              await this.setResponseTimer(responsePos);
-            }
-          } else {
-            this.lastDuelRecord.responses.push(resp);
-          }
-        }
-        return next();
-      },
-      true,
-    )
-    .middleware(
-      YGOProMsgResponseBase,
-      async (message, next) => {
-        const op = this.getOperatingPlayer(message.responsePlayer());
-        const noOps = this.playingPlayers.filter((p) => p !== op);
-        await Promise.all(
-          noOps.map((p) =>
-            p.send(
-              new YGOProStocGameMsg().fromPartial({
-                msg: new YGOProMsgWaiting(),
-              }),
-            ),
-          ),
-        );
-        return next();
-      },
-      true,
-    )
-    .middleware(
-      YGOProMsgResponseBase,
-      async (message, next) => {
-        this.lastResponseRequestMsgType = getMessageIdentifier(message);
-        this.responsePos = this.getIngameDuelPosByDuelPos(
-          message.responsePlayer(),
-        );
-        await this.setResponseTimer(this.responsePos);
-        return next();
-      },
-      true,
-    )
     .middleware(YGOProMsgRetry, async (message, next) => {
       if (this.responsePos != null) {
         const op = this.getOperatingPlayer(
@@ -1491,8 +1472,6 @@ export class Room {
       return next();
     });
 
-  private pendingResponse?: Buffer;
-  private pendingResponsePos?: number;
   private responsePos?: number;
 
   private async advance() {
@@ -1591,18 +1570,14 @@ export class Room {
       return;
     }
     const responsePos = this.responsePos;
-    this.pendingResponsePos = responsePos;
-    this.pendingResponseRequestMsgType = this.lastResponseRequestMsgType;
-    this.pendingResponse = Buffer.from(msg.response);
+    const responseRequestMsgType = this.lastResponseRequestMsgType;
+    const response = Buffer.from(msg.response);
+    this.lastDuelRecord.responses.push(response);
     if (this.hasTimeLimit) {
       this.clearResponseTimer(true);
-      this.increaseResponseTime(
-        responsePos,
-        this.pendingResponseRequestMsgType,
-        this.pendingResponse,
-      );
+      this.increaseResponseTime(responsePos, responseRequestMsgType, response);
     }
-    this.responsePos = undefined;
+    this.lastResponseRequestMsgType = 0;
     await this.ocgcore.setResponse(msg.response);
     return this.advance();
   }
