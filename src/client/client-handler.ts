@@ -2,14 +2,22 @@ import {
   YGOProCtosBase,
   YGOProCtosExternalAddress,
   YGOProCtosJoinGame,
-  YGOProCtosLeaveGame,
   YGOProCtosPlayerInfo,
 } from 'ygopro-msg-encode';
 import { Context } from '../app';
 import { Client } from './client';
 import { IpResolver } from '../services/ip-resolver';
 import { WsClient } from '../transport/ws/client';
-import { forkJoin, filter, takeUntil, timeout, firstValueFrom } from 'rxjs';
+import {
+  forkJoin,
+  filter,
+  takeUntil,
+  timeout,
+  firstValueFrom,
+  merge,
+  map,
+} from 'rxjs';
+import { YGOProCtosDisconnect } from '../utility/ygopro-ctos-disconnect';
 
 export class ClientHandler {
   constructor(private ctx: Context) {
@@ -52,13 +60,6 @@ export class ClientHandler {
           return next();
         },
         true,
-      )
-      .middleware(
-        YGOProCtosLeaveGame, // this means immediately disconnect the client when they send leave game message, which is what official server does
-        async (msg, client, next) => {
-          return client.disconnect();
-        },
-        true,
       );
   }
 
@@ -66,7 +67,18 @@ export class ClientHandler {
 
   async handleClient(client: Client): Promise<void> {
     client.init();
-    const receive$ = client.receive$;
+
+    // 将 disconnect$ 映射为 YGOProCtosDisconnect 消息
+    const disconnect$ = client.disconnect$.pipe(
+      map(({ bySystem }) => {
+        const msg = new YGOProCtosDisconnect();
+        msg.bySystem = bySystem;
+        return msg;
+      }),
+    );
+
+    // 合并 receive$ 和 disconnect$
+    const receive$ = merge(client.receive$, disconnect$);
 
     receive$.subscribe(async (msg) => {
       try {
@@ -79,11 +91,11 @@ export class ClientHandler {
     });
 
     const handshake$ = forkJoin([
-      receive$.pipe(
+      client.receive$.pipe(
         filter((msg) => msg instanceof YGOProCtosPlayerInfo),
         takeUntil(client.disconnect$),
       ),
-      receive$.pipe(
+      client.receive$.pipe(
         filter((msg) => msg instanceof YGOProCtosJoinGame),
         takeUntil(client.disconnect$),
       ),
