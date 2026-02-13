@@ -20,6 +20,18 @@ export class DuelRecord {
   responses: Buffer[] = [];
   messages: YGOProMsgBase[] = [];
 
+  private toReplayDeck(deck: YGOProDeck | null | undefined) {
+    if (!deck) {
+      return null;
+    }
+    return new YGOProDeck({
+      main: [...deck.main].reverse(),
+      extra: [...deck.extra].reverse(),
+      side: [...deck.side],
+      name: deck.name,
+    });
+  }
+
   toYrp(room: Room) {
     const isTag = room.isTag;
 
@@ -57,14 +69,14 @@ export class DuelRecord {
       startHand: room.hostinfo.start_hand,
       drawCount: room.hostinfo.draw_count,
       opt: room.opt,
-      hostDeck: this.players[0]?.deck || null,
+      hostDeck: this.toReplayDeck(this.players[0]?.deck),
       clientDeck: isTag
-        ? this.players[2]?.deck || null
-        : this.players[1]?.deck || null,
+        ? this.toReplayDeck(this.players[2]?.deck)
+        : this.toReplayDeck(this.players[1]?.deck),
       tagHostName: isTag ? this.players[1]?.name || '' : null,
       tagClientName: isTag ? this.players[2]?.name || '' : null,
-      tagHostDeck: isTag ? this.players[1]?.deck || null : null,
-      tagClientDeck: isTag ? this.players[3]?.deck || null : null,
+      tagHostDeck: isTag ? this.toReplayDeck(this.players[1]?.deck) : null,
+      tagClientDeck: isTag ? this.toReplayDeck(this.players[3]?.deck) : null,
       singleScript: null,
       responses: this.responses.map((buf) => new Uint8Array(buf)),
     });
