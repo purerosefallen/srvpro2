@@ -6,6 +6,9 @@ import {
   DirScriptReaderEx,
   DirCardReader,
   _OcgcoreConstants,
+  parseCardQuery,
+  parseFieldCardQuery,
+  parseFieldInfo,
 } from 'koishipro-core.js';
 import type {
   OcgcoreQueryCardParams,
@@ -201,12 +204,25 @@ export class OcgcoreWorker {
 
   @WorkerMethod()
   @TransportEncoder<OcgcoreProcessResult, SerializableProcessResult>(
-    (result) => ({
-      length: result.length,
-      raw: result.raw,
-      status: result.status,
-      messagePayload: result.message?.toPayload(),
-    }),
+    (result) => {
+      // Re-parse from raw at encode time, so worker-side core calls can use noParse.
+      let messagePayload: Uint8Array | undefined;
+      if (result.raw.length > 0) {
+        try {
+          messagePayload = YGOProMessages.getInstanceFromPayload(
+            result.raw,
+          ).toPayload();
+        } catch {
+          messagePayload = undefined;
+        }
+      }
+      return {
+        length: result.length,
+        raw: result.raw,
+        status: result.status,
+        messagePayload,
+      };
+    },
     (serialized) => ({
       length: serialized.length,
       raw: serialized.raw,
@@ -217,7 +233,7 @@ export class OcgcoreWorker {
     }),
   )
   async process(): Promise<OcgcoreProcessResult> {
-    return this.duel.process();
+    return this.duel.process({ noParse: true });
   }
 
   @WorkerMethod()
@@ -232,11 +248,14 @@ export class OcgcoreWorker {
 
   @WorkerMethod()
   @TransportEncoder<OcgcoreCardQueryResult, SerializableCardQueryResult>(
-    (result) => ({
-      length: result.length,
-      raw: result.raw,
-      cardPayload: result.card?.toPayload() ?? null,
-    }),
+    (result) => {
+      const card = parseCardQuery(result.raw, result.length);
+      return {
+        length: result.length,
+        raw: result.raw,
+        cardPayload: card ? card.toPayload() : null,
+      };
+    },
     (serialized) => ({
       length: serialized.length,
       raw: serialized.raw,
@@ -248,7 +267,7 @@ export class OcgcoreWorker {
   async queryCard(
     @TransportType() query: OcgcoreQueryCardParams,
   ): Promise<OcgcoreCardQueryResult> {
-    return this.duel.queryCard(query);
+    return this.duel.queryCard(query, { noParse: true });
   }
 
   @WorkerMethod()
@@ -263,11 +282,14 @@ export class OcgcoreWorker {
     OcgcoreFieldCardQueryResult,
     SerializableFieldCardQueryResult
   >(
-    (result) => ({
-      length: result.length,
-      raw: result.raw,
-      cardsPayload: result.cards.map((card) => card.toPayload()),
-    }),
+    (result) => {
+      const cards = parseFieldCardQuery(result.raw, result.length);
+      return {
+        length: result.length,
+        raw: result.raw,
+        cardsPayload: cards.map((card) => card.toPayload()),
+      };
+    },
     (serialized) => ({
       length: serialized.length,
       raw: serialized.raw,
@@ -279,7 +301,7 @@ export class OcgcoreWorker {
   async queryFieldCard(
     @TransportType() query: OcgcoreQueryFieldCardParams,
   ): Promise<OcgcoreFieldCardQueryResult> {
-    return this.duel.queryFieldCard(query);
+    return this.duel.queryFieldCard(query, { noParse: true });
   }
 
   @WorkerMethod()
@@ -287,7 +309,7 @@ export class OcgcoreWorker {
     (result) => ({
       length: result.length,
       raw: result.raw,
-      fieldPayload: result.field.toPayload(),
+      fieldPayload: parseFieldInfo(result.raw).toPayload(),
     }),
     (serialized) => ({
       length: serialized.length,
@@ -298,18 +320,30 @@ export class OcgcoreWorker {
     }),
   )
   async queryFieldInfo(): Promise<OcgcoreFieldInfoResult> {
-    return this.duel.queryFieldInfo();
+    return this.duel.queryFieldInfo({ noParse: true });
   }
 
   @WorkerMethod()
   @TransportEncoder<OcgcoreProcessResult[], SerializableProcessResult[]>(
     (results) =>
-      results.map((result) => ({
-        length: result.length,
-        raw: result.raw,
-        status: result.status,
-        messagePayload: result.message?.toPayload(),
-      })),
+      results.map((result) => {
+        let messagePayload: Uint8Array | undefined;
+        if (result.raw.length > 0) {
+          try {
+            messagePayload = YGOProMessages.getInstanceFromPayload(
+              result.raw,
+            ).toPayload();
+          } catch {
+            messagePayload = undefined;
+          }
+        }
+        return {
+          length: result.length,
+          raw: result.raw,
+          status: result.status,
+          messagePayload,
+        };
+      }),
     (serializedArray) =>
       serializedArray.map((serialized) => ({
         length: serialized.length,
