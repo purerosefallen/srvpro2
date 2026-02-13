@@ -10,6 +10,7 @@ export type HostinfoOptions = {
 export const defaultConfig = {
   HOST: '::',
   PORT: '7911',
+  REDIS_URL: '',
   LOG_LEVEL: 'info',
   WS_PORT: '0',
   SSL_PATH: '',

@@ -1,8 +1,7 @@
-import initSqlJs, { SqlJsStatic } from 'sql.js';
 import { Context } from '../app';
 import { loadPaths } from '../utility/load-path';
 import { DirCardReader, searchYGOProResource } from 'koishipro-core.js';
-import { YGOProLFList, YGOProLFListItem } from 'ygopro-lflist-encode';
+import { YGOProLFList } from 'ygopro-lflist-encode';
 import path from 'node:path';
 
 export class YGOProResourceLoader {
@@ -14,14 +13,8 @@ export class YGOProResourceLoader {
   ]);
   extraScriptPaths = loadPaths(this.ctx.getConfig('EXTRA_SCRIPT_PATH'));
 
-  private SQL!: SqlJsStatic;
-
-  async init() {
-    this.SQL = await initSqlJs();
-  }
-
   async getCardReader() {
-    return DirCardReader(this.SQL, ...this.ygoproPaths);
+    return DirCardReader(this.ctx.SQL, ...this.ygoproPaths);
   }
 
   async *getLFLists() {

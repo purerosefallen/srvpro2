@@ -1,12 +1,12 @@
 import { IncomingMessage, createServer as createHttpServer } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { Server as WebSocketServer } from 'ws';
-import { Context } from '../../app';
-import { ClientHandler } from '../../client/client-handler';
-import { SSLFinder } from '../../services/ssl-finder';
+import { Context } from '../../../app';
+import { ClientHandler } from '../../client-handler';
+import { SSLFinder } from '../../ssl-finder';
 import { WsClient } from './client';
 import { WebSocket } from 'ws';
-import { IpResolver } from '../../services/ip-resolver';
+import { IpResolver } from '../../ip-resolver';
 
 export class WsServer {
   private wss?: WebSocketServer;

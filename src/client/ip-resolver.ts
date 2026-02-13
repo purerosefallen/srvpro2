@@ -1,5 +1,5 @@
 import { Context } from '../app';
-import { Client } from '../client/client';
+import { Client } from './client';
 import * as ipaddr from 'ipaddr.js';
 import { convertStringArray } from '../utility/convert-string-array';
 

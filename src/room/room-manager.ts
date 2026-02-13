@@ -1,5 +1,6 @@
 import { Context } from '../app';
 import { Room, RoomFinalizor } from './room';
+import BetterLock from 'better-lock';
 
 export class RoomManager {
   constructor(private ctx: Context) {}
@@ -24,11 +25,13 @@ export class RoomManager {
     return Array.from(this.rooms.values());
   }
 
+  private roomCreateLock = new BetterLock();
+
   async findOrCreateByName(name: string) {
     const existing = this.findByName(name);
     if (existing) return existing;
 
-    return this.ctx.aragami.lock(`room_create:${name}`, async () => {
+    return this.roomCreateLock.acquire(`room_create:${name}`, async () => {
       const existing = this.findByName(name);
       if (existing) return existing;
 

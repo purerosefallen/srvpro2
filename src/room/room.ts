@@ -16,10 +16,12 @@ import {
   YGOProStocDeckCount_DeckInfo,
   YGOProStocSelectTp,
   YGOProStocSelectHand,
+  ChatColor,
+  YGOProCtosChat,
 } from 'ygopro-msg-encode';
 import { DefaultHostInfoProvider } from './default-hostinfo-provder';
 import { CardReaderFinalized } from 'koishipro-core.js';
-import { YGOProResourceLoader } from '../services/ygopro-resource-loader';
+import { YGOProResourceLoader } from './ygopro-resource-loader';
 import { blankLFList } from '../utility/blank-lflist';
 import { Client } from '../client/client';
 import { RoomMethod } from '../utility/decorators';
@@ -163,12 +165,15 @@ export class Room {
     return this.playingPlayers.filter((p) => !teammates.has(p));
   }
 
+  private get teamOffsetBit() {
+    return this.isTag ? 1 : 0;
+  }
+
   getDuelPos(client: Client) {
     if (client.pos === NetPlayerType.OBSERVER) {
       return -1;
     }
-    const teamOffsetBit = this.isTag ? 1 : 0;
-    return (client.pos & (0x1 << teamOffsetBit)) >>> teamOffsetBit;
+    return (client.pos & (0x1 << this.teamOffsetBit)) >>> this.teamOffsetBit;
   }
 
   getPosPlayers(duelPos: number) {
@@ -176,6 +181,14 @@ export class Room {
       return [...this.watchers];
     }
     return this.playingPlayers.filter((p) => this.getDuelPos(p) === duelPos);
+  }
+
+  isPosSwapped = false;
+  getSwappedPos(client: Client) {
+    if (client.pos === NetPlayerType.OBSERVER || !this.isPosSwapped) {
+      return client.pos;
+    }
+    return client.pos ^ (0x1 << this.teamOffsetBit);
   }
 
   async join(client: Client) {
@@ -221,6 +234,7 @@ export class Room {
     } else {
       await this.ctx.dispatch(new OnRoomJoinObserver(this), client);
     }
+    return undefined;
   }
 
   duelStage = DuelStage.Begin;
@@ -430,6 +444,15 @@ export class Room {
     // 发送 PlayerChange 给所有人
     const changeMsg = client.prepareChangePacket(PlayerChangeState.NOTREADY);
     this.allPlayers.forEach((p) => p.send(changeMsg));
+  }
+
+  @RoomMethod()
+  private async onChat(client: Client, msg: YGOProCtosChat) {
+    return this.sendChat(msg.msg, this.getSwappedPos(client));
+  }
+
+  async sendChat(msg: string, type: number = ChatColor.BABYBLUE) {
+    return Promise.all(this.allPlayers.map((p) => p.sendChat(msg, type)));
   }
 
   duelCount = 0;

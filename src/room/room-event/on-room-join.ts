@@ -1,3 +1,3 @@
-import { RoomEvent } from "./room-event";
+import { RoomEvent } from './room-event';
 
-export class OnRoomJoin extends RoomEvent { }
+export class OnRoomJoin extends RoomEvent {}

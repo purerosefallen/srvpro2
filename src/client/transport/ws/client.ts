@@ -3,8 +3,8 @@ import { Socket } from 'node:net';
 import { Observable, fromEvent, merge } from 'rxjs';
 import { map, take } from 'rxjs/operators';
 import WebSocket, { RawData } from 'ws';
-import { Context } from '../../app';
-import { Client } from '../../client/client';
+import { Context } from '../../../app';
+import { Client } from '../../client';
 
 export class WsClient extends Client {
   constructor(

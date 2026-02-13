@@ -1,8 +1,8 @@
 import { Socket } from 'node:net';
 import { Observable, fromEvent, merge } from 'rxjs';
 import { map, take } from 'rxjs/operators';
-import { Context } from '../../app';
-import { Client } from '../../client/client';
+import { Context } from '../../../app';
+import { Client } from '../../client';
 
 export class TcpClient extends Client {
   constructor(

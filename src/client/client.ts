@@ -12,10 +12,11 @@ import {
   YGOProStocHsPlayerEnter,
   YGOProStocHsPlayerChange,
   PlayerChangeState,
+  NetPlayerType,
 } from 'ygopro-msg-encode';
 import { YGOProProtoPipe } from '../utility/ygopro-proto-pipe';
-import { I18nService } from '../services/i18n';
-import { Chnroute } from '../services/chnroute';
+import { I18nService } from './i18n';
+import { Chnroute } from './chnroute';
 import YGOProDeck from 'ygopro-deck-encode';
 import PQueue from 'p-queue';
 
@@ -93,12 +94,18 @@ export abstract class Client {
     });
   }
 
-  async sendChat(msg: string, type = ChatColor.BABYBLUE) {
+  async sendChat(msg: string, type: number = ChatColor.BABYBLUE) {
     return this.send(
       new YGOProStocChat().fromPartial({
-        msg: await this.ctx
-          .get(() => I18nService)
-          .translate(this.ctx.get(() => Chnroute).getLocale(this.ip), msg),
+        msg:
+          type <= NetPlayerType.OBSERVER
+            ? msg
+            : await this.ctx
+                .get(() => I18nService)
+                .translate(
+                  this.ctx.get(() => Chnroute).getLocale(this.ip),
+                  msg,
+                ),
         player_type: type,
       }),
     );
