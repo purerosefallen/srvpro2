@@ -40,6 +40,7 @@ import { DefaultHostInfoProvider } from './default-hostinfo-provder';
 import { CardReaderFinalized } from 'koishipro-core.js';
 import { YGOProResourceLoader } from './ygopro-resource-loader';
 import { blankLFList } from '../utility/blank-lflist';
+import { calculateDuelOptions } from '../utility/calculate-duel-options';
 import { Client } from '../client/client';
 import { RoomMethod } from '../utility/decorators';
 import { YGOProCtosDisconnect } from '../utility/ygopro-ctos-disconnect';
@@ -85,17 +86,7 @@ export class Room {
   }
 
   get opt() {
-    const DUEL_PSEUDO_SHUFFLE = 16;
-    const DUEL_TAG_MODE = 32;
-    // duel_rule is stored in high 16 bits
-    let opt = this.hostinfo.duel_rule << 16;
-    if (this.hostinfo.no_shuffle_deck) {
-      opt |= DUEL_PSEUDO_SHUFFLE;
-    }
-    if (this.isTag) {
-      opt |= DUEL_TAG_MODE;
-    }
-    return opt;
+    return calculateDuelOptions(this.hostinfo, this.isTag);
   }
 
   players = new Array<Client | undefined>(this.hostinfo.mode === 2 ? 4 : 2);
