@@ -32,7 +32,7 @@ import { OcgcoreWorkerOptions } from './ocgcore-worker-options';
 import { Subject } from 'rxjs';
 import { calculateDuelOptions } from '../utility/calculate-duel-options';
 import initSqlJs from 'sql.js';
-import { YGOProMessages, CardQuery, OcgcoreCommonConstants } from 'ygopro-msg-encode';
+import { YGOProMessages, OcgcoreCommonConstants } from 'ygopro-msg-encode';
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 
@@ -333,22 +333,11 @@ export class OcgcoreWorker {
       })),
   )
   async advance(): Promise<OcgcoreProcessResult[]> {
-    // Re-implement advance loop here (no advancor state), and use noParse process.
-    // Stop when:
-    //  - status === 2 (need response / halted)
-    //  - MSG_RETRY is emitted (also indicates need response)
     const results: OcgcoreProcessResult[] = [];
     while (true) {
       const res = this.duel.process({ noParse: true });
       results.push(res);
-
-      const msgId = res.raw.length > 0 ? res.raw[0] : undefined;
-      if (res.status === 2 || msgId === OcgcoreCommonConstants.MSG_RETRY) {
-        break;
-      }
-
-      // status === 0 means no more messages for now
-      if (res.status === 0) {
+      if (res.status > 0) {
         break;
       }
     }
