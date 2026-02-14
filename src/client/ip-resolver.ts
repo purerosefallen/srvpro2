@@ -2,6 +2,7 @@ import { Context } from '../app';
 import { Client } from './client';
 import * as ipaddr from 'ipaddr.js';
 import { convertStringArray } from '../utility/convert-string-array';
+import { parseConfigBoolean } from '../utility/parse-config-boolean';
 
 export class IpResolver {
   private logger = this.ctx.createLogger('IpResolver');
@@ -110,9 +111,8 @@ export class IpResolver {
     client.isLocal = isLocal;
 
     // Increment count for new IP
-    const noConnectCountLimit = this.ctx.getConfig(
-      'NO_CONNECT_COUNT_LIMIT',
-      '',
+    const noConnectCountLimit = parseConfigBoolean(
+      this.ctx.getConfig('NO_CONNECT_COUNT_LIMIT', ''),
     );
     let connectCount = this.connectedIpCount.get(newIp) || 0;
 

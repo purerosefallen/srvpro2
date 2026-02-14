@@ -30,6 +30,7 @@ import { RoomManager } from '../room/room-manager';
 import { getSpecificFields } from '../utility/metadata';
 import { YGOProCtosDisconnect } from '../utility/ygopro-ctos-disconnect';
 import { isUpdateDeckPayloadEqual } from '../utility/deck-compare';
+import { parseConfigBoolean } from '../utility/parse-config-boolean';
 
 interface DisconnectInfo {
   roomName: string;
@@ -59,8 +60,8 @@ export class Reconnect {
   ); // 超时时间，单位：毫秒（默认 180000ms = 3分钟）
 
   constructor(private ctx: Context) {
-    // 检查是否禁用断线重连
-    if (this.ctx.getConfig('NO_RECONNECT', '')) {
+    // 检查是否启用断线重连（默认启用）
+    if (!parseConfigBoolean(this.ctx.getConfig('ENABLE_RECONNECT', ''), true)) {
       return;
     }
 

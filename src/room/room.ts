@@ -89,6 +89,7 @@ import { shuffleDecksBySeed } from '../utility/shuffle-decks-by-seed';
 import { isUpdateMessage } from '../utility/is-update-message';
 import { getMessageIdentifier } from '../utility/get-message-identifier';
 import { canIncreaseTime } from '../utility/can-increase-time';
+import { parseConfigBoolean } from '../utility/parse-config-boolean';
 import { TimerState } from './timer-state';
 import { makeArray } from 'aragami/dist/src/utility/utility';
 
@@ -1267,7 +1268,7 @@ export class Room {
     this.ocgcore.message$.subscribe((msg) => {
       if (
         msg.type === OcgcoreMessageType.DebugMessage &&
-        !this.ctx.getConfig('OCGCORE_DEBUG_LOG', '')
+        !parseConfigBoolean(this.ctx.getConfig('OCGCORE_DEBUG_LOG', ''))
       ) {
         return;
       }

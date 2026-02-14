@@ -97,14 +97,22 @@ npm start
 
 ## 🔧 Configuration
 
-Key configuration options (see `config.example.yaml` for full list):
+Configuration meaning source of truth:
+
+- `src/config.ts` is the canonical place for all config keys and their meanings.
+- Use the comments in `src/config.ts` to understand what each field does.
+- `config.example.yaml` is generated from `src/config.ts` defaults for quick editing.
+- All config values are loaded as strings; follow each field's format note in `src/config.ts`.
+- Format examples used in `src/config.ts`: comma-separated lists, integer strings, and explicit time units (`ms` or `s`).
+
+Commonly used options:
 
 - `WELCOME`: Welcome message shown to players joining rooms
 - `RECONNECT_TIMEOUT`: Disconnect timeout before reconnect expires (default: 180000ms)
-- `NO_RECONNECT`: Set to disable reconnect feature
+- `ENABLE_RECONNECT`: Reconnect feature switch (default enabled)
 - Standard YGOPro settings (port, timeout, banlist, etc.)
 
-After modifying `src/config.ts`, regenerate the example config:
+After modifying defaults in `src/config.ts`, regenerate the example config:
 ```bash
 npm run gen:config-example
 ```
