@@ -8,3 +8,6 @@ export interface RoomMethodOptions {
 
 export const RoomMethod = (options: RoomMethodOptions = {}): MethodDecorator =>
   Metadata.set('roomMethod', options, 'roomMethodKeys');
+
+export const ClientRoomField = (): PropertyDecorator =>
+  Metadata.set('clientRoomField', true, 'clientRoomFieldKeys');

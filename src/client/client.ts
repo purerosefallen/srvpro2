@@ -19,6 +19,7 @@ import { I18nService } from './i18n';
 import { Chnroute } from './chnroute';
 import YGOProDeck from 'ygopro-deck-encode';
 import PQueue from 'p-queue';
+import { ClientRoomField } from '../utility/decorators';
 
 export abstract class Client {
   protected abstract _send(data: Buffer): Promise<void>;
@@ -72,7 +73,10 @@ export abstract class Client {
     return this;
   }
 
+  disconnected = false;
+
   disconnect(): undefined {
+    this.disconnected = true;
     this.disconnectSubject.next();
     this.disconnectSubject.complete();
     this._disconnect().then();
@@ -82,6 +86,9 @@ export abstract class Client {
   private sendQueue = new PQueue({ concurrency: 1 });
 
   async send(data: YGOProStocBase) {
+    if (this.disconnected) { 
+      return;
+    }
     return this.sendQueue.add(async () => {
       try {
         await this._send(Buffer.from(data.toFullPayload()));
@@ -139,10 +146,15 @@ export abstract class Client {
   established = false;
 
   // in room
+  @ClientRoomField()
   roomName?: string;
+  @ClientRoomField()
   isHost = false;
+  @ClientRoomField()
   pos = -1;
+  @ClientRoomField()
   deck?: YGOProDeck;
+  @ClientRoomField()
   startDeck?: YGOProDeck;
 
   async sendTypeChange() {

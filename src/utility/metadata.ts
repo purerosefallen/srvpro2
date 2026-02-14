@@ -3,6 +3,7 @@ import type { RoomMethodOptions } from './decorators';
 
 interface MetadataMap {
   roomMethod: RoomMethodOptions;
+  clientRoomField: true;
 }
 
 type MetadataArrayMap = {
