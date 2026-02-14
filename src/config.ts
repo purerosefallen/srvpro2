@@ -30,6 +30,8 @@ export const defaultConfig = {
   DECK_MAX_COPIES: '3',
   OCGCORE_DEBUG_LOG: '',
   WELCOME: '',
+  NO_RECONNECT: '',
+  RECONNECT_TIMEOUT: '180000',
   ...(Object.fromEntries(
     Object.entries(DefaultHostinfo).map(([key, value]) => [
       `HOSTINFO_${key.toUpperCase()}`,

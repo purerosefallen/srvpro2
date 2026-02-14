@@ -1,5 +1,5 @@
 import { filter, merge, Observable, of, Subject } from 'rxjs';
-import { map, share, take, takeUntil } from 'rxjs/operators';
+import { map, share, take, takeUntil, tap } from 'rxjs/operators';
 import { Context } from '../app';
 import {
   YGOProCtos,
@@ -55,7 +55,13 @@ export class Client {
         .asObservable()
         .pipe(map(() => ({ bySystem: true }))),
       this._onDisconnect().pipe(map(() => ({ bySystem: false }))),
-    ).pipe(take(1), share());
+    ).pipe(
+      take(1),
+      tap(() => {
+        this.disconnected = new Date();
+      }),
+      share(),
+    );
     this.receive$ = this._receive().pipe(
       YGOProProtoPipe(YGOProCtos, {
         onError: (error) => {
@@ -85,7 +91,6 @@ export class Client {
   disconnected?: Date;
 
   disconnect(): undefined {
-    this.disconnected = new Date();
     this.disconnectSubject.next();
     this.disconnectSubject.complete();
     this._disconnect().then();

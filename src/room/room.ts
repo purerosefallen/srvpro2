@@ -210,7 +210,7 @@ export class Room {
     }
   }
 
-  private get joinGameMessage() {
+  get joinGameMessage() {
     return new YGOProStocJoinGame().fromPartial({
       info: {
         ...this.hostinfo,
@@ -297,9 +297,20 @@ export class Room {
 
   private sendPostWatchMessages(client: Client) {
     client.send(new YGOProStocDuelStart());
+    
+    // 在 SelectHand / SelectTp 阶段发送 DeckCount
+    // Siding 阶段不发 DeckCount
+    if (
+      this.duelStage === DuelStage.Finger ||
+      this.duelStage === DuelStage.FirstGo
+    ) {
+      client.send(this.prepareStocDeckCount(client.pos));
+    }
+
     if (this.duelStage === DuelStage.Siding) {
       client.send(new YGOProStocWaitingSide());
     } else if (this.duelStage === DuelStage.Dueling) {
+      // Dueling 阶段不发 DeckCount，直接发送观战消息
       this.lastDuelRecord?.watchMessages.forEach((message) => {
         client.send(
           new YGOProStocGameMsg().fromPartial({ msg: message.observerView() }),
@@ -755,6 +766,7 @@ export class Room {
       this.allPlayers.forEach((p) => p.send(changeMsg));
     } else if (this.duelStage === DuelStage.Siding) {
       // In Siding stage, send DUEL_START to the player who submitted deck
+      // Siding 阶段不发 DeckCount
       client.send(new YGOProStocDuelStart());
 
       // Check if all players have submitted their decks
@@ -809,13 +821,54 @@ export class Room {
     return Promise.all(this.allPlayers.map((p) => p.sendChat(msg, type)));
   }
 
-  firstgoPlayer?: Client;
-  private handResult = [0, 0];
+  firstgoPos?: number;
+  handResult = [0, 0];
+
+  prepareStocDeckCount(pos: number) {
+    const toDeckCount = (d: YGOProDeck | undefined) => {
+      const res = new YGOProStocDeckCount_DeckInfo();
+      if (!d) {
+        res.main = 0;
+        res.extra = 0;
+        res.side = 0;
+      } else {
+        res.main = d.main.length;
+        res.extra = d.extra.length;
+        res.side = d.side.length;
+      }
+      return res;
+    };
+
+    const displayCountDecks: (YGOProDeck | undefined)[] = [0, 1].map((p) => {
+      const player = this.getDuelPosPlayers(p)[0];
+      // 优先使用 deck，如果不存在则使用 startDeck 兜底
+      return player?.deck || player?.startDeck;
+    });
+
+    // 如果是观战者或者其他特殊位置，直接按顺序显示
+    if (pos >= NetPlayerType.OBSERVER) {
+      return new YGOProStocDeckCount().fromPartial({
+        player0DeckCount: toDeckCount(displayCountDecks[0]),
+        player1DeckCount: toDeckCount(displayCountDecks[1]),
+      });
+    }
+
+    // 对于玩家，自己的卡组在前，对方的在后
+    const duelPos = this.getDuelPos(pos);
+    const selfDeck = displayCountDecks[duelPos];
+    const otherDeck = displayCountDecks[1 - duelPos];
+
+    return new YGOProStocDeckCount().fromPartial({
+      player0DeckCount: toDeckCount(selfDeck),
+      player1DeckCount: toDeckCount(otherDeck),
+    });
+  }
 
   private async toFirstGo(firstgoPos: number) {
-    this.firstgoPlayer = this.getDuelPosPlayers(firstgoPos)[0];
+    this.firstgoPos = firstgoPos;
     this.duelStage = DuelStage.FirstGo;
-    this.firstgoPlayer.send(new YGOProStocSelectTp());
+    const firstgoPlayer = this.getDuelPosPlayers(firstgoPos)[0];
+    firstgoPlayer.send(new YGOProStocSelectTp());
   }
 
   private async toFinger() {
@@ -901,36 +954,9 @@ export class Room {
     }
 
     if (this.duelRecords.length === 0) {
-      this.allPlayers.forEach((p) => p.send(new YGOProStocDuelStart()));
-      const displayCountDecks = [0, 1].map(
-        (p) => this.getDuelPosPlayers(p)[0].deck!,
-      );
-      const toDeckCount = (d: YGOProDeck) => {
-        const res = new YGOProStocDeckCount_DeckInfo();
-        res.main = d.main.length;
-        res.extra = d.extra.length;
-        res.side = d.side.length;
-        return res;
-      };
-      [0, 1].forEach((p) => {
-        const selfDeck = displayCountDecks[p];
-        const otherDeck = displayCountDecks[1 - p];
-        this.getDuelPosPlayers(p).forEach((c) => {
-          c.send(
-            new YGOProStocDeckCount().fromPartial({
-              player0DeckCount: toDeckCount(selfDeck),
-              player1DeckCount: toDeckCount(otherDeck),
-            }),
-          );
-        });
-      });
-      this.watchers.forEach((c) => {
-        c.send(
-          new YGOProStocDeckCount().fromPartial({
-            player0DeckCount: toDeckCount(displayCountDecks[0]),
-            player1DeckCount: toDeckCount(displayCountDecks[1]),
-          }),
-        );
+      this.allPlayers.forEach((p) => {
+        p.send(new YGOProStocDuelStart());
+        p.send(this.prepareStocDeckCount(p.pos));
       });
     }
 
@@ -1089,7 +1115,13 @@ export class Room {
 
   @RoomMethod({ allowInDuelStages: DuelStage.FirstGo })
   private async onDuelStart(client: Client, msg: YGOProCtosTpResult) {
-    if (client !== this.firstgoPlayer) {
+    // 检查是否是该玩家选先后手（duelPos 的第一个玩家）
+    const duelPos = this.getDuelPos(client);
+    if (duelPos !== this.firstgoPos) {
+      return;
+    }
+    const firstgoPlayers = this.getDuelPosPlayers(duelPos);
+    if (client !== firstgoPlayers[0]) {
       return;
     }
     this.isPosSwapped =
@@ -1294,7 +1326,11 @@ export class Room {
 
   async refreshLocations(
     refresh: RequireQueryLocation,
-    options: { queryFlag?: number; sendToClient?: MayBeArray<Client> } = {},
+    options: {
+      queryFlag?: number;
+      sendToClient?: MayBeArray<Client>;
+      useCache?: number;
+    } = {},
   ) {
     if (!this.ocgcore) {
       return;
@@ -1305,7 +1341,7 @@ export class Room {
         player: refresh.player,
         location,
         queryFlag: options.queryFlag ?? getZoneQueryFlag(location),
-        useCache: 1,
+        useCache: options.useCache ?? 1,
       });
       await this.dispatchGameMsg(
         new YGOProMsgUpdateData().fromPartial({
