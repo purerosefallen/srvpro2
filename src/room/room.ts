@@ -117,10 +117,10 @@ export class Room {
   }
 
   get isTag() {
-    return this.hostinfo.mode === 2;
+    return (this.hostinfo.mode & 0x2) !== 0;
   }
 
-  players = new Array<Client | undefined>(this.hostinfo.mode === 2 ? 4 : 2);
+  players = new Array<Client | undefined>(this.isTag ? 4 : 2);
   watchers = new Set<Client>();
   get playingPlayers() {
     return this.players.filter((p) => p) as Client[];

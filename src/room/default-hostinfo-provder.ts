@@ -2,6 +2,23 @@ import { HostInfo } from 'ygopro-msg-encode';
 import { Context } from '../app';
 import { DefaultHostinfo } from './default-hostinfo';
 
+const TAG_MODE_BIT = 0x2;
+const MATCH_WINS_BITS_MASK = 0xfd;
+
+const encodeWinMatchCountBits = (winMatchCount: number): number => {
+  // room.ts decode: ((mode & 0x1) | ((mode & 0xfc) >>> 1)) + 1
+  const value = Math.max(1, winMatchCount) - 1;
+  return (value & 0x1) | ((value & 0x7e) << 1);
+};
+
+const setTagBit = (mode: number, isTag: boolean): number =>
+  isTag ? mode | TAG_MODE_BIT : mode & ~TAG_MODE_BIT;
+
+const setWinMatchCountBits = (mode: number, winMatchCount: number): number => {
+  const nonTagBits = encodeWinMatchCountBits(winMatchCount) & MATCH_WINS_BITS_MASK;
+  return (mode & TAG_MODE_BIT) | nonTagBits;
+};
+
 export class DefaultHostInfoProvider {
   constructor(private ctx: Context) {}
 
@@ -70,11 +87,19 @@ export class DefaultHostInfoProvider {
 
     const rule = rulePrefix[1].toUpperCase();
     if (/(^|，|,)(M|MATCH)(，|,|$)/.test(rule)) {
-      hostinfo.mode = 1;
+      hostinfo.mode = setWinMatchCountBits(hostinfo.mode, 2);
     }
     if (/(^|，|,)(T|TAG)(，|,|$)/.test(rule)) {
-      hostinfo.mode = 2;
+      hostinfo.mode = setTagBit(hostinfo.mode, true);
       hostinfo.start_lp = defaultHostinfo.start_lp * 2;
+    }
+    const boParam = rule.match(/(^|，|,)BO(\d+)(，|,|$)/);
+    if (boParam) {
+      const bo = Number.parseInt(boParam[2], 10);
+      // only odd BOx is valid (e.g. BO1/3/5...)
+      if (!Number.isNaN(bo) && bo > 0 && bo % 2 === 1) {
+        hostinfo.mode = setWinMatchCountBits(hostinfo.mode, (bo + 1) / 2);
+      }
     }
     if (/(^|，|,)(OOR|OCGONLYRANDOM)(，|,|$)/.test(rule)) {
       hostinfo.rule = 0;
