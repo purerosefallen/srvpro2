@@ -61,7 +61,6 @@ import {
 } from 'koishipro-core.js';
 import { YGOProResourceLoader } from './ygopro-resource-loader';
 import { blankLFList } from '../utility/blank-lflist';
-import { calculateDuelOptions } from '../utility/calculate-duel-options';
 import { Client } from '../client/client';
 import { RoomMethod } from '../utility/decorators';
 import { YGOProCtosDisconnect } from '../utility/ygopro-ctos-disconnect';
