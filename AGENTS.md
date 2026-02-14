@@ -11,6 +11,10 @@
 - 如果 Room 的事件不够，可以加，然后在对应的点加 dispatch。
 - Room 的事件不要依赖 YGOProMsgStart 或者 YGOProMsgWin 这样的直接消息事件（经常会不准，这些事件只适合用来构建 replay），应该依赖 Room 专用事件。
 - 定义 middleware 如果不是拦截消息，必须 return next()
+- 引用规范：
+  - 目录内引用：同级文件使用 `'./xxx'`，子目录文件使用 `'../xxx'`
+  - 目录外引用：必须通过 index.ts 引用，如 `'../room'` `'../client'`（指向 index.ts）
+  - 禁止直接引用具体文件：不要使用 `'../room/room'` `'../client/client'` 这样的路径
 
 ## 模块结构
 
@@ -30,13 +34,13 @@
 
 ## 参考项目
 
-可以参考电脑的下面的项目，用来参考
+可以参考电脑的下面的项目，用来参考。这些代码只能看，不能改。~ 指代这台电脑的 HOME 目录。
 
 - ygopro-msg-encode（js 协议库）: ~/ygo/ygopro-msg-encode
 - koishipro-core.js（wasm 层）: ~/ygo/koishipro-core.js
 - ocgcore（YGOPro ocgcore 内核）: ~/ygo/ygopro/ocgcore
 - ygopro（YGOPro 主程序服务端）: ~/ygo/ygopro/gframe
-- srvpro（本项目的上一代）: ~/ygo/ygopro/srvpro-koishi
+- srvpro（本项目的上一代）: ~/ygo/srvpro-koishi
 - yuzuthread（多线程执行器）: ~/test/yuzuthread
 - typed-reflector（反射器）: ~/test/koishi-related/typed-reflector
 - nfkit（工具库,事件触发器，IoC）: ~/test/nfkit

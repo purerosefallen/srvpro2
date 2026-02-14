@@ -3,7 +3,7 @@ import { Context } from '../app';
 import { getSpecificFields } from '../utility/metadata';
 import { RoomMethodOptions } from '../utility/decorators';
 import { Room } from './room';
-import { Client } from '../client/client';
+import { Client } from '../client';
 import { YGOProCtosBase } from 'ygopro-msg-encode';
 import { RoomManager } from './room-manager';
 import { makeArray } from 'nfkit';

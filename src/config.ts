@@ -29,6 +29,7 @@ export const defaultConfig = {
   DECK_SIDE_MAX: '15',
   DECK_MAX_COPIES: '3',
   OCGCORE_DEBUG_LOG: '',
+  WELCOME: '',
   ...(Object.fromEntries(
     Object.entries(DefaultHostinfo).map(([key, value]) => [
       `HOSTINFO_${key.toUpperCase()}`,
