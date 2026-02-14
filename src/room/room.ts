@@ -1489,6 +1489,12 @@ export class Room {
               const duelPos = this.getIngameDuelPos(c);
               const playerView = message.playerView(duelPos);
               const operatingPlayer = this.getIngameOperatingPlayer(duelPos);
+              if (
+                message instanceof YGOProMsgResponseBase &&
+                c !== operatingPlayer
+              ) {
+                return;
+              }
               return sendGameMsg(
                 c,
                 c === operatingPlayer ? playerView : playerView.teammateView(),
