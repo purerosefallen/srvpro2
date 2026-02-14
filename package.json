@@ -81,7 +81,7 @@
     "ygopro-cdb-encode": "^1.0.2",
     "ygopro-deck-encode": "^1.0.15",
     "ygopro-lflist-encode": "^1.0.3",
-    "ygopro-msg-encode": "^1.1.20",
+    "ygopro-msg-encode": "^1.1.21",
     "ygopro-yrp-encode": "^1.0.1",
     "yuzuthread": "^1.0.8"
   }
