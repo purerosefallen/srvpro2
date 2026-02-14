@@ -223,6 +223,8 @@ export class Room {
       info: {
         ...this.hostinfo,
         lflist: this.lflist === blankLFList ? 0 : this.lflist.getHash(),
+        mode:
+          this.hostinfo.mode > 2 ? (this.isTag ? 2 : 1) : this.hostinfo.mode,
       },
     });
   }
@@ -1210,7 +1212,8 @@ export class Room {
       'Initializing OCGCoreWorker',
     );
 
-    const ocgcoreWasmPathConfig = this.ctx.config.getString('OCGCORE_WASM_PATH');
+    const ocgcoreWasmPathConfig =
+      this.ctx.config.getString('OCGCORE_WASM_PATH');
     const ocgcoreWasmPath = ocgcoreWasmPathConfig
       ? path.resolve(process.cwd(), ocgcoreWasmPathConfig)
       : undefined;
