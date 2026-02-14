@@ -10,6 +10,9 @@ export const TRANSLATIONS = {
     blank_room_name: 'Blank room name is unallowed, please fill in something.',
     replay_hint_part1: 'Sending the replay of the duel number ',
     replay_hint_part2: '.',
+    watch_join: 'joined as spectator.',
+    quit_watch: 'quited spectating',
+    left_game: 'quited game',
   },
   'zh-CN': {
     update_required: '请更新你的客户端版本',
@@ -21,5 +24,8 @@ export const TRANSLATIONS = {
     blank_room_name: '房间名不能为空，请在主机密码处填写房间名',
     replay_hint_part1: '正在发送第',
     replay_hint_part2: '局决斗的录像。',
+    watch_join: '加入了观战',
+    quit_watch: '退出了观战',
+    left_game: '离开了游戏',
   },
 };

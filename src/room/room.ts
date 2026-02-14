@@ -295,11 +295,25 @@ export class Room {
     return this.getDuelPosPlayers(swappedDuelPos);
   }
 
+  private sendPostWatchMessages(client: Client) {
+    client.send(new YGOProStocDuelStart());
+    if (this.duelStage === DuelStage.Siding) {
+      client.send(new YGOProStocWaitingSide());
+    } else if (this.duelStage === DuelStage.Dueling) {
+      this.lastDuelRecord?.watchMessages.forEach((message) => {
+        client.send(
+          new YGOProStocGameMsg().fromPartial({ msg: message.observerView() }),
+        );
+      });
+    }
+  }
+
   async join(client: Client) {
     client.roomName = this.name;
     client.isHost = !this.allPlayers.length;
     const firstEmptyPlayerSlot = this.players.findIndex((p) => !p);
-    const isPlayer = firstEmptyPlayerSlot >= 0;
+    const isPlayer =
+      firstEmptyPlayerSlot >= 0 && this.duelStage === DuelStage.Begin;
 
     if (isPlayer) {
       this.players[firstEmptyPlayerSlot] = client;
@@ -319,16 +333,20 @@ export class Room {
         client.send(p.prepareChangePacket());
       }
     });
-    if (this.watchers.size) {
+    if (this.watchers.size && this.duelStage === DuelStage.Begin) {
       client.send(this.watcherSizeMessage);
     }
 
     // send to other players
-    this.allPlayers
-      .filter((p) => p !== client)
-      .forEach((p) => {
-        p.send(client.prepareEnterPacket());
-      });
+    if (isPlayer) {
+      this.allPlayers
+        .filter((p) => p !== client)
+        .forEach((p) => {
+          p.send(client.prepareEnterPacket());
+        });
+    } else if (this.watchers.size && this.duelStage === DuelStage.Begin) {
+      client.send(this.watcherSizeMessage);
+    }
 
     await this.ctx.dispatch(new OnRoomJoin(this), client);
 
@@ -338,6 +356,11 @@ export class Room {
     } else {
       await this.ctx.dispatch(new OnRoomJoinObserver(this), client);
     }
+
+    if (this.duelStage !== DuelStage.Begin) {
+      this.sendPostWatchMessages(client);
+    }
+
     return undefined;
   }
 
@@ -1471,7 +1494,7 @@ export class Room {
     .middleware(YGOProMsgBase, async (message, next) => {
       // record messages for replay
       if (!(message instanceof YGOProMsgResponseBase)) {
-        this.lastDuelRecord.messages.push(message);
+        this.lastDuelRecord.watchMessages.push(message);
       }
       return next();
     })

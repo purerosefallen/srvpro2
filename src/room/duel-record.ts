@@ -19,7 +19,7 @@ export class DuelRecord {
   date = new Date();
   winPosition?: number;
   responses: Buffer[] = [];
-  messages: YGOProMsgBase[] = [];
+  watchMessages: YGOProMsgBase[] = [];
 
   private toReplayDeck(deck: YGOProDeck | null | undefined) {
     if (!deck) {
