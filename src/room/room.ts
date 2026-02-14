@@ -436,9 +436,11 @@ export class Room {
     this.disposeOcgcore();
     this.ocgcore = undefined;
     if (this.duelStage === DuelStage.Siding) {
-      this.playingPlayers
-        .filter((p) => !p.deck)
-        .forEach((p) => p.send(new YGOProStocDuelStart()));
+      await Promise.all(
+        this.playingPlayers
+          .filter((p) => !p.deck)
+          .map((p) => p.send(new YGOProStocDuelStart())),
+      );
     }
     const duelPos = this.getIngameDuelPosByDuelPos(winMsg.player!);
     this.isPosSwapped = false;
