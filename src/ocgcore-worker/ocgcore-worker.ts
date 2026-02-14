@@ -124,7 +124,7 @@ export class OcgcoreWorker {
     }
 
     // Calculate duel options
-    const opt = calculateDuelOptions(hostinfo, this.options.isTag ?? false);
+    const opt = calculateDuelOptions(hostinfo);
 
     // Helper function to load a deck
     const loadDeck = (
