@@ -173,7 +173,7 @@ export class Room {
 
   private async cleanPlayers(sendDuelEnd = false) {
     await Promise.all([
-      ...this.allPlayers.map(async (p) => {
+      ...this.playingPlayers.map(async (p) => {
         await this.kick(p, sendDuelEnd);
         if (p.pos < NetPlayerType.OBSERVER) {
           this.players[p.pos] = undefined;
@@ -496,6 +496,16 @@ export class Room {
       if (nextHost) {
         nextHost.isHost = true;
         await nextHost.sendTypeChange();
+        // 如果游戏还在准备阶段，重置新房主的准备状态
+        if (this.duelStage === DuelStage.Begin && nextHost.deck) {
+          nextHost.deck = undefined;
+          // 发送 PlayerChange NOTREADY 给所有人
+          await Promise.all(
+            this.allPlayers.map((p) =>
+              p.send(nextHost.prepareChangePacket(PlayerChangeState.NOTREADY)),
+            ),
+          );
+        }
       }
     }
 
