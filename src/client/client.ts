@@ -1,4 +1,4 @@
-import { filter, merge, Observable, Subject } from 'rxjs';
+import { filter, merge, Observable, of, Subject } from 'rxjs';
 import { map, share, take, takeUntil } from 'rxjs/operators';
 import { Context } from '../app';
 import {
@@ -21,12 +21,20 @@ import YGOProDeck from 'ygopro-deck-encode';
 import PQueue from 'p-queue';
 import { ClientRoomField } from '../utility/decorators';
 
-export abstract class Client {
-  protected abstract _send(data: Buffer): Promise<void>;
-  protected abstract _receive(): Observable<Buffer<ArrayBufferLike>>;
-  protected abstract _disconnect(): Promise<void>;
-  protected abstract _onDisconnect(): Observable<void>;
-  abstract physicalIp(): string;
+export class Client {
+  protected async _send(data: Buffer): Promise<void> {
+    return Promise.resolve();
+  }
+  protected _receive(): Observable<Buffer<ArrayBufferLike>> {
+    return of();
+  }
+  protected async _disconnect(): Promise<void> {}
+  protected _onDisconnect(): Observable<void> {
+    return of();
+  }
+  physicalIp(): string {
+    return '';
+  }
 
   // in handshake
   ip = '';
@@ -86,7 +94,7 @@ export abstract class Client {
   private sendQueue = new PQueue({ concurrency: 1 });
 
   async send(data: YGOProStocBase) {
-    if (this.disconnected) { 
+    if (this.disconnected) {
       return;
     }
     return this.sendQueue.add(async () => {
