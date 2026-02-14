@@ -8,6 +8,7 @@ import { TransportModule } from './client/transport-module';
 import { JoinHandlerModule } from './join-handlers/join-handler-module';
 import { RoomModule } from './room/room-module';
 import { SqljsFactory, SqljsLoader } from './services/sqljs';
+import { FeatsModule } from './feats/feats-module';
 
 const core = createAppContext()
   .provide(ConfigService, {
@@ -28,6 +29,7 @@ export type ContextState = AppContextState<Context>;
 
 export const app = core
   .use(TransportModule)
+  .use(FeatsModule)
   .use(RoomModule)
   .use(JoinHandlerModule)
   .define();

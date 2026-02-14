@@ -11,6 +11,10 @@ const YGOPRO_VERSION = 0x1362;
 export class ClientVersionCheck {
   private altVersions = convertNumberArray(this.ctx.getConfig('ALT_VERSIONS'));
 
+  version = parseInt(
+    this.ctx.getConfig('YGOPRO_VERSION', YGOPRO_VERSION.toString()),
+  );
+
   constructor(private ctx: Context) {
     this.ctx.middleware(YGOProCtosJoinGame, async (msg, client, next) => {
       if (msg.version === YGOPRO_VERSION) {

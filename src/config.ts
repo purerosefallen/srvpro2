@@ -18,6 +18,7 @@ export const defaultConfig = {
   SSL_KEY: '',
   TRUSTED_PROXIES: '127.0.0.0/8,::1/128',
   NO_CONNECT_COUNT_LIMIT: '',
+  YGOPRO_VERSION: '',
   ALT_VERSIONS: '',
   USE_PROXY: '',
   YGOPRO_PATH: './ygopro',

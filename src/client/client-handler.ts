@@ -82,6 +82,13 @@ export class ClientHandler {
     const receive$ = merge(client.receive$, disconnect$);
 
     receive$.subscribe(async (msg) => {
+      this.logger.debug(
+        {
+          msgName: msg.constructor.name,
+          client: client.name || client.loggingIp(),
+        },
+        'Received client message',
+      );
       try {
         await this.ctx.dispatch(msg, client);
       } catch (e) {

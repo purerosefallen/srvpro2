@@ -168,7 +168,6 @@ export class Room {
     if (this.hostinfo.lflist >= 0) {
       this.lflist = (await this.findLFList()) || blankLFList;
     }
-    this.logger.debug({ winMatchCount: this.winMatchCount }, 'Match win count');
     return this;
   }
 
@@ -1284,7 +1283,10 @@ export class Room {
     }
   }
 
-  private async refreshSingle(refresh: RequireQueryCardLocation) {
+  private async refreshSingle(
+    refresh: RequireQueryCardLocation,
+    options: { queryFlag?: number; sendToClient?: MayBeArray<Client> } = {},
+  ) {
     if (!this.ocgcore) {
       return;
     }
@@ -1295,7 +1297,7 @@ export class Room {
         location,
         sequence: refresh.sequence,
         queryFlag:
-          0xf81fff |
+          (options.queryFlag ?? 0xf81fff) |
           OcgcoreCommonConstants.QUERY_CODE |
           OcgcoreCommonConstants.QUERY_POSITION,
         useCache: 0,
@@ -1314,7 +1316,7 @@ export class Room {
               return empty;
             })(),
         }),
-        true,
+        { sendToClient: options.sendToClient, route: true },
       );
     }
   }
