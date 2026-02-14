@@ -188,7 +188,7 @@ export class OcgcoreWorker {
     };
 
     // Load decks
-    if (this.options.isTag) {
+    if (this.options.hostinfo.mode & 0x2) {
       // Tag duel: decks[0] for player 0 main, decks[1] for player 0 tag,
       //           decks[2] for player 1 main, decks[3] for player 1 tag
       // In tag mode: player 0 main and player 1 tag start, using newCard

@@ -10,6 +10,5 @@ export class OcgcoreWorkerOptions {
   hostinfo: HostInfo;
   @TransportType(() => [YGOProDeck])
   decks: YGOProDeck[];
-  isTag: boolean;
   registry: Record<string, string>;
 }

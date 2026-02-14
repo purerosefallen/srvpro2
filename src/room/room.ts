@@ -1226,7 +1226,6 @@ export class Room {
       ocgcoreWasmPath,
       registry,
       decks: duelRecord.players.map((p) => p.deck),
-      isTag: this.isTag,
     });
 
     const [
