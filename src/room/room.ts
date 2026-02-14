@@ -185,7 +185,7 @@ export class Room {
     ]);
   }
 
-  private finalizors: RoomFinalizor[] = [() => this.ocgcore?.dispose()];
+  private finalizors: RoomFinalizor[] = [() => this.disposeOcgcore()];
 
   addFinalizor(finalizor: RoomFinalizor, atEnd = false) {
     if (atEnd) {
@@ -297,7 +297,7 @@ export class Room {
 
   private sendPostWatchMessages(client: Client) {
     client.send(new YGOProStocDuelStart());
-    
+
     // 在 SelectHand / SelectTp 阶段发送 DeckCount
     // Siding 阶段不发 DeckCount
     if (
@@ -416,9 +416,16 @@ export class Room {
     return this.duelRecords[this.duelRecords.length - 1];
   }
 
+  private disposeOcgcore() {
+    try {
+      this.ocgcore?.dispose().catch();
+      this.ocgcore = undefined;
+    } catch {}
+  }
+
   async win(winMsg: Partial<YGOProMsgWin>, forceWinMatch = false) {
     this.resetResponseState();
-    await this.ocgcore?.dispose();
+    this.disposeOcgcore();
     this.ocgcore = undefined;
     if (this.duelStage === DuelStage.Siding) {
       this.playingPlayers
