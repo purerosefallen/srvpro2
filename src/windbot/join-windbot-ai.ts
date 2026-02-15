@@ -3,6 +3,7 @@ import { Context } from '../app';
 import { WindBotProvider } from './windbot-provider';
 import { RoomManager } from '../room';
 import { fillRandomString } from '../utility/fill-random-string';
+import { parseWindbotOptions } from './utility';
 
 const getDisplayLength = (text: string) =>
   text.replace(/[^\x00-\xff]/g, '00').length;
@@ -52,16 +53,21 @@ export class JoinWindbotAi {
       room.windbot = {
         name: '',
         deck: '',
-      }
+      };
+      const windbotOptions = parseWindbotOptions(room.name);
 
       await room.join(client);
-      const requestOk = await this.windbotProvider.requestWindbotJoin(
-        room,
-        requestedBotName,
-      );
-      if (!requestOk) {
-        await room.finalize();
-        return;
+      const requestCount = room.isTag ? 3 : 1;
+      for (let i = 0; i < requestCount; i += 1) {
+        const requestOk = await this.windbotProvider.requestWindbotJoin(
+          room,
+          requestedBotName,
+          windbotOptions,
+        );
+        if (!requestOk) {
+          await room.finalize();
+          return;
+        }
       }
 
       this.logger.debug(
@@ -69,6 +75,7 @@ export class JoinWindbotAi {
           player: client.name,
           roomName: room.name,
           botName: room.windbot?.name,
+          requestCount,
         },
         'Created windbot room',
       );

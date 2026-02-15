@@ -3,14 +3,11 @@ import * as fs from 'node:fs/promises';
 import { ChatColor } from 'ygopro-msg-encode';
 import { Context } from '../app';
 import { OnRoomFinalize, Room } from '../room';
-
-export interface WindbotData {
-  name: string;
-  deck: string;
-  dialog?: string;
-  hidden?: boolean;
-  deckcode?: string;
-}
+import type {
+  RequestWindbotJoinOptions,
+  WindbotData,
+  WindbotJoinTokenData,
+} from './utility';
 
 declare module '../client' {
   interface Client {
@@ -36,8 +33,8 @@ export class WindBotProvider {
   public botlistPath = this.ctx.config.getString('WINDBOT_BOTLIST');
 
   private bots: WindbotData[] = [];
-  private tokenRoomMap = new Map<string, string>();
-  private roomTokenMap = new Map<string, string>();
+  private tokenDataMap = new Map<string, WindbotJoinTokenData>();
+  private roomTokenMap = new Map<string, Set<string>>();
 
   constructor(private ctx: Context) {
     if (!this.enabled) {
@@ -73,60 +70,70 @@ export class WindBotProvider {
     return this.bots.find((bot) => bot.name === name || bot.deck === name);
   }
 
-  issueJoinToken(roomName: string) {
-    const oldToken = this.roomTokenMap.get(roomName);
-    if (oldToken) {
-      this.tokenRoomMap.delete(oldToken);
-    }
-
+  issueJoinToken(roomName: string, windbot: WindbotData) {
     let token = '';
     do {
       token = cryptoRandomString({
         length: 12,
         type: 'alphanumeric',
       });
-    } while (this.tokenRoomMap.has(token));
+    } while (this.tokenDataMap.has(token));
 
     this.logger.debug(
       { roomName, token },
       'Issuing windbot join token for room',
     );
-    this.tokenRoomMap.set(token, roomName);
-    this.roomTokenMap.set(roomName, token);
+    this.tokenDataMap.set(token, {
+      roomName,
+      windbot: { ...windbot },
+    });
+    let roomTokens = this.roomTokenMap.get(roomName);
+    if (!roomTokens) {
+      roomTokens = new Set<string>();
+      this.roomTokenMap.set(roomName, roomTokens);
+    }
+    roomTokens.add(token);
     return token;
   }
 
   consumeJoinToken(token: string) {
-    const roomName = this.tokenRoomMap.get(token);
-    this.logger.debug({ roomName, token }, 'Consuming windbot join token');
-    if (!roomName) {
+    const data = this.tokenDataMap.get(token);
+    this.logger.debug({ roomName: data?.roomName, token }, 'Consuming windbot join token');
+    if (!data) {
       return undefined;
     }
-    this.tokenRoomMap.delete(token);
-    const mappedToken = this.roomTokenMap.get(roomName);
-    if (mappedToken === token) {
-      this.roomTokenMap.delete(roomName);
+    this.tokenDataMap.delete(token);
+    const roomTokens = this.roomTokenMap.get(data.roomName);
+    if (roomTokens) {
+      roomTokens.delete(token);
+      if (roomTokens.size === 0) {
+        this.roomTokenMap.delete(data.roomName);
+      }
     }
-    return roomName;
+    return data;
   }
 
   deleteRoomToken(roomName: string) {
-    const token = this.roomTokenMap.get(roomName);
-    if (!token) {
+    const roomTokens = this.roomTokenMap.get(roomName);
+    if (!roomTokens) {
       return;
     }
     this.roomTokenMap.delete(roomName);
-    const mappedRoomName = this.tokenRoomMap.get(token);
-    if (mappedRoomName === roomName) {
-      this.tokenRoomMap.delete(token);
+    for (const token of roomTokens) {
+      const mappedData = this.tokenDataMap.get(token);
+      if (mappedData?.roomName === roomName) {
+        this.tokenDataMap.delete(token);
+      }
     }
   }
 
-  async requestWindbotJoin(room: Room, botname?: string) {
-    const roomWindbot =
-      this.isValidBot(room.windbot) && room.windbot ? room.windbot : undefined;
+  async requestWindbotJoin(
+    room: Room,
+    botname?: string,
+    options: RequestWindbotJoinOptions = {},
+  ) {
     const bot =
-      (botname && this.getBotByNameOrDeck(botname)) || roomWindbot || this.getRandomBot();
+      (botname && this.getBotByNameOrDeck(botname)) || this.getRandomBot();
     if (!bot) {
       await room.sendChat('#{windbot_deck_not_found}', ChatColor.RED);
       return false;
@@ -138,7 +145,7 @@ export class WindBotProvider {
       };
     }
     Object.assign(room.windbot, bot);
-    const token = this.issueJoinToken(room.name);
+    const token = this.issueJoinToken(room.name, bot);
 
     let url: URL;
     try {
@@ -164,6 +171,9 @@ export class WindBotProvider {
     if (bot.deckcode) {
       url.searchParams.set('deckcode', bot.deckcode);
     }
+    if (options.hand) {
+      url.searchParams.set('hand', options.hand.toString());
+    }
 
     this.logger.debug(
       { url: url.toString(), roomName: room.name },
@@ -185,18 +195,6 @@ export class WindBotProvider {
       await room.sendChat('#{add_windbot_failed}', ChatColor.RED);
       return false;
     }
-  }
-
-  private isValidBot(
-    bot: WindbotData | undefined,
-  ): bot is WindbotData {
-    return !!(
-      bot &&
-      typeof bot.name === 'string' &&
-      bot.name.length &&
-      typeof bot.deck === 'string' &&
-      bot.deck.length
-    );
   }
 
   private async loadBotList() {

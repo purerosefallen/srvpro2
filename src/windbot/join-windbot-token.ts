@@ -20,18 +20,18 @@ export class JoinWindbotToken {
       }
 
       const token = msg.pass.slice('AIJOIN#'.length);
-      const roomName = this.windbotProvider.consumeJoinToken(token);
-      if (!roomName) {
+      const tokenData = this.windbotProvider.consumeJoinToken(token);
+      if (!tokenData) {
         return client.die('#{invalid_password_not_found}', ChatColor.RED);
       }
 
-      const room = this.roomManager.findByName(roomName);
+      const room = this.roomManager.findByName(tokenData.roomName);
       if (!room) {
         return client.die('#{invalid_password_not_found}', ChatColor.RED);
       }
 
       client.isInternal = true;
-      client.windbot = room.windbot;
+      client.windbot = tokenData.windbot;
       return room.join(client);
     });
   }

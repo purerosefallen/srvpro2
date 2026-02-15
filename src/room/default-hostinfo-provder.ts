@@ -74,11 +74,10 @@ export class DefaultHostInfoProvider {
     }
 
     const rulePrefix = name.match(/(.+)#/);
-    if (!rulePrefix) {
+    const rule = rulePrefix ? rulePrefix[1].toUpperCase() : '';
+    if (!rule) {
       return hostinfo;
     }
-
-    const rule = rulePrefix[1].toUpperCase();
     if (/(^|，|,)(M|MATCH)(，|,|$)/.test(rule)) {
       hostinfo.mode = setWinMatchCountBits(hostinfo.mode, 2);
     }
