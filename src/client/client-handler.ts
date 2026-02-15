@@ -7,7 +7,6 @@ import {
 import { Context } from '../app';
 import { Client } from './client';
 import { IpResolver } from './ip-resolver';
-import { WsClient } from './transport/ws/client';
 import {
   forkJoin,
   filter,
@@ -24,8 +23,8 @@ export class ClientHandler {
   constructor(private ctx: Context) {
     this.ctx
       .middleware(YGOProCtosExternalAddress, async (msg, client, next) => {
-        if (client instanceof WsClient || client.ip) {
-          // ws should tell real IP and hostname in http headers, so we skip this step for ws clients
+        if (client.ip) {
+          // ws/reverse-ws should already have IP from connection metadata, skip overwrite
           return next();
         }
         this.ctx

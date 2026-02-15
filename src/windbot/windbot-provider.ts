@@ -1,13 +1,18 @@
 import cryptoRandomString from 'crypto-random-string';
 import * as fs from 'node:fs/promises';
+import * as dns from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { ChatColor } from 'ygopro-msg-encode';
+import WebSocket from 'ws';
 import { Context } from '../app';
+import { ClientHandler } from '../client';
 import { OnRoomFinalize, Room } from '../room';
 import type {
   RequestWindbotJoinOptions,
   WindbotData,
   WindbotJoinTokenData,
 } from './utility';
+import { ReverseWsClient } from './reverse-ws-client';
 
 declare module '../client' {
   interface Client {
@@ -35,6 +40,7 @@ export class WindBotProvider {
   private bots: WindbotData[] = [];
   private tokenDataMap = new Map<string, WindbotJoinTokenData>();
   private roomTokenMap = new Map<string, Set<string>>();
+  private clientHandler = this.ctx.get(() => ClientHandler);
 
   constructor(private ctx: Context) {
     if (!this.enabled) {
@@ -162,7 +168,9 @@ export class WindBotProvider {
     url.searchParams.set('name', bot.name);
     url.searchParams.set('deck', bot.deck);
     url.searchParams.set('host', this.myIp);
-    url.searchParams.set('port', this.port);
+    if (!this.hasHostScheme(this.myIp)) {
+      url.searchParams.set('port', this.port);
+    }
     if (bot.dialog) {
       url.searchParams.set('dialog', bot.dialog);
     }
@@ -180,6 +188,10 @@ export class WindBotProvider {
       'Requesting windbot join',
     );
 
+    if (this.isWebSocketEndpoint(url)) {
+      return this.requestWindbotJoinByReverseWs(room, token, bot.name, url);
+    }
+
     try {
       await this.ctx.http.get(url.toString());
       return true;
@@ -191,6 +203,93 @@ export class WindBotProvider {
           error: (error as Error).toString(),
         },
         'Windbot add request failed',
+      );
+      await room.sendChat('#{add_windbot_failed}', ChatColor.RED);
+      return false;
+    }
+  }
+
+  private hasHostScheme(host: string) {
+    return /^[a-z][a-z0-9+.-]*:\/\//i.test(host);
+  }
+
+  private isWebSocketEndpoint(url: URL) {
+    return url.protocol === 'ws:' || url.protocol === 'wss:';
+  }
+
+  private async resolveEndpointIp(url: URL) {
+    const hostname = url.hostname;
+    if (!hostname) {
+      return '';
+    }
+    if (isIP(hostname)) {
+      return hostname;
+    }
+    try {
+      const resolved = await dns.lookup(hostname);
+      return resolved.address;
+    } catch (error) {
+      this.logger.warn(
+        {
+          hostname,
+          endpoint: url.toString(),
+          error: (error as Error).toString(),
+        },
+        'Failed to resolve reverse ws endpoint ip',
+      );
+      return hostname;
+    }
+  }
+
+  private async createReverseWsConnection(url: URL) {
+    return new Promise<WebSocket>((resolve, reject) => {
+      const sock = new WebSocket(url.toString());
+      const cleanup = () => {
+        sock.off('open', onOpen);
+        sock.off('error', onError);
+      };
+      const onOpen = () => {
+        cleanup();
+        resolve(sock);
+      };
+      const onError = (error: Error) => {
+        cleanup();
+        reject(error);
+      };
+      sock.once('open', onOpen);
+      sock.once('error', onError);
+    });
+  }
+
+  private async requestWindbotJoinByReverseWs(
+    room: Room,
+    token: string,
+    botName: string,
+    url: URL,
+  ) {
+    try {
+      const endpointIp = await this.resolveEndpointIp(url);
+      const sock = await this.createReverseWsConnection(url);
+      const client = new ReverseWsClient(this.ctx, sock, endpointIp);
+      this.clientHandler.handleClient(client).catch((error) => {
+        this.logger.warn(
+          {
+            roomToken: token,
+            botName,
+            error: (error as Error).toString(),
+          },
+          'Reverse ws windbot client handler failed',
+        );
+      });
+      return true;
+    } catch (error) {
+      this.logger.warn(
+        {
+          roomToken: token,
+          botName,
+          error: (error as Error).toString(),
+        },
+        'Windbot reverse ws request failed',
       );
       await room.sendChat('#{add_windbot_failed}', ChatColor.RED);
       return false;
