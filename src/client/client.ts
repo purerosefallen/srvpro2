@@ -13,6 +13,7 @@ import {
   YGOProStocHsPlayerChange,
   PlayerChangeState,
   NetPlayerType,
+  YGOProStocGameMsg,
 } from 'ygopro-msg-encode';
 import { YGOProProtoPipe } from '../utility/ygopro-proto-pipe';
 import { I18nService } from './i18n';
@@ -104,11 +105,12 @@ export class Client {
       return;
     }
     return this.sendQueue.add(async () => {
+      const logMsg = data instanceof YGOProStocGameMsg ? data.msg : data;
       this.logger.debug(
         {
-          msgName: data.constructor.name,
+          msgName: logMsg?.constructor.name,
           client: this.name || this.loggingIp(),
-          payload: JSON.stringify(data),
+          payload: JSON.stringify(logMsg),
         },
         'Sending message to client',
       )
