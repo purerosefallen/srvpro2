@@ -1,7 +1,5 @@
 import cryptoRandomString from 'crypto-random-string';
 import * as fs from 'node:fs/promises';
-import * as dns from 'node:dns/promises';
-import { isIP } from 'node:net';
 import { ChatColor } from 'ygopro-msg-encode';
 import WebSocket from 'ws';
 import { Context } from '../app';
