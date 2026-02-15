@@ -104,6 +104,14 @@ export class Client {
       return;
     }
     return this.sendQueue.add(async () => {
+      this.logger.debug(
+        {
+          msgName: data.constructor.name,
+          client: this.name || this.loggingIp(),
+          payload: JSON.stringify(data),
+        },
+        'Sending message to client',
+      )
       try {
         await this._send(Buffer.from(data.toFullPayload()));
       } catch (e) {

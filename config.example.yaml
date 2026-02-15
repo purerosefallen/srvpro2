@@ -26,6 +26,11 @@ deckMaxCopies: 3
 ocgcoreDebugLog: 0
 ocgcoreWasmPath: ""
 welcome: ""
+enableWindbot: 1
+windbotBotlist: ./windbot/bots.json
+windbotSpawn: 0
+windbotEndpoint: http://127.0.0.1:2399
+windbotMyIp: 127.0.0.1
 enableReconnect: 1
 reconnectTimeout: 180000
 hostinfoLflist: 0

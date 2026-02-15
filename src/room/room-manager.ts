@@ -1,6 +1,7 @@
 import { Context } from '../app';
 import { Room, RoomFinalizor } from './room';
 import BetterLock from 'better-lock';
+import { HostInfo } from 'ygopro-msg-encode';
 
 export class RoomManager {
   constructor(private ctx: Context) {}
@@ -29,7 +30,7 @@ export class RoomManager {
 
   private logger = this.ctx.createLogger('RoomManager');
 
-  async findOrCreateByName(name: string) {
+  async findOrCreateByName(name: string, hostinfo?: Partial<HostInfo>) {
     const existing = this.findByName(name);
     if (existing) return existing;
 
@@ -37,7 +38,7 @@ export class RoomManager {
       const existing = this.findByName(name);
       if (existing) return existing;
 
-      const room = new Room(this.ctx, name).addFinalizor((r) => {
+      const room = new Room(this.ctx, name, hostinfo).addFinalizor((r) => {
         this.rooms.delete(r.name);
         this.logger.debug(
           { room: r.name, roomCount: this.rooms.size },

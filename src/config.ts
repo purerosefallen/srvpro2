@@ -60,6 +60,19 @@ export const defaultConfig = {
   OCGCORE_WASM_PATH: '',
   // Welcome message sent when players join. Format: plain string.
   WELCOME: '',
+  // Enable windbot feature.
+  // Boolean parse rule (default true): only '0'/'false'/'null' => false, otherwise true.
+  ENABLE_WINDBOT: '0',
+  // Windbot bot list path. Format: filesystem path string.
+  WINDBOT_BOTLIST: './windbot/bots.json',
+  // Spawn built-in windbot server mode process.
+  // Effective only when ENABLE_WINDBOT is true.
+  // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
+  WINDBOT_SPAWN: '0',
+  // Windbot HTTP endpoint. Format: URL string.
+  WINDBOT_ENDPOINT: 'http://127.0.0.1:2399',
+  // Public IP/host that windbot uses to connect back to this server.
+  WINDBOT_MY_IP: '127.0.0.1',
   // Enable reconnect feature.
   // Boolean parse rule (default true): only '0'/'false'/'null' => false, otherwise true.
   // Note: with default-true parsing, empty string is treated as true.

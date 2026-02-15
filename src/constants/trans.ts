@@ -7,6 +7,7 @@ export const TRANSLATIONS = {
       'Your client version is not fully supported. Please rejoin to enable temporary compatibility mode. For the best experience, we recommend updating your game to the latest version.',
     version_polyfilled:
       'Temporary compatibility mode has been enabled for your version. We recommend updating your game to avoid potential compatibility issues in the future.',
+    bad_user_name: 'Please enter the correct ID',
     blank_room_name: 'Blank room name is unallowed, please fill in something.',
     replay_hint_part1: 'Sending the replay of the duel number ',
     replay_hint_part2: '.',
@@ -17,6 +18,12 @@ export const TRANSLATIONS = {
     reconnect_to_game: 'reconnected to the game',
     reconnect_kicked:
       "You are kicked out because you're logged in on other devices.",
+    windbot_deck_not_found: 'Oops, AI or Deck not found',
+    windbot_name_too_long:
+      'Error occurs, please create a new game and enter /ai to summon an AI.',
+    create_room_failed: 'Game creation failed, please try again later.',
+    invalid_password_not_found: 'Password invalid (Not Found)',
+    add_windbot_failed: 'AI addition failed, enter /ai again.',
     pre_reconnecting_to_room:
       'You will be reconnected to your previous game. Please pick your previous deck.',
     deck_incorrect_reconnect: 'Please pick your previous deck.',
@@ -30,6 +37,7 @@ export const TRANSLATIONS = {
       '当前客户端版本暂未完全支持。请重新加入以启用临时兼容模式。为获得更佳体验，建议尽快更新游戏版本。',
     version_polyfilled:
       '已为当前版本启用临时兼容模式。建议尽快更新游戏，以避免后续兼容性问题。',
+    bad_user_name: '请输入正确的用户名',
     blank_room_name: '房间名不能为空，请在主机密码处填写房间名',
     replay_hint_part1: '正在发送第',
     replay_hint_part2: '局决斗的录像。',
@@ -39,6 +47,11 @@ export const TRANSLATIONS = {
     disconnect_from_game: '断开了连接',
     reconnect_to_game: '重新连接了',
     reconnect_kicked: '你的账号已经在其他设备登录，你被迫下线。',
+    windbot_deck_not_found: '未找到该AI角色或卡组',
+    windbot_name_too_long: 'AI房间名过长，请在建立房间后输入 /ai 来添加AI',
+    create_room_failed: '建立房间失败，请重试',
+    invalid_password_not_found: '主机密码不正确 (Not Found)',
+    add_windbot_failed: '添加AI失败，可尝试输入 /ai 重新添加',
     pre_reconnecting_to_room:
       '你有未完成的对局，即将重新连接，请选择你在本局决斗中使用的卡组并准备。',
     deck_incorrect_reconnect: '请选择你在本局决斗中使用的卡组。',

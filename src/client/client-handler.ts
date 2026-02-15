@@ -86,6 +86,7 @@ export class ClientHandler {
         {
           msgName: msg.constructor.name,
           client: client.name || client.loggingIp(),
+          payload: JSON.stringify(msg),
         },
         'Received client message',
       );

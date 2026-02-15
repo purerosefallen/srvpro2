@@ -309,8 +309,8 @@ export class Room {
     return this.getDuelPosPlayers(swappedDuelPos);
   }
 
-  private sendPostWatchMessages(client: Client) {
-    client.send(new YGOProStocDuelStart());
+  private async sendPostWatchMessages(client: Client) {
+    await client.send(new YGOProStocDuelStart());
 
     // 在 SelectHand / SelectTp 阶段发送 DeckCount
     // Siding 阶段不发 DeckCount
@@ -318,26 +318,26 @@ export class Room {
       this.duelStage === DuelStage.Finger ||
       this.duelStage === DuelStage.FirstGo
     ) {
-      client.send(this.prepareStocDeckCount(client.pos));
+      await client.send(this.prepareStocDeckCount(client.pos));
     }
 
     if (this.duelStage === DuelStage.Siding) {
-      client.send(new YGOProStocWaitingSide());
+      await client.send(new YGOProStocWaitingSide());
     } else if (this.duelStage === DuelStage.Dueling) {
       // Dueling 阶段不发 DeckCount，直接发送观战消息
-      this.lastDuelRecord?.messages
-        .filter(
+      const observerMessages =
+        this.lastDuelRecord?.messages.filter(
           (msg) =>
             !(msg instanceof YGOProMsgResponseBase) &&
             msg.getSendTargets().includes(NetPlayerType.OBSERVER),
-        )
-        .forEach((message) => {
-          client.send(
+        ) || [];
+      for (const message of observerMessages) {
+        await client.send(
             new YGOProStocGameMsg().fromPartial({
               msg: message.observerView(),
             }),
           );
-        });
+      }
     }
   }
 
@@ -357,28 +357,28 @@ export class Room {
     }
 
     // send to client
-    client.send(this.joinGameMessage);
-    client.sendTypeChange();
-    this.playingPlayers.forEach((p) => {
-      client.send(p.prepareEnterPacket());
-      // p.send(client.prepareEnterPacket());
+    await client.send(this.joinGameMessage);
+    await client.sendTypeChange();
+    for (const p of this.playingPlayers) {
+      await client.send(p.prepareEnterPacket());
       if (p.deck) {
-        client.send(p.prepareChangePacket());
+        await client.send(p.prepareChangePacket());
       }
-    });
+    }
     if (this.watchers.size && this.duelStage === DuelStage.Begin) {
-      client.send(this.watcherSizeMessage);
+      await client.send(this.watcherSizeMessage);
     }
 
     // send to other players
     if (isPlayer) {
-      this.allPlayers
-        .filter((p) => p !== client)
-        .forEach((p) => {
-          p.send(client.prepareEnterPacket());
-        });
+      const enterMessage = client.prepareEnterPacket();
+      await Promise.all(
+        this.allPlayers
+          .filter((p) => p !== client)
+          .map((p) => p.send(enterMessage)),
+      );
     } else if (this.watchers.size && this.duelStage === DuelStage.Begin) {
-      client.send(this.watcherSizeMessage);
+      await client.send(this.watcherSizeMessage);
     }
 
     await this.ctx.dispatch(new OnRoomJoin(this), client);
@@ -391,7 +391,7 @@ export class Room {
     }
 
     if (this.duelStage !== DuelStage.Begin) {
-      this.sendPostWatchMessages(client);
+      await this.sendPostWatchMessages(client);
     }
 
     return undefined;

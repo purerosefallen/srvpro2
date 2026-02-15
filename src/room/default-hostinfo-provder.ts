@@ -53,13 +53,6 @@ export class DefaultHostInfoProvider {
       hostinfo.start_lp = defaultHostinfo.start_lp * 2;
       return hostinfo;
     }
-    if (name.startsWith('AI#')) {
-      hostinfo.rule = 5;
-      hostinfo.lflist = -1;
-      hostinfo.time_limit = 0;
-      return hostinfo;
-    }
-
     const compactParam = name.match(
       /^(\d)(\d)([12345TF])(T|F)(T|F)(\d+),(\d+),(\d+)/i,
     );

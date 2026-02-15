@@ -50,6 +50,12 @@ declare module '../client' {
   }
 }
 
+declare module '../room' {
+  interface Room {
+    noReconnect?: boolean;
+  }
+}
+
 export class Reconnect {
   private disconnectList = new Map<string, DisconnectInfo>();
   private isLooseReconnectRule = false; // 宽松匹配模式，日后可能配置支持
@@ -121,6 +127,7 @@ export class Reconnect {
 
     return (
       !client.isInternal && // 不是内部虚拟客户端
+      !room.noReconnect &&
       client.pos < NetPlayerType.OBSERVER && // 是玩家
       room.duelStage !== DuelStage.Begin // 游戏已开始
     );
