@@ -4,7 +4,8 @@
 
 ## 项目规范
 
-- 非必要不要在 Room 和 Client 里面加字段或者方法。如果可以的话请使用定义 interface 进行依赖合并。
+- 禁止在模块里面保存 `Client` 或者 `Room` 的强引用（包括 `Map` key/value、闭包长期持有等）。如需关联状态，优先使用 `pos`、`room.name` 等轻量标识。
+- 禁止直接在 `Client` 和 `Room` 类里面添加耦合业务模块的字段或者方法。需要扩展时可通过定义 interface 做依赖合并；若扩展房间流程，允许在 `Room` 里新增并 `dispatch` 专用事件。
 - 进行协议设计需要核对 ygopro 和 srvpro 的 coffee 和 cpp 的实现。
 - 尽量定义新的模块实现功能，而不是在之前的方法上进行修改。
 - 配置在 config.ts 里面写默认类型。注意所有类型必须是 string 并且全部大写字母。改了之后需要 npm run gen:config-example 生成 config.example.yaml

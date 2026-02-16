@@ -5,6 +5,7 @@ import { Welcome } from './welcome';
 import { PlayerStatusNotify } from './player-status-notify';
 import { Reconnect } from './reconnect';
 import { WindbotModule } from '../windbot';
+import { SideTimeout } from './side-timeout';
 
 export const FeatsModule = createAppContext<ContextState>()
   .provide(ClientVersionCheck)
@@ -12,4 +13,5 @@ export const FeatsModule = createAppContext<ContextState>()
   .provide(Welcome)
   .provide(PlayerStatusNotify)
   .provide(Reconnect)
+  .provide(SideTimeout)
   .define();

@@ -79,6 +79,9 @@ export const defaultConfig = {
   ENABLE_RECONNECT: '1',
   // Reconnect timeout after disconnect. Format: integer string in milliseconds (ms).
   RECONNECT_TIMEOUT: '180000',
+  // Side deck timeout in minutes during siding stage.
+  // Format: integer string. '0' or negative disables the feature.
+  SIDE_TIMEOUT_MINUTES: '3',
   // Room hostinfo defaults expanded into HOSTINFO_* keys.
   // Format: each HOSTINFO_* value is a string; numeric fields use integer strings.
   // Unit note: HOSTINFO_TIME_LIMIT is in seconds (s).

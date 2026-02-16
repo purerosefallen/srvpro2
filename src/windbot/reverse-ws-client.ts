@@ -68,7 +68,7 @@ export class ReverseWsClient extends Client {
   }
 
   physicalIp(): string {
-    return this.endpointIp;
+    return this.ip;
   }
 
   xffIp(): string | undefined {

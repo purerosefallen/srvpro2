@@ -94,6 +94,8 @@ import { makeArray } from 'aragami/dist/src/utility/utility';
 import path from 'path';
 import { OnRoomCreate } from './room-event/on-room-create';
 import { OnRoomFinalize } from './room-event/on-room-finalize';
+import { OnRoomSidingStart } from './room-event/on-room-siding-start';
+import { OnRoomSidingReady } from './room-event/on-room-siding-ready';
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 
@@ -435,6 +437,7 @@ export class Room {
     for (const p of this.watchers) {
       p.send(new YGOProStocWaitingSide());
     }
+    await this.ctx.dispatch(new OnRoomSidingStart(this), this.playingPlayers[0]);
   }
 
   get lastDuelRecord() {
@@ -806,6 +809,7 @@ export class Room {
       // In Siding stage, send DUEL_START to the player who submitted deck
       // Siding 阶段不发 DeckCount
       client.send(new YGOProStocDuelStart());
+      await this.ctx.dispatch(new OnRoomSidingReady(this), client);
 
       // Check if all players have submitted their decks
       const allReady = this.playingPlayers.every((p) => p.deck);

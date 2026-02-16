@@ -9,6 +9,7 @@ import { JoinHandlerModule } from './join-handlers/join-handler-module';
 import { RoomModule } from './room/room-module';
 import { SqljsFactory, SqljsLoader } from './services/sqljs';
 import { FeatsModule } from './feats/feats-module';
+import { MiddlewareRx } from './services/middleware-rx';
 
 const core = createAppContext()
   .provide(ConfigService, {
@@ -16,6 +17,7 @@ const core = createAppContext()
   })
   .provide(Logger, { merge: ['createLogger'] })
   .provide(Emitter, { merge: ['dispatch', 'middleware', 'removeMiddleware'] })
+  .provide(MiddlewareRx, { merge: ['event$'] })
   .provide(HttpClient, { merge: ['http'] })
   .provide(AragamiService, { merge: ['aragami'] })
   .provide(SqljsLoader, {
