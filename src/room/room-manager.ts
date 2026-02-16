@@ -40,7 +40,7 @@ export class RoomManager {
 
       const room = new Room(this.ctx, name, hostinfo).addFinalizor((r) => {
         this.rooms.delete(r.name);
-        this.logger.debug(
+        this.logger.info(
           { room: r.name, roomCount: this.rooms.size },
           'Room finalized and removed',
         );
@@ -50,7 +50,7 @@ export class RoomManager {
       }
       await room.init();
       this.rooms.set(name, room);
-      this.logger.debug(
+      this.logger.info(
         { room: name, roomCount: this.rooms.size },
         'Room created',
       );

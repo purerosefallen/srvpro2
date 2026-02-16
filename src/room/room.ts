@@ -516,7 +516,7 @@ export class Room {
       this.setOverrideScore(loseDuelPos, -Math.abs(forceWinMatch));
     }
     const score = this.score;
-    this.logger.debug(
+    this.logger.info(
       `Player ${duelPos} wins the duel. Current score: ${score.join('-')}`,
     );
     const winMatch =
