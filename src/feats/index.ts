@@ -1,6 +1,7 @@
 export * from './client-version-check';
 export * from './client-key-provider';
 export * from './chatgpt-service';
+export * from './cloud-replay';
 export * from './hide-player-name-provider';
 export * from './menu-manager';
 export * from './welcome';

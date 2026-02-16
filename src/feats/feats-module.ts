@@ -14,6 +14,7 @@ import { ClientKeyProvider } from './client-key-provider';
 import { HidePlayerNameProvider } from './hide-player-name-provider';
 import { CommandsService, KoishiContextService } from '../koishi';
 import { ChatgptService } from './chatgpt-service';
+import { CloudReplayService } from './cloud-replay';
 
 export const FeatsModule = createAppContext<ContextState>()
   .provide(ClientKeyProvider)
@@ -24,6 +25,7 @@ export const FeatsModule = createAppContext<ContextState>()
   .provide(ClientVersionCheck)
   .provide(Welcome)
   .provide(PlayerStatusNotify)
+  .provide(CloudReplayService) // persist duel records
   .provide(ChatgptService) // AI-room chat replies
   .provide(RefreshFieldService)
   .provide(Reconnect)

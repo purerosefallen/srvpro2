@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { ConfigService } from './config';
 import { Logger } from './logger';
 import { RandomDuelScore } from '../feats/random-duel';
+import { DuelRecordEntity, DuelRecordPlayer } from '../feats/cloud-replay';
 
 export class TypeormLoader {
   constructor(private ctx: AppContext) {}
@@ -40,7 +41,7 @@ export const TypeormFactory = async (ctx: AppContext) => {
     password,
     database,
     synchronize,
-    entities: [RandomDuelScore],
+    entities: [RandomDuelScore, DuelRecordEntity, DuelRecordPlayer],
   });
 
   try {
