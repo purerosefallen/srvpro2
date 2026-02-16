@@ -80,7 +80,9 @@ export class MenuManager {
   }
 
   async launchMenu(client: Client, menu: MenuEntry[]) {
-    client.currentMenu = menu;
+    client.currentMenu = menu.filter(
+      (entry): entry is MenuEntry => !!entry,
+    );
     if (client.menuOffset == null) {
       client.menuOffset = 0;
     }
@@ -93,7 +95,9 @@ export class MenuManager {
   }
 
   private buildMenuView(client: Client): MenuView {
-    const menu = client.currentMenu || [];
+    const menu = (client.currentMenu || []).filter(
+      (entry): entry is MenuEntry => !!entry,
+    );
     if (menu.length <= 2) {
       return {
         actions: menu.map((entry) => ({ type: 'entry', entry })),

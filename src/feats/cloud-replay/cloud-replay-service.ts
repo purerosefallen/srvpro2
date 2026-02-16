@@ -220,7 +220,7 @@ export class CloudReplayService {
 
     for (const replay of page.entries) {
       menu.push({
-        title: `R#${replay.id}`,
+        title: this.formatDate(replay.endTime),
         callback: async (currentClient) => {
           currentClient.cloudReplaySelectedReplayId = replay.id;
           await this.renderReplayDetailMenu(currentClient, replay.id);
@@ -233,15 +233,6 @@ export class CloudReplayService {
         title: '#{menu_next_page}',
         callback: async (currentClient) => {
           this.goToNextReplayPage(currentClient, page.nextCursor!);
-          await this.renderReplayListMenu(currentClient);
-        },
-      });
-    }
-
-    while (menu.length <= 2) {
-      menu.push({
-        title: '',
-        callback: async (currentClient) => {
           await this.renderReplayListMenu(currentClient);
         },
       });
@@ -441,10 +432,20 @@ export class CloudReplayService {
 
   private createJoinGamePacket(replay: DuelRecordEntity) {
     return new YGOProStocJoinGame().fromPartial({
-      info: {
-        ...replay.hostInfo,
-      },
+      info: this.normalizeHostInfoForClient(replay.hostInfo),
     });
+  }
+
+  private normalizeHostInfoForClient(hostInfo: HostInfo) {
+    return {
+      ...hostInfo,
+      mode:
+        hostInfo.mode > 2
+          ? this.isTagMode(hostInfo)
+            ? 2
+            : 1
+          : hostInfo.mode,
+    };
   }
 
   private createReplayPacket(replay: DuelRecordEntity) {
