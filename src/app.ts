@@ -10,6 +10,7 @@ import { RoomModule } from './room/room-module';
 import { SqljsFactory, SqljsLoader } from './services/sqljs';
 import { FeatsModule } from './feats/feats-module';
 import { MiddlewareRx } from './services/middleware-rx';
+import { TypeormFactory, TypeormLoader } from './services/typeorm';
 
 const core = createAppContext()
   .provide(ConfigService, {
@@ -23,6 +24,10 @@ const core = createAppContext()
   .provide(SqljsLoader, {
     useFactory: SqljsFactory,
     merge: ['SQL'],
+  })
+  .provide(TypeormLoader, {
+    useFactory: TypeormFactory,
+    merge: ['database'],
   })
   .define();
 

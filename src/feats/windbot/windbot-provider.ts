@@ -2,9 +2,9 @@ import cryptoRandomString from 'crypto-random-string';
 import * as fs from 'node:fs/promises';
 import { ChatColor } from 'ygopro-msg-encode';
 import WebSocket from 'ws';
-import { Context } from '../app';
-import { ClientHandler } from '../client';
-import { OnRoomFinalize, Room } from '../room';
+import { Context } from '../../app';
+import { ClientHandler } from '../../client';
+import { OnRoomFinalize, Room } from '../../room';
 import type {
   RequestWindbotJoinOptions,
   WindbotData,
@@ -12,13 +12,13 @@ import type {
 } from './utility';
 import { ReverseWsClient } from './reverse-ws-client';
 
-declare module '../client' {
+declare module '../../client' {
   interface Client {
     windbot?: WindbotData;
   }
 }
 
-declare module '../room' {
+declare module '../../room' {
   interface Room {
     windbot?: WindbotData;
   }

@@ -1,8 +1,9 @@
 import { ChatColor, YGOProCtosJoinGame } from 'ygopro-msg-encode';
-import { Context } from '../app';
+import { Context } from '../../app';
 import { WindBotProvider } from './windbot-provider';
-import { RoomManager } from '../room';
-import { fillRandomString } from '../utility/fill-random-string';
+import { RoomManager } from '../../room';
+import { MAX_ROOM_NAME_LENGTH } from '../../constants/room';
+import { fillRandomString } from '../../utility/fill-random-string';
 import { parseWindbotOptions } from './utility';
 
 const getDisplayLength = (text: string) =>
@@ -25,6 +26,7 @@ export class JoinWindbotAi {
 
       const existingRoom = this.roomManager.findByName(msg.pass);
       if (existingRoom) {
+        existingRoom.noHost = true;
         return existingRoom.join(client);
       }
 
@@ -49,6 +51,7 @@ export class JoinWindbotAi {
         lflist: -1,
         time_limit: 0,
       });
+      room.noHost = true;
       room.noReconnect = true;
       room.windbot = {
         name: '',
@@ -102,7 +105,7 @@ export class JoinWindbotAi {
       } else {
         prefix = `${pass}#`;
       }
-      const roomName = fillRandomString(prefix, 19);
+      const roomName = fillRandomString(prefix, MAX_ROOM_NAME_LENGTH);
       if (!this.roomManager.findByName(roomName)) {
         return roomName;
       }

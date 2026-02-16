@@ -27,18 +27,16 @@ export class ClientHandler {
           // ws/reverse-ws should already have IP from connection metadata, skip overwrite
           return next();
         }
-        this.ctx
-          .get(() => IpResolver)
-          .setClientIp(
-            client,
-            msg.real_ip === '0.0.0.0' ? undefined : msg.real_ip,
-          );
+        await this.ctx.get(() => IpResolver).setClientIp(
+          client,
+          msg.real_ip === '0.0.0.0' ? undefined : msg.real_ip,
+        );
         client.hostname = msg.hostname?.split(':')[0] || '';
         return next();
       })
       .middleware(YGOProCtosPlayerInfo, async (msg, client, next) => {
         if (!client.ip) {
-          this.ctx.get(() => IpResolver).setClientIp(client);
+          await this.ctx.get(() => IpResolver).setClientIp(client);
         }
         const [name, vpass] = msg.name.split('$');
         client.name = name;

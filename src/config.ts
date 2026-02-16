@@ -12,6 +12,19 @@ export const defaultConfig = {
   HOST: '::',
   // Main server port for YGOPro clients. Format: integer string.
   PORT: '7911',
+  // PostgreSQL host. Empty means database disabled.
+  DB_HOST: '',
+  // PostgreSQL port. Format: integer string.
+  DB_PORT: '5432',
+  // PostgreSQL username.
+  DB_USER: 'postgres',
+  // PostgreSQL password.
+  DB_PASS: '',
+  // PostgreSQL database name.
+  DB_NAME: 'srvpro2',
+  // Skip schema initialization/synchronize when set to '1'.
+  // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
+  DB_NO_INIT: '0',
   // Redis connection URL. Format: URL string. Empty means disabled.
   REDIS_URL: '',
   // Log level. Format: lowercase string (e.g. info/debug/warn/error).
@@ -79,6 +92,27 @@ export const defaultConfig = {
   ENABLE_RECONNECT: '1',
   // Reconnect timeout after disconnect. Format: integer string in milliseconds (ms).
   RECONNECT_TIMEOUT: '180000',
+  // Enable random duel feature.
+  // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
+  ENABLE_RANDOM_DUEL: '1',
+  // Random duel modes that can be matched by blank pass.
+  // Format: comma-separated mode names. The first item is used as default type.
+  RANDOM_DUEL_BLANK_PASS_MODES: 'S,M',
+  // Disable rematch checking for random duel.
+  // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
+  RANDOM_DUEL_NO_REMATCH_CHECK: '0',
+  // Record random match scores (effective only when database is enabled).
+  // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
+  RANDOM_DUEL_RECORD_MATCH_SCORES: '1',
+  // Disable chat in random duel rooms.
+  // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
+  RANDOM_DUEL_DISABLE_CHAT: '0',
+  // Random duel ready countdown before kicking the only unready player in Begin stage.
+  // Format: integer string in seconds (s). '0' or negative disables the feature.
+  RANDOM_DUEL_READY_TIME: '20',
+  // Random duel AFK timeout while waiting for player action.
+  // Format: integer string in seconds (s). '0' or negative disables the feature.
+  RANDOM_DUEL_HANG_TIMEOUT: '90',
   // Side deck timeout in minutes during siding stage.
   // Format: integer string. '0' or negative disables the feature.
   SIDE_TIMEOUT_MINUTES: '3',

@@ -35,6 +35,20 @@ export const TRANSLATIONS = {
     side_remain_part2: ' minutes.',
     side_overtime: 'You exceeded side changing time and were kicked by system.',
     side_overtime_room: ' exceeded side changing time and was kicked by system.',
+    kicked_by_system: 'was evicted from the game by server.',
+    kick_count_down:
+      ' seconds later this player will be evicted for not getting ready or starting the game.',
+    afk_warn_part1: 'no operation too long, will be disconnected after ',
+    afk_warn_part2: ' seconds',
+    random_duel_enter_room_waiting: 'Your opponent is ready, start now!',
+    random_duel_enter_room_new: 'Game created, waiting for random opponent.',
+    random_duel_enter_room_single:
+      'Single mode room. Password M for match mode, T for tag mode.',
+    random_duel_enter_room_match:
+      'Match mode room. Password S for single mode, T for tag mode.',
+    random_duel_enter_room_tag:
+      'Tag mode room. Password S for single mode, M for match mode.',
+    chat_disabled: 'Chat is disabled in this room.',
   },
   'zh-CN': {
     update_required: '请更新你的客户端版本',
@@ -69,5 +83,18 @@ export const TRANSLATIONS = {
     side_remain_part2: '分钟。',
     side_overtime: '你更换副卡组超时，已被系统踢出。',
     side_overtime_room: '更换副卡组超时，已被系统踢出。',
+    kicked_by_system: '被系统请出了房间',
+    kick_count_down: '秒后若不准备或开始游戏将被请出房间',
+    afk_warn_part1: '已经很久没有操作了，若继续挂机，将于',
+    afk_warn_part2: '秒后被请出房间',
+    random_duel_enter_room_waiting: '对手已经在等你了，开始决斗吧！',
+    random_duel_enter_room_new: '已建立随机对战房间，正在等待对手！',
+    random_duel_enter_room_single:
+      '您进入了单局模式房间，密码输入 M 进入比赛模式，输入 T 进入双打模式。',
+    random_duel_enter_room_match:
+      '您进入了比赛模式房间，密码输入 S 进入单局模式，输入 T 进入双打模式。',
+    random_duel_enter_room_tag:
+      '您进入了双打模式房间，密码输入 S 进入单局模式，输入 M 进入比赛模式。',
+    chat_disabled: '本房间禁止聊天。',
   },
 };

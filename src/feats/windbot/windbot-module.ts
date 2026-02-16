@@ -1,5 +1,5 @@
 import { createAppContext } from 'nfkit';
-import { ContextState } from '../app';
+import { ContextState } from '../../app';
 import { WindBotProvider } from './windbot-provider';
 import { WindbotSpawner } from './windbot-spawner';
 

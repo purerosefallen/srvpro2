@@ -1,7 +1,7 @@
 import { ChatColor, YGOProCtosJoinGame } from 'ygopro-msg-encode';
-import { Context } from '../app';
+import { Context } from '../../app';
 import { WindBotProvider } from './windbot-provider';
-import { RoomManager } from '../room';
+import { RoomManager } from '../../room';
 
 export class JoinWindbotToken {
   private windbotProvider = this.ctx.get(() => WindBotProvider);

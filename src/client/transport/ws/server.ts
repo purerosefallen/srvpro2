@@ -45,7 +45,9 @@ export class WsServer {
     this.wss = new WebSocketServer({ server: this.httpServer });
 
     this.wss.on('connection', (ws, req) => {
-      this.handleConnection(ws, req);
+      this.handleConnection(ws, req).catch((err) => {
+        this.logger.error({ err }, 'Error handling WebSocket connection');
+      });
     });
 
     await new Promise<void>((resolve, reject) => {
@@ -64,13 +66,17 @@ export class WsServer {
     });
   }
 
-  private handleConnection(ws: WebSocket, req: IncomingMessage): void {
+  private async handleConnection(
+    ws: WebSocket,
+    req: IncomingMessage,
+  ): Promise<void> {
     const client = new WsClient(this.ctx, ws, req);
-    if (this.ctx.get(() => IpResolver).setClientIp(client, client.xffIp()))
+    if (await this.ctx.get(() => IpResolver).setClientIp(client, client.xffIp())) {
       return;
+    }
     client.hostname = req.headers.host?.split(':')[0] || '';
     const handler = this.ctx.get(() => ClientHandler);
-    handler.handleClient(client).catch((err) => {
+    await handler.handleClient(client).catch((err) => {
       this.logger.error({ err }, 'Error handling client');
     });
   }

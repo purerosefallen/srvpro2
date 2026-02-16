@@ -52,6 +52,7 @@ import {
   YGOProCtosTimeConfirm,
   YGOProMsgWaiting,
   YGOProStocTimeLimit,
+  YGOProMsgMatchKill,
 } from 'ygopro-msg-encode';
 import { DefaultHostInfoProvider } from './default-hostinfo-provder';
 import {
@@ -96,6 +97,8 @@ import { OnRoomCreate } from './room-event/on-room-create';
 import { OnRoomFinalize } from './room-event/on-room-finalize';
 import { OnRoomSidingStart } from './room-event/on-room-siding-start';
 import { OnRoomSidingReady } from './room-event/on-room-siding-ready';
+import { OnRoomFinger } from './room-event/on-room-finger';
+import { OnRoomSelectTp } from './room-event/on-room-select-tp';
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 
@@ -124,6 +127,7 @@ export class Room {
     return (this.hostinfo.mode & 0x2) !== 0;
   }
 
+  noHost = false;
   players = new Array<Client | undefined>(this.isTag ? 4 : 2);
   watchers = new Set<Client>();
   get playingPlayers() {
@@ -335,17 +339,17 @@ export class Room {
         ) || [];
       for (const message of observerMessages) {
         await client.send(
-            new YGOProStocGameMsg().fromPartial({
-              msg: message.observerView(),
-            }),
-          );
+          new YGOProStocGameMsg().fromPartial({
+            msg: message.observerView(),
+          }),
+        );
       }
     }
   }
 
   async join(client: Client) {
     client.roomName = this.name;
-    client.isHost = !this.allPlayers.length;
+    client.isHost = this.noHost ? false : !this.allPlayers.length;
     const firstEmptyPlayerSlot = this.players.findIndex((p) => !p);
     const isPlayer =
       firstEmptyPlayerSlot >= 0 && this.duelStage === DuelStage.Begin;
@@ -401,10 +405,27 @@ export class Room {
 
   duelStage = DuelStage.Begin;
   duelRecords: DuelRecord[] = [];
+  private overrideScore?: [number | undefined, number | undefined];
+
+  setOverrideScore(duelPos: 0 | 1, value: number) {
+    this.overrideScore = this.overrideScore || [undefined, undefined];
+    this.overrideScore[duelPos] = value;
+  }
+
   get score() {
-    return [0, 1].map(
-      (p) => this.duelRecords.filter((d) => d.winPosition === p).length,
-    );
+    const score: [number, number] = [0, 0];
+    for (const duelRecord of this.duelRecords) {
+      if (duelRecord.winPosition === 0 || duelRecord.winPosition === 1) {
+        score[duelRecord.winPosition] += 1;
+      }
+    }
+    for (const duelPos of [0, 1] as const) {
+      const override = this.overrideScore?.[duelPos];
+      if (override != null) {
+        score[duelPos] = override;
+      }
+    }
+    return score;
   }
 
   private async sendReplays(client: Client) {
@@ -437,7 +458,10 @@ export class Room {
     for (const p of this.watchers) {
       p.send(new YGOProStocWaitingSide());
     }
-    await this.ctx.dispatch(new OnRoomSidingStart(this), this.playingPlayers[0]);
+    await this.ctx.dispatch(
+      new OnRoomSidingStart(this),
+      this.playingPlayers[0],
+    );
   }
 
   get lastDuelRecord() {
@@ -451,7 +475,7 @@ export class Room {
     } catch {}
   }
 
-  async win(winMsg: Partial<YGOProMsgWin>, forceWinMatch = false) {
+  async win(winMsg: Partial<YGOProMsgWin>, forceWinMatch?: number) {
     this.resetResponseState();
     this.disposeOcgcore();
     this.ocgcore = undefined;
@@ -481,10 +505,16 @@ export class Room {
     if (lastDuelRecord) {
       lastDuelRecord.winPosition = duelPos;
     }
+    if (typeof forceWinMatch === 'number') {
+      const loseDuelPos = (1 - duelPos) as 0 | 1;
+      this.setOverrideScore(loseDuelPos, -Math.abs(forceWinMatch));
+    }
+    const score = this.score;
     this.logger.debug(
-      `Player ${duelPos} wins the duel. Current score: ${this.score.join('-')}`,
+      `Player ${duelPos} wins the duel. Current score: ${score.join('-')}`,
     );
-    const winMatch = forceWinMatch || this.score[duelPos] >= this.winMatchCount;
+    const winMatch =
+      forceWinMatch != null || score[duelPos] >= this.winMatchCount;
     if (!winMatch) {
       await this.changeSide();
     }
@@ -533,10 +563,9 @@ export class Room {
         p.send(client.prepareChangePacket(PlayerChangeState.LEAVE));
       });
     } else {
-      this.score[this.getDuelPos(client)] = -9;
       await this.win(
         { player: 1 - this.getIngameDuelPos(client), type: 0x4 },
-        true,
+        9,
       );
     }
     if (client.isHost) {
@@ -805,6 +834,12 @@ export class Room {
       // Auto-ready: send PlayerChange READY to all players (client.deck 已设置，自动为 READY)
       const changeMsg = client.prepareChangePacket();
       this.allPlayers.forEach((p) => p.send(changeMsg));
+      if (this.noHost) {
+        const allReadyAndFull = this.players.every((player) => !!player?.deck);
+        if (allReadyAndFull) {
+          await this.startGame();
+        }
+      }
     } else if (this.duelStage === DuelStage.Siding) {
       // In Siding stage, send DUEL_START to the player who submitted deck
       // Siding 阶段不发 DeckCount
@@ -910,16 +945,27 @@ export class Room {
     this.firstgoPos = firstgoPos;
     this.duelStage = DuelStage.FirstGo;
     const firstgoPlayer = this.getDuelPosPlayers(firstgoPos)[0];
+    if (!firstgoPlayer) {
+      return;
+    }
     firstgoPlayer.send(new YGOProStocSelectTp());
+    await this.ctx.dispatch(
+      new OnRoomSelectTp(this, firstgoPlayer),
+      firstgoPlayer,
+    );
   }
 
   private async toFinger() {
     this.duelStage = DuelStage.Finger;
     // 只有每方的第一个玩家猜拳
-    const fingerPlayers = [0, 1].map((p) => this.getDuelPosPlayers(p)[0]);
-    fingerPlayers.forEach((p) => {
-      p.send(new YGOProStocSelectHand());
-    });
+    const duelPos0 = this.getDuelPosPlayers(0)[0];
+    const duelPos1 = this.getDuelPosPlayers(1)[0];
+    if (!duelPos0 || !duelPos1) {
+      return;
+    }
+    duelPos0.send(new YGOProStocSelectHand());
+    duelPos1.send(new YGOProStocSelectHand());
+    await this.ctx.dispatch(new OnRoomFinger(this, [duelPos0, duelPos1]), duelPos0);
   }
 
   @RoomMethod({ allowInDuelStages: DuelStage.Finger })
@@ -1618,8 +1664,13 @@ export class Room {
         );
       }
       return next();
+    })
+    .middleware(YGOProMsgMatchKill, async (message, next) => {
+      this.matchKilled = true;
+      return next();
     });
 
+  private matchKilled = false;
   private responsePos?: number;
 
   private async advance() {
@@ -1660,7 +1711,7 @@ export class Room {
 
         const handled = await this.dispatchGameMsg(message);
         if (handled instanceof YGOProMsgWin) {
-          return this.win(handled);
+          return this.win(handled, this.matchKilled ? 1 : undefined);
         }
         await this.routeGameMsg(handled);
       }

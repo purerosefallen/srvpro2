@@ -1,5 +1,11 @@
 host: "::"
 port: 7911
+dbHost: ""
+dbPort: 5432
+dbUser: postgres
+dbPass: ""
+dbName: srvpro2
+dbNoInit: 0
 redisUrl: ""
 logLevel: info
 wsPort: 0
@@ -33,6 +39,15 @@ windbotEndpoint: http://127.0.0.1:2399
 windbotMyIp: 127.0.0.1
 enableReconnect: 1
 reconnectTimeout: 180000
+enableRandomDuel: 1
+randomDuelBlankPassModes:
+  - S
+  - M
+randomDuelNoRematchCheck: 0
+randomDuelRecordMatchScores: 1
+randomDuelDisableChat: 0
+randomDuelReadyTime: 20
+randomDuelHangTimeout: 90
 sideTimeoutMinutes: 3
 hostinfoLflist: 0
 hostinfoRule: 0
