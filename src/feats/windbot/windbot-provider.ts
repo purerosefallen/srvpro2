@@ -1,9 +1,11 @@
 import cryptoRandomString from 'crypto-random-string';
 import * as fs from 'node:fs/promises';
+import { h } from 'koishi';
 import { ChatColor } from 'ygopro-msg-encode';
 import WebSocket from 'ws';
 import { Context } from '../../app';
 import { ClientHandler } from '../../client';
+import { KoishiContextService } from '../../koishi';
 import { OnRoomFinalize, Room } from '../../room';
 import type {
   RequestWindbotJoinOptions,
@@ -39,11 +41,59 @@ export class WindBotProvider {
   private tokenDataMap = new Map<string, WindbotJoinTokenData>();
   private roomTokenMap = new Map<string, Set<string>>();
   private clientHandler = this.ctx.get(() => ClientHandler);
+  private koishiContextService = this.ctx.get(() => KoishiContextService);
+  private asRedError(message: string) {
+    return h('Chat', { color: 'Red' }, message);
+  }
 
   constructor(private ctx: Context) {
     if (!this.enabled) {
       return;
     }
+
+    const koishi = this.koishiContextService.instance;
+    this.koishiContextService.attachI18n('ai', {
+      description: 'koishi_cmd_ai_desc',
+    });
+
+    koishi.command('ai [name:text]', '').action(async ({ session }, name) => {
+      const commandContext =
+        this.koishiContextService.resolveCommandContext(session);
+      if (!commandContext) {
+        return;
+      }
+
+      const { room, client } = commandContext;
+      if (!client.isHost) {
+        return this.asRedError('#{koishi_ai_only_host}');
+      }
+      if (!this.enabled) {
+        return this.asRedError('#{koishi_ai_disabled}');
+      }
+      if (room.randomType) {
+        return this.asRedError('#{koishi_ai_disabled_random_room}');
+      }
+      let hasFreeSeat = false;
+      for (let i = 0; i < room.players.length; i += 1) {
+        if (!room.players[i]) {
+          hasFreeSeat = true;
+          break;
+        }
+      }
+      if (!hasFreeSeat) {
+        return this.asRedError('#{koishi_ai_room_full}');
+      }
+
+      const botName = (name || '').trim() || undefined;
+      if (botName && !this.getBotByNameOrDeck(botName)) {
+        return this.asRedError('#{windbot_deck_not_found}');
+      }
+      if (!botName && !this.getRandomBot()) {
+        return this.asRedError('#{windbot_deck_not_found}');
+      }
+      await this.requestWindbotJoin(room, botName);
+    });
+
     this.ctx.middleware(OnRoomFinalize, async (event, _client, next) => {
       this.deleteRoomToken(event.room.name);
       return next();

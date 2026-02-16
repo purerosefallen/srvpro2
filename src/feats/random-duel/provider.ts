@@ -610,7 +610,10 @@ export class RandomDuelProvider {
     if (!clientKey) {
       return empty;
     }
-    const data = await this.ctx.aragami.get(RandomDuelDisciplineCache, clientKey);
+    const data = await this.ctx.aragami.get(
+      RandomDuelDisciplineCache,
+      clientKey,
+    );
     const now = Date.now();
     const expireAt = Math.max(0, data?.expireAt || 0);
     if (!data || expireAt <= now) {
@@ -641,7 +644,10 @@ export class RandomDuelProvider {
       return;
     }
     const now = Date.now();
-    const expireAt = Math.max(now + 1000, data.expireAt || now + RANDOM_DUEL_TTL);
+    const expireAt = Math.max(
+      now + 1000,
+      data.expireAt || now + RANDOM_DUEL_TTL,
+    );
     const ttl = Math.max(1000, expireAt - now);
     await this.ctx.aragami.set(
       RandomDuelDisciplineCache,

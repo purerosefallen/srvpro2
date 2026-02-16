@@ -3,6 +3,7 @@ import { ContextState } from '../app';
 import { ClientVersionCheck } from '../feats';
 import { JoinWindbotAi, JoinWindbotToken } from '../feats/windbot';
 import { JoinRoom } from './join-room';
+import { JoinRoomIp } from './join-room-ip';
 import { JoinFallback } from './fallback';
 import { JoinPrechecks } from './join-prechecks';
 import { RandomDuelJoinHandler } from './random-duel-join-handler';
@@ -18,6 +19,7 @@ export const JoinHandlerModule = createAppContext<ContextState>()
   .provide(BadwordPlayerInfoChecker)
   .provide(RandomDuelJoinHandler)
   .provide(JoinWindbotAi)
+  .provide(JoinRoomIp)
   .provide(JoinRoom)
   .provide(JoinBlankPassMenu)
   .provide(JoinBlankPassRandomDuel)

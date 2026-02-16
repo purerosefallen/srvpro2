@@ -3,7 +3,7 @@ import { ClientVersionCheck } from './client-version-check';
 import { ContextState } from '../app';
 import { Welcome } from './welcome';
 import { PlayerStatusNotify } from './player-status-notify';
-import { Reconnect } from './reconnect';
+import { Reconnect, RefreshFieldService } from './reconnect';
 import { WindbotModule } from './windbot';
 import { SideTimeout } from './side-timeout';
 import { RandomDuelModule } from './random-duel';
@@ -12,14 +12,18 @@ import { ResourceModule } from './resource';
 import { MenuManager } from './menu-manager';
 import { ClientKeyProvider } from './client-key-provider';
 import { HidePlayerNameProvider } from './hide-player-name-provider';
+import { CommandsService, KoishiContextService } from '../koishi';
 
 export const FeatsModule = createAppContext<ContextState>()
   .provide(ClientKeyProvider)
   .provide(HidePlayerNameProvider)
+  .provide(KoishiContextService)
+  .provide(CommandsService)
   .provide(MenuManager)
   .provide(ClientVersionCheck)
   .provide(Welcome)
   .provide(PlayerStatusNotify)
+  .provide(RefreshFieldService)
   .provide(Reconnect)
   .provide(WaitForPlayerProvider) // chat refresh
   .provide(SideTimeout)

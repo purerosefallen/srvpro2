@@ -1,18 +1,12 @@
 import {
   ChatColor,
   NetPlayerType,
-  OcgcoreScriptConstants,
   YGOProCtosBase,
   YGOProCtosJoinGame,
   YGOProCtosUpdateDeck,
-  YGOProMsgHint,
-  YGOProMsgNewPhase,
-  YGOProMsgNewTurn,
   YGOProMsgStart,
-  YGOProMsgWaiting,
   YGOProStocDuelStart,
   YGOProStocGameMsg,
-  YGOProStocJoinGame,
   YGOProStocTypeChange,
   YGOProStocHsPlayerEnter,
   YGOProStocHsPlayerChange,
@@ -30,6 +24,7 @@ import { YGOProCtosDisconnect } from '../../utility/ygopro-ctos-disconnect';
 import { isUpdateDeckPayloadEqual } from '../../utility/deck-compare';
 import { CanReconnectCheck } from './can-reconnect-check';
 import { ClientKeyProvider } from '../client-key-provider';
+import { RefreshFieldService } from './refresh-field-service';
 
 interface DisconnectInfo {
   key: string;
@@ -62,6 +57,7 @@ export class Reconnect {
   private disconnectList = new Map<string, DisconnectInfo>();
   private reconnectTimeout = this.ctx.config.getInt('RECONNECT_TIMEOUT'); // 超时时间，单位：毫秒（默认 180000ms = 3分钟）
   private clientKeyProvider = this.ctx.get(() => ClientKeyProvider);
+  private refreshFieldService = this.ctx.get(() => RefreshFieldService);
 
   constructor(private ctx: Context) {
     // 检查是否启用断线重连（默认启用）
@@ -513,65 +509,7 @@ export class Reconnect {
       }),
     );
 
-    // 发送回合/阶段消息
-    await newClient.send(
-      new YGOProStocGameMsg().fromPartial({
-        msg: new YGOProMsgNewTurn().fromPartial({
-          player: room.turnIngamePos,
-        }),
-      }),
-    );
-
-    if (room.phase != null) {
-      await newClient.send(
-        new YGOProStocGameMsg().fromPartial({
-          msg: new YGOProMsgNewPhase().fromPartial({
-            phase: room.phase,
-          }),
-        }),
-      );
-    }
-
-    // 发送 MSG_RELOAD_FIELD（核心状态重建）
-    await newClient.send(await this.requestField(room));
-
-    // 发送刷新消息
-    await this.sendRefreshMessages(newClient, room);
-
-    // 判断是否需要重发响应请求
-    const needResendRequest =
-      room.hostinfo.time_limit > 0 && // 有计时器
-      this.isReconnectingPlayerOperating(newClient, room); // 重连玩家在操作
-
-    if (needResendRequest) {
-      // 重发 lastHintMsg（从 messages 找）
-      const lastHint = this.findLastHintForClient(newClient, room);
-      if (lastHint) {
-        await newClient.send(
-          new YGOProStocGameMsg().fromPartial({
-            msg: lastHint,
-          }),
-        );
-      }
-
-      // 重发 lastResponseRequestMsg
-      if (room.lastResponseRequestMsg) {
-        await newClient.send(
-          new YGOProStocGameMsg().fromPartial({
-            msg: room.lastResponseRequestMsg.playerView(
-              room.getIngameDuelPos(newClient),
-            ),
-          }),
-        );
-      }
-    } else {
-      // 不是重连玩家操作，发送 WAITING
-      await newClient.send(
-        new YGOProStocGameMsg().fromPartial({
-          msg: new YGOProMsgWaiting(),
-        }),
-      );
-    }
+    await this.refreshFieldService.sendReconnectDuelingMessages(newClient, room);
   }
 
   private importClientData(newClient: Client, oldClient: Client, room: Room) {
@@ -603,166 +541,6 @@ export class Reconnect {
       room.watchers.delete(oldClient);
       room.watchers.add(newClient);
     }
-  }
-
-  private async requestField(room: Room): Promise<YGOProStocGameMsg> {
-    if (!room.ocgcore) {
-      throw new Error('OCGCore not initialized');
-    }
-    const info = await room.ocgcore.queryFieldInfo();
-
-    // info.field 已经是 YGOProMsgReloadField 对象
-    return new YGOProStocGameMsg().fromPartial({
-      msg: info.field,
-    });
-  }
-
-  private async sendRefreshMessages(client: Client, room: Room) {
-    // 参考 ygopro RequestField 的逻辑，刷新各个区域
-    // 使用 0xefffff queryFlag（重连专用，包含更完整的信息）
-    const queryFlag = 0xefffff;
-
-    // 按照 ygopro RequestField 的顺序刷新
-    // 先对方，后自己（使用 ingame pos）
-    const selfIngamePos = room.getIngameDuelPosByDuelPos(client.pos);
-    const opponentIngamePos = 1 - selfIngamePos;
-
-    // RefreshMzone
-    await room.refreshLocations(
-      {
-        player: opponentIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_MZONE,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-    await room.refreshLocations(
-      {
-        player: selfIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_MZONE,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-
-    // RefreshSzone
-    await room.refreshLocations(
-      {
-        player: opponentIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_SZONE,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-    await room.refreshLocations(
-      {
-        player: selfIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_SZONE,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-
-    // RefreshHand
-    await room.refreshLocations(
-      {
-        player: opponentIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_HAND,
-      },
-      { queryFlag, sendToClient: client },
-    );
-    await room.refreshLocations(
-      { player: selfIngamePos, location: OcgcoreScriptConstants.LOCATION_HAND },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-
-    // RefreshGrave
-    await room.refreshLocations(
-      {
-        player: opponentIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_GRAVE,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-    await room.refreshLocations(
-      {
-        player: selfIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_GRAVE,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-
-    // RefreshExtra
-    await room.refreshLocations(
-      {
-        player: opponentIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_EXTRA,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-    await room.refreshLocations(
-      {
-        player: selfIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_EXTRA,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-
-    // RefreshRemoved
-    await room.refreshLocations(
-      {
-        player: opponentIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_REMOVED,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-    await room.refreshLocations(
-      {
-        player: selfIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_REMOVED,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-  }
-
-  private isReconnectingPlayerOperating(client: Client, room: Room): boolean {
-    // 检查重连玩家是否是当前操作玩家
-    const ingameDuelPos = room.getIngameDuelPosByDuelPos(client.pos);
-    const operatingPlayer = room.getIngameOperatingPlayer(ingameDuelPos);
-
-    return operatingPlayer === client;
-  }
-
-  private findLastHintForClient(
-    client: Client,
-    room: Room,
-  ): YGOProMsgHint | undefined {
-    const messages = room.lastDuelRecord?.messages;
-    if (!messages) {
-      return undefined;
-    }
-
-    // 提前计算 ingame pos
-    const clientIngamePos = room.getIngameDuelPosByDuelPos(client.pos);
-
-    // 从后往前找
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-
-      // 只找 Hint 消息
-      if (!(msg instanceof YGOProMsgHint)) {
-        continue;
-      }
-
-      // 检查 getSendTargets 是否包含重连玩家
-      try {
-        const targets = msg.getSendTargets(); // 返回 number[] (ingame pos 数组)
-        if (targets.includes(clientIngamePos)) {
-          return msg.playerView(clientIngamePos);
-        }
-      } catch {
-        // getSendTargets 可能失败，忽略
-        continue;
-      }
-    }
-
-    return undefined;
   }
 
   private getClientRoom(client: Client): Room | undefined {
@@ -858,3 +636,4 @@ export class Reconnect {
 }
 
 export * from './can-reconnect-check';
+export * from './refresh-field-service';

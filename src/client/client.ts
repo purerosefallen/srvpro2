@@ -153,7 +153,7 @@ export class Client {
     if (this.isInternal) {
       return;
     }
-    const locale = this.ctx.get(() => Chnroute).getLocale(this.ip);
+    const locale = this.getLocale();
     const lines = type <= NetPlayerType.OBSERVER ? [msg] : msg.split(/\r?\n/);
     const sendTasks: Promise<unknown>[] = [];
 
@@ -207,6 +207,10 @@ export class Client {
 
   loggingIp() {
     return this.ip || this.physicalIp() || 'unknown';
+  }
+
+  getLocale() {
+    return this.ctx.get(() => Chnroute).getLocale(this.ip);
   }
 
   // in handshake

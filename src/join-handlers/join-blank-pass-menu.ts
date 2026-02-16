@@ -154,7 +154,8 @@ export class JoinBlankPassMenu {
 
   private async dispatchJoinGameFromMenu(client: Client, pass: string) {
     const joinMsg = new YGOProCtosJoinGame().fromPartial({
-      version: client.menuJoinVersion || this.ctx.config.getInt('YGOPRO_VERSION'),
+      version:
+        client.menuJoinVersion || this.ctx.config.getInt('YGOPRO_VERSION'),
       gameid: client.menuJoinGameId || 0,
       pass,
     });

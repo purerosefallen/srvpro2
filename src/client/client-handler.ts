@@ -53,8 +53,7 @@ export class ClientHandler {
         YGOProCtosBase,
         async (msg, client, next) => {
           const bypassEstablished =
-            msg instanceof YGOProCtosJoinGame &&
-            msg.bypassEstablished;
+            msg instanceof YGOProCtosJoinGame && msg.bypassEstablished;
           if (bypassEstablished) {
             delete msg.bypassEstablished;
             return next();

@@ -51,7 +51,10 @@ export class MenuManager {
         if (!client.currentMenu) {
           return next();
         }
-        if (msg instanceof YGOProCtosHsToDuelist || msg instanceof YGOProCtosKick) {
+        if (
+          msg instanceof YGOProCtosHsToDuelist ||
+          msg instanceof YGOProCtosKick
+        ) {
           return next();
         }
         return undefined;

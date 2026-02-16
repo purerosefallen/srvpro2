@@ -1190,7 +1190,7 @@ export class Room {
     });
   }
 
-  private async setResponseTimer(
+  async setResponseTimer(
     originalDuelPos: number,
     options: {
       settlePrevious?: boolean;
@@ -1813,7 +1813,7 @@ export class Room {
         this.getIngameOperatingPlayer(
           this.getIngameDuelPosByDuelPos(this.responsePos),
         ) ||
-      !this.ocgcore
+      !this.ocgcore // || this.timerState.awaitingConfirm
     ) {
       return;
     }

@@ -62,6 +62,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@koishijs/plugin-help": "^2.4.6",
     "aragami": "^1.2.10",
     "axios": "^1.13.5",
     "better-lock": "^3.2.0",

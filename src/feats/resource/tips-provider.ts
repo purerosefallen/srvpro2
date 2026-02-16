@@ -1,6 +1,7 @@
 import { ChatColor } from 'ygopro-msg-encode';
 import { Context } from '../../app';
 import { Chnroute, Client } from '../../client';
+import { KoishiContextService } from '../../koishi';
 import { DuelStage, OnRoomDuelStart, Room, RoomManager } from '../../room';
 import { ValueContainer } from '../../utility/value-container';
 import { pickRandom } from '../../utility/pick-random';
@@ -31,6 +32,7 @@ export class TipsProvider extends BaseResourceProvider<TipsData> {
   );
   private chnroute = this.ctx.get(() => Chnroute);
   private roomManager = this.ctx.get(() => RoomManager);
+  private koishiContextService = this.ctx.get(() => KoishiContextService);
   private timersRegistered = false;
 
   constructor(ctx: Context) {
@@ -42,6 +44,20 @@ export class TipsProvider extends BaseResourceProvider<TipsData> {
     if (!this.enabled) {
       return;
     }
+
+    const koishi = this.koishiContextService.instance;
+    this.koishiContextService.attachI18n('tip', {
+      description: 'koishi_cmd_tip_desc',
+    });
+
+    koishi.command('tip', '').action(async ({ session }) => {
+      const commandContext =
+        this.koishiContextService.resolveCommandContext(session);
+      if (!commandContext) {
+        return;
+      }
+      await this.sendRandomTip(commandContext.client, commandContext.room);
+    });
 
     this.ctx.middleware(OnRoomDuelStart, async (event, _client, next) => {
       await this.sendRandomTipToRoom(event.room);
