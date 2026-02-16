@@ -6,6 +6,8 @@ import { ConfigService } from './config';
 export class HttpClient {
   constructor(private ctx: AppContext) {}
   http = axios.create({
-    ...useProxy(this.ctx.get(() => ConfigService).config.getString('USE_PROXY')),
+    ...useProxy(
+      this.ctx.get(() => ConfigService).config.getString('USE_PROXY'),
+    ),
   });
 }

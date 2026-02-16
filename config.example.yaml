@@ -32,6 +32,20 @@ deckMaxCopies: 3
 ocgcoreDebugLog: 0
 ocgcoreWasmPath: ""
 welcome: ""
+enableTips: 1
+tipsGet: ""
+tipsGetZh: ""
+tipsSplitZh: 0
+tipsPrefix: "Tip: "
+tipsInterval: 30000
+tipsIntervalIngame: 120000
+enableWords: 1
+wordsGet: ""
+enableDialogues: 1
+dialoguesGet: http://mercury233.me/ygosrv233/dialogues.json
+dialoguesGetCustom: ""
+enableBadwords: 1
+badwordsGet: ""
 enableWindbot: 0
 windbotBotlist: ./windbot/bots.json
 windbotSpawn: 0

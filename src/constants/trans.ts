@@ -8,6 +8,12 @@ export const TRANSLATIONS = {
     version_polyfilled:
       'Temporary compatibility mode has been enabled for your version. We recommend updating your game to avoid potential compatibility issues in the future.',
     bad_user_name: 'Please enter the correct ID',
+    bad_name_level1: 'Your username contains blocked words.',
+    bad_name_level2: 'Your username contains blocked words.',
+    bad_name_level3: 'Your username contains blocked words.',
+    bad_roomname_level1: 'Your room name contains blocked words.',
+    bad_roomname_level2: 'Your room name contains blocked words.',
+    bad_roomname_level3: 'Your room name contains blocked words.',
     blank_room_name: 'Blank room name is unallowed, please fill in something.',
     replay_hint_part1: 'Sending the replay of the duel number ',
     replay_hint_part2: '.',
@@ -34,7 +40,8 @@ export const TRANSLATIONS = {
     side_remain_part1: 'Remaining side changing time: ',
     side_remain_part2: ' minutes.',
     side_overtime: 'You exceeded side changing time and were kicked by system.',
-    side_overtime_room: ' exceeded side changing time and was kicked by system.',
+    side_overtime_room:
+      ' exceeded side changing time and was kicked by system.',
     kicked_by_system: 'was evicted from the game by server.',
     kick_count_down:
       ' seconds later this player will be evicted for not getting ready or starting the game.',
@@ -49,6 +56,8 @@ export const TRANSLATIONS = {
     random_duel_enter_room_tag:
       'Tag mode room. Password S for single mode, M for match mode.',
     chat_disabled: 'Chat is disabled in this room.',
+    chat_warn_level1: 'Please avoid sensitive words.',
+    chat_warn_level2: 'Your message contains blocked words.',
   },
   'zh-CN': {
     update_required: '请更新你的客户端版本',
@@ -58,6 +67,12 @@ export const TRANSLATIONS = {
     version_polyfilled:
       '已为当前版本启用临时兼容模式。建议尽快更新游戏，以避免后续兼容性问题。',
     bad_user_name: '请输入正确的用户名',
+    bad_name_level1: '你的用户名包含敏感词，请修改后重试。',
+    bad_name_level2: '你的用户名包含敏感词，请修改后重试。',
+    bad_name_level3: '你的用户名包含敏感词，请修改后重试。',
+    bad_roomname_level1: '房间名包含敏感词，请修改后重试。',
+    bad_roomname_level2: '房间名包含敏感词，请修改后重试。',
+    bad_roomname_level3: '房间名包含敏感词，请修改后重试。',
     blank_room_name: '房间名不能为空，请在主机密码处填写房间名',
     replay_hint_part1: '正在发送第',
     replay_hint_part2: '局决斗的录像。',
@@ -96,5 +111,7 @@ export const TRANSLATIONS = {
     random_duel_enter_room_tag:
       '您进入了双打模式房间，密码输入 S 进入单局模式，输入 M 进入比赛模式。',
     chat_disabled: '本房间禁止聊天。',
+    chat_warn_level1: '请注意发言，敏感词已被替换。',
+    chat_warn_level2: '消息包含敏感词，已被拦截。',
   },
 };

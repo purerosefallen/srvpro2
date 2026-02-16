@@ -73,6 +73,39 @@ export const defaultConfig = {
   OCGCORE_WASM_PATH: '',
   // Welcome message sent when players join. Format: plain string.
   WELCOME: '',
+  // Enable tips feature.
+  // Boolean parse rule (default true): only '0'/'false'/'null' => false, otherwise true.
+  ENABLE_TIPS: '1',
+  // Remote URL for tips list. Empty means disabled.
+  TIPS_GET: '',
+  // Remote URL for zh tips list. Empty means disabled.
+  TIPS_GET_ZH: '',
+  // Use tips_zh for zh users when available.
+  // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
+  TIPS_SPLIT_ZH: '0',
+  // Prefix for tips messages.
+  TIPS_PREFIX: 'Tip: ',
+  // Interval for auto tips in non-dueling rooms. Format: integer string in milliseconds (ms). '0' disables.
+  TIPS_INTERVAL: '30000',
+  // Interval for auto tips in dueling rooms. Format: integer string in milliseconds (ms). '0' disables.
+  TIPS_INTERVAL_INGAME: '120000',
+  // Enable words feature.
+  // Boolean parse rule (default true): only '0'/'false'/'null' => false, otherwise true.
+  ENABLE_WORDS: '1',
+  // Remote URL for words data. Empty means disabled.
+  WORDS_GET: '',
+  // Enable dialogues feature.
+  // Boolean parse rule (default true): only '0'/'false'/'null' => false, otherwise true.
+  ENABLE_DIALOGUES: '1',
+  // Remote URL for dialogues.
+  DIALOGUES_GET: 'http://mercury233.me/ygosrv233/dialogues.json',
+  // Remote URL for custom dialogues. Empty means disabled.
+  DIALOGUES_GET_CUSTOM: '',
+  // Enable badwords feature.
+  // Boolean parse rule (default true): only '0'/'false'/'null' => false, otherwise true.
+  ENABLE_BADWORDS: '1',
+  // Remote URL for badwords data. Empty means disabled.
+  BADWORDS_GET: '',
   // Enable windbot feature.
   // Boolean parse rule (default true): only '0'/'false'/'null' => false, otherwise true.
   ENABLE_WINDBOT: '0',

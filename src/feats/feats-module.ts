@@ -8,8 +8,10 @@ import { WindbotModule } from './windbot';
 import { SideTimeout } from './side-timeout';
 import { RandomDuelModule } from './random-duel';
 import { WaitForPlayerProvider } from './wait-for-player-provider';
+import { ResourceModule } from './resource';
 
 export const FeatsModule = createAppContext<ContextState>()
+  .use(ResourceModule)
   .provide(ClientVersionCheck)
   .provide(Welcome)
   .provide(PlayerStatusNotify)

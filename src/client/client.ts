@@ -1,5 +1,22 @@
-import { filter, merge, Observable, of, Subject } from 'rxjs';
-import { map, share, take, takeUntil, tap } from 'rxjs/operators';
+import {
+  filter,
+  from,
+  lastValueFrom,
+  merge,
+  Observable,
+  of,
+  Subject,
+} from 'rxjs';
+import {
+  concatMap,
+  defaultIfEmpty,
+  ignoreElements,
+  map,
+  share,
+  take,
+  takeUntil,
+  tap,
+} from 'rxjs/operators';
 import { Context } from '../app';
 import {
   YGOProCtos,
@@ -113,7 +130,7 @@ export class Client {
           payload: JSON.stringify(logMsg),
         },
         'Sending message to client',
-      )
+      );
       try {
         await this._send(Buffer.from(data.toFullPayload()));
       } catch (e) {
@@ -129,23 +146,43 @@ export class Client {
     if (this.isInternal) {
       return;
     }
-    if (type >= ChatColor.RED) {
-      msg = `[Server]: ${msg}`;
-    }
-    return this.send(
-      new YGOProStocChat().fromPartial({
-        msg:
-          type <= NetPlayerType.OBSERVER
-            ? msg
-            : await this.ctx
-                .get(() => I18nService)
-                .translate(
-                  this.ctx.get(() => Chnroute).getLocale(this.ip),
-                  msg,
-                ),
-        player_type: type,
-      }),
+    const locale = this.ctx.get(() => Chnroute).getLocale(this.ip);
+    const lines = type <= NetPlayerType.OBSERVER ? [msg] : msg.split(/\r?\n/);
+    const sendTasks: Promise<unknown>[] = [];
+
+    await lastValueFrom(
+      from(lines).pipe(
+        concatMap((rawLine) => this.resolveChatLine(rawLine, type, locale)),
+        tap((line: string) => {
+          const sendTask = this.send(
+            new YGOProStocChat().fromPartial({
+              msg: line,
+              player_type: type,
+            }),
+          );
+          if (sendTask) {
+            sendTasks.push(sendTask);
+          }
+        }),
+        ignoreElements(),
+        defaultIfEmpty(undefined),
+      ),
     );
+
+    await Promise.all(sendTasks);
+  }
+
+  private async resolveChatLine(rawLine: string, type: number, locale: string) {
+    let line = rawLine;
+    if (type >= ChatColor.RED) {
+      line = `[Server]: ${line}`;
+    }
+    if (type > NetPlayerType.OBSERVER) {
+      line = String(
+        await this.ctx.get(() => I18nService).translate(locale, line),
+      );
+    }
+    return line;
   }
 
   async die(msg?: string, type = ChatColor.BABYBLUE) {

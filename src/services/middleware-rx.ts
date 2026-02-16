@@ -23,7 +23,7 @@ export class MiddlewareRx {
       this.emitter.middleware(cls, handler, prior);
       return () => {
         this.emitter.removeMiddleware(cls, handler);
-      }
+      };
     });
   }
 }

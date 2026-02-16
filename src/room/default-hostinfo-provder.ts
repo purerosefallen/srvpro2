@@ -15,7 +15,8 @@ const setTagBit = (mode: number, isTag: boolean): number =>
   isTag ? mode | TAG_MODE_BIT : mode & ~TAG_MODE_BIT;
 
 const setWinMatchCountBits = (mode: number, winMatchCount: number): number => {
-  const nonTagBits = encodeWinMatchCountBits(winMatchCount) & MATCH_WINS_BITS_MASK;
+  const nonTagBits =
+    encodeWinMatchCountBits(winMatchCount) & MATCH_WINS_BITS_MASK;
   return (mode & TAG_MODE_BIT) | nonTagBits;
 };
 

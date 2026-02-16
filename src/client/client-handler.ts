@@ -27,10 +27,12 @@ export class ClientHandler {
           // ws/reverse-ws should already have IP from connection metadata, skip overwrite
           return next();
         }
-        await this.ctx.get(() => IpResolver).setClientIp(
-          client,
-          msg.real_ip === '0.0.0.0' ? undefined : msg.real_ip,
-        );
+        await this.ctx
+          .get(() => IpResolver)
+          .setClientIp(
+            client,
+            msg.real_ip === '0.0.0.0' ? undefined : msg.real_ip,
+          );
         client.hostname = msg.hostname?.split(':')[0] || '';
         return next();
       })

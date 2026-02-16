@@ -1,7 +1,9 @@
 import type { RequestWindbotJoinOptions } from './types';
 import { parseRulePrefix } from './parse-rule-prefix';
 
-export const parseWindbotOptions = (name: string): RequestWindbotJoinOptions => {
+export const parseWindbotOptions = (
+  name: string,
+): RequestWindbotJoinOptions => {
   const rule = parseRulePrefix(name);
   const options: RequestWindbotJoinOptions = {};
   if (!rule) {

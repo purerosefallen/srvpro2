@@ -102,7 +102,10 @@ export class WindBotProvider {
 
   consumeJoinToken(token: string) {
     const data = this.tokenDataMap.get(token);
-    this.logger.debug({ roomName: data?.roomName, token }, 'Consuming windbot join token');
+    this.logger.debug(
+      { roomName: data?.roomName, token },
+      'Consuming windbot join token',
+    );
     if (!data) {
       return undefined;
     }

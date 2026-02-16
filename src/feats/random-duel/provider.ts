@@ -60,8 +60,7 @@ export class RandomDuelProvider {
   private waitForPlayerReadyTimeoutMs =
     Math.max(0, this.ctx.config.getInt('RANDOM_DUEL_READY_TIME') || 0) * 1000;
   private waitForPlayerHangTimeoutMs =
-    Math.max(0, this.ctx.config.getInt('RANDOM_DUEL_HANG_TIMEOUT') || 0) *
-    1000;
+    Math.max(0, this.ctx.config.getInt('RANDOM_DUEL_HANG_TIMEOUT') || 0) * 1000;
   private waitForPlayerLongAgoBackoffMs = Math.max(
     0,
     this.waitForPlayerHangTimeoutMs - 19_000,
@@ -134,6 +133,7 @@ export class RandomDuelProvider {
     if (found) {
       const foundType = found.randomType || type || this.defaultType;
       found.randomType = foundType;
+      found.checkChatBadword = true;
       found.noHost = true;
       found.randomDuelMaxPlayer = this.resolveRandomDuelMaxPlayer(foundType);
       found.welcome = '#{random_duel_enter_room_waiting}';
@@ -148,6 +148,7 @@ export class RandomDuelProvider {
     }
     const room = await this.roomManager.findOrCreateByName(roomName);
     room.randomType = randomType;
+    room.checkChatBadword = true;
     room.noHost = true;
     room.randomDuelMaxPlayer = this.resolveRandomDuelMaxPlayer(randomType);
     room.welcome = '#{random_duel_enter_room_new}';

@@ -71,7 +71,9 @@ export class WsServer {
     req: IncomingMessage,
   ): Promise<void> {
     const client = new WsClient(this.ctx, ws, req);
-    if (await this.ctx.get(() => IpResolver).setClientIp(client, client.xffIp())) {
+    if (
+      await this.ctx.get(() => IpResolver).setClientIp(client, client.xffIp())
+    ) {
       return;
     }
     client.hostname = req.headers.host?.split(':')[0] || '';

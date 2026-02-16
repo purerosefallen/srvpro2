@@ -965,7 +965,10 @@ export class Room {
     }
     duelPos0.send(new YGOProStocSelectHand());
     duelPos1.send(new YGOProStocSelectHand());
-    await this.ctx.dispatch(new OnRoomFinger(this, [duelPos0, duelPos1]), duelPos0);
+    await this.ctx.dispatch(
+      new OnRoomFinger(this, [duelPos0, duelPos1]),
+      duelPos0,
+    );
   }
 
   @RoomMethod({ allowInDuelStages: DuelStage.Finger })

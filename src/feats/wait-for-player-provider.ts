@@ -129,7 +129,11 @@ export class WaitForPlayerProvider {
       YGOProCtosUpdateDeck,
       async (_msg, client, next) => {
         const room = this.getRoom(client);
-        if (!room || !this.hasTickForRoom(room) || room.duelStage !== DuelStage.Begin) {
+        if (
+          !room ||
+          !this.hasTickForRoom(room) ||
+          room.duelStage !== DuelStage.Begin
+        ) {
           return next();
         }
         try {
@@ -349,7 +353,8 @@ export class WaitForPlayerProvider {
 
     if (room.waitForPlayerReadyTargetPos !== target.pos) {
       room.waitForPlayerReadyTargetPos = target.pos;
-      room.waitForPlayerReadyDeadlineMs = nowMs + runtime.options.raadyTimeoutMs;
+      room.waitForPlayerReadyDeadlineMs =
+        nowMs + runtime.options.raadyTimeoutMs;
       room.waitForPlayerReadyWarnRemain = undefined;
     }
 
@@ -385,7 +390,10 @@ export class WaitForPlayerProvider {
     ) {
       return;
     }
-    await room.sendChat(`${latestTarget.name} #{kicked_by_system}`, ChatColor.RED);
+    await room.sendChat(
+      `${latestTarget.name} #{kicked_by_system}`,
+      ChatColor.RED,
+    );
     latestTarget.disconnect();
   }
 
