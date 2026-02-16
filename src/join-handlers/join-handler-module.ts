@@ -1,6 +1,6 @@
 import { createAppContext } from 'nfkit';
 import { ContextState } from '../app';
-import { ClientVersionCheck } from '../feats';
+import { ClientVersionCheck, MenuManager } from '../feats';
 import { JoinWindbotAi, JoinWindbotToken } from '../feats/windbot';
 import { JoinRoom } from './join-room';
 import { JoinFallback } from './fallback';
@@ -19,6 +19,7 @@ export const JoinHandlerModule = createAppContext<ContextState>()
   .provide(RandomDuelJoinHandler)
   .provide(JoinWindbotAi)
   .provide(JoinRoom)
+  .provide(MenuManager)
   .provide(JoinBlankPassMenu)
   .provide(JoinBlankPassRandomDuel)
   .provide(JoinBlankPassWindbotAi)
