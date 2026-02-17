@@ -21,9 +21,9 @@ export const FeatsModule = createAppContext<ContextState>()
   .provide(HidePlayerNameProvider)
   .provide(KoishiContextService)
   .provide(CommandsService) // some chat commands
+  .provide(Welcome)
   .provide(MenuManager)
   .provide(ClientVersionCheck)
-  .provide(Welcome)
   .provide(PlayerStatusNotify)
   .provide(CloudReplayService) // persist duel records
   .provide(ChatgptService) // AI-room chat replies

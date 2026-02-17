@@ -13,6 +13,7 @@ import { Chnroute, Client, I18nService } from '../client';
 import { DefaultHostinfo } from '../room';
 import { resolvePanelPageLayout } from '../utility';
 import { Awaitable } from 'nfkit';
+import { Welcome } from './welcome';
 
 export type MenuEntry = {
   title: string;
@@ -46,6 +47,7 @@ type MenuView = {
 export class MenuManager {
   private i18n = this.ctx.get(() => I18nService);
   private chnroute = this.ctx.get(() => Chnroute);
+  private welcome = this.ctx.get(() => Welcome);
 
   constructor(private ctx: Context) {
     this.ctx.middleware(
@@ -87,6 +89,7 @@ export class MenuManager {
     if (client.menuOffset == null) {
       client.menuOffset = 0;
     }
+    await this.welcome.sendConfigWelcome(client);
     await this.renderMenu(client);
   }
 

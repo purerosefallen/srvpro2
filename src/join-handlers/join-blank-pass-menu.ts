@@ -9,7 +9,6 @@ interface MenuNode {
 
 export class JoinBlankPassMenu {
   private logger = this.ctx.createLogger(this.constructor.name);
-  private welcome = this.ctx.get(() => Welcome);
   private menuManager = this.ctx.get(() => MenuManager);
   private enabled = this.ctx.config.getBoolean('ENABLE_MENU');
   private rootMenu = this.loadRootMenu();
@@ -36,7 +35,6 @@ export class JoinBlankPassMenu {
       }
 
       this.enterMenuContext(client, msg);
-      await this.welcome.sendConfigWelcome(client);
       await this.openMenuByPath(client, client.menuPath || []);
       return msg;
     });
