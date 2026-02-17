@@ -10,6 +10,7 @@ import { Client } from '../../client';
 import { MAX_ROOM_NAME_LENGTH } from '../../constants/room';
 import {
   DuelStage,
+  DefaultHostInfoProvider,
   OnRoomFinalize,
   OnRoomJoinPlayer,
   OnRoomLeavePlayer,
@@ -98,6 +99,7 @@ export class RandomDuelProvider {
   private waitForPlayerProvider = this.ctx.get(() => WaitForPlayerProvider);
   private clientKeyProvider = this.ctx.get(() => ClientKeyProvider);
   private hidePlayerNameProvider = this.ctx.get(() => HidePlayerNameProvider);
+  private defaultHostInfoProvider = this.ctx.get(() => DefaultHostInfoProvider);
 
   enabled = this.ctx.config.getBoolean('ENABLE_RANDOM_DUEL');
   noRematchCheck = this.ctx.config.getBoolean('RANDOM_DUEL_NO_REMATCH_CHECK');
@@ -120,6 +122,7 @@ export class RandomDuelProvider {
     if (!this.enabled) {
       return;
     }
+    this.registerRandomRoomModes();
     this.waitForPlayerProvider.registerTick({
       roomFilter: (room) => !!room.randomType,
       raadyTimeoutMs: this.waitForPlayerReadyTimeoutMs,
@@ -278,6 +281,51 @@ export class RandomDuelProvider {
       return ['S', 'M'];
     }
     return uniqModes;
+  }
+
+  private registerRandomRoomModes() {
+    this.defaultHostInfoProvider
+      .registerRoomMode('(OOR|OCGONLYRANDOM)', {
+        rule: 0,
+        lflist: 0,
+      })
+      .registerRoomMode('(OR|OCGRANDOM)', {
+        rule: 5,
+        lflist: 0,
+      })
+      .registerRoomMode('(CR|CCGRANDOM)', {
+        rule: 2,
+        lflist: -1,
+      })
+      .registerRoomMode('(TOR|TCGONLYRANDOM)', {
+        rule: 1,
+      })
+      .registerRoomMode('(TR|TCGRANDOM)', {
+        rule: 5,
+      })
+      .registerRoomMode('(OOMR|OCGONLYMATCHRANDOM)', {
+        rule: 0,
+        lflist: 0,
+        mode: 1,
+      })
+      .registerRoomMode('(OMR|OCGMATCHRANDOM)', {
+        rule: 5,
+        lflist: 0,
+        mode: 1,
+      })
+      .registerRoomMode('(CMR|CCGMATCHRANDOM)', {
+        rule: 2,
+        lflist: -1,
+        mode: 1,
+      })
+      .registerRoomMode('(TOMR|TCGONLYMATCHRANDOM)', {
+        rule: 1,
+        mode: 1,
+      })
+      .registerRoomMode('(TMR|TCGMATCHRANDOM)', {
+        rule: 5,
+        mode: 1,
+      });
   }
 
   private resolveSupportedTypes() {

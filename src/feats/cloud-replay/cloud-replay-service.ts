@@ -458,6 +458,7 @@ export class CloudReplayService {
       ...hostInfo,
       mode:
         hostInfo.mode > 2 ? (this.isTagMode(hostInfo) ? 2 : 1) : hostInfo.mode,
+      lflist: 0,
     };
   }
 
