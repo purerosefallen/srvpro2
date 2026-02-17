@@ -11,7 +11,12 @@ export class JoinRoom {
       }
       this.logger.debug({ name: client.name, pass: msg.pass }, 'Joining room');
       const roomManager = this.ctx.get(() => RoomManager);
+      const existing = roomManager.findByName(msg.pass);
+      if (existing) {
+        return existing.join(client);
+      }
       const room = await roomManager.findOrCreateByName(msg.pass);
+      room.native = true;
       return room.join(client);
     });
   }

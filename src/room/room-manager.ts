@@ -3,6 +3,12 @@ import { Room, RoomFinalizor } from './room';
 import BetterLock from 'better-lock';
 import { HostInfo } from 'ygopro-msg-encode';
 
+declare module './room' {
+  export interface Room { 
+    native?: boolean;
+  }
+}
+
 export class RoomManager {
   constructor(private ctx: Context) {}
 
