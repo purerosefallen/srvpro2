@@ -7,7 +7,7 @@ import {
   OneToMany,
   PrimaryColumn,
 } from 'typeorm';
-import { BaseTimeEntity } from './base-time.entity';
+import { BaseTimeEntity } from '../../utility';
 import { BigintTransformer } from './bigint-transformer';
 import { DuelRecordPlayer } from './duel-record-player.entity';
 

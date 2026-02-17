@@ -1,7 +1,8 @@
 import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
+import { BaseTimeEntity } from '../../utility';
 
 @Entity('random_duel_score')
-export class RandomDuelScore {
+export class RandomDuelScore extends BaseTimeEntity {
   @PrimaryColumn({ type: 'varchar', length: 64 })
   name!: string;
 

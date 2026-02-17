@@ -1,4 +1,4 @@
-import { CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { CreateDateColumn, DeleteDateColumn, UpdateDateColumn } from 'typeorm';
 
 export abstract class BaseTimeEntity {
   @CreateDateColumn({
@@ -10,4 +10,10 @@ export abstract class BaseTimeEntity {
     type: 'timestamp',
   })
   updateTime!: Date;
+
+  @DeleteDateColumn({
+    type: 'timestamp',
+    nullable: true,
+  })
+  deleteTime?: Date;
 }
