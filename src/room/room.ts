@@ -1875,14 +1875,20 @@ export class Room {
       watcherCount: this.watchers.size,
       players: this.playingPlayers.map((p) => ({
         ...pick(p, ['name', 'pos', 'ip']),
-        deck: p.deck?.toYGOMobileDeckURL(),
-        startDeck: p.startDeck?.toYGOMobileDeckURL(),
+        deck: p.deck?.toYdkeURL(),
         lp: fieldInfo?.[this.getIngameDuelPos(p)]?.lp,
         cardCount: fieldInfo?.[this.getIngameDuelPos(p)]?.cardCount,
       })),
-      duels: this.duelRecords.map((d) => ({
-        ...pick(d, ['startTime', 'endTime'])
-      })),
+      duels: this.duelRecords.map((d) => {
+        const firstPos = d.isSwapped ? 1 : 0;
+        return {
+          ...pick(d, ['startTime', 'endTime', 'winPosition']),
+          players: d.players.map((p, i) => ({
+            deck: p.deck.toYdkeURL(),
+            isFirst: this.getDuelPos(i) === firstPos,
+          })),
+        };
+      }),
     };
   }
 }
