@@ -35,9 +35,13 @@
 - srvpro 里面的 client.send（发送给客户端）还是对应 client.send
 - srvpro 里面 server.send（模拟客户端发送消息）对应 this.ctx.dispatch(msgClassInstance, client)
 
-## ts-rest 相关
+## ts-rest 相关（如果用到的话）
 
 - 契约文件放在 src/api/contract.ts 一个文件里面，方便其他项目复制。
+
+## TypeORM 相关
+
+- 删除一律用 softDelete。
 
 ## 参考项目
 

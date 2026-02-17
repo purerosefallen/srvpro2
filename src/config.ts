@@ -142,6 +142,15 @@ export const defaultConfig = {
   // Enable cloud replay menu entry (R/W pass handling).
   // Boolean parse rule (default true): only '0'/'false'/'null' => false, otherwise true.
   ENABLE_CLOUD_REPLAY: '1',
+  // Enable tournament mode compatibility behavior.
+  // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
+  TOURNAMENT_MODE: '0',
+  // Enable tournament mode deck lock check hook.
+  // Boolean parse rule (default true): only '0'/'false'/'null' => false, otherwise true.
+  TOURNAMENT_MODE_CHECK_DECK: '1',
+  // Block replay packets to players who are currently in a room.
+  // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
+  BLOCK_REPLAY_TO_PLAYER: '0',
   // Enable room list menu entry (L pass handling).
   // Boolean parse rule (default true): only '0'/'false'/'null' => false, otherwise true.
   ENABLE_ROOMLIST: '1',

@@ -7,6 +7,10 @@ export class BadwordPlayerInfoChecker {
   private badwordProvider = this.ctx.get(() => BadwordProvider);
 
   constructor(private ctx: Context) {
+    if (this.ctx.config.getBoolean('TOURNAMENT_MODE')) {
+      return;
+    }
+
     if (!this.badwordProvider.enabled) {
       return;
     }

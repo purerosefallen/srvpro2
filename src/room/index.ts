@@ -17,5 +17,6 @@ export * from './room-event/on-room-select-tp';
 export * from './room-event/on-room-siding-ready';
 export * from './room-event/on-room-siding-start';
 export * from './room-event/on-room-win';
+export * from './room-event/room-check-deck';
 export * from './default-hostinfo-provder';
 export * from './default-hostinfo';

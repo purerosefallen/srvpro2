@@ -33,6 +33,14 @@ export const TRANSLATIONS = {
     pre_reconnecting_to_room:
       'You will be reconnected to your previous game. Please pick your previous deck.',
     deck_incorrect_reconnect: 'Please pick your previous deck.',
+    deck_correct_part1: 'Your deck ',
+    deck_correct_part2: ' has passed the deck check for this tournament.',
+    deck_incorrect_part1:
+      'The deck you are using is not the same as your submitted deck ',
+    deck_incorrect_part2:
+      ' . Please make sure all the cards are in the correct sequence.',
+    deck_not_found:
+      ', we did not receive your registration. Please make sure you are using the correct ID for the tournament.',
     reconnect_failed: 'Reconnect failed.',
     reconnecting_to_room: 'Reconnecting to server...',
     side_timeout_part1: 'Changing side time is limited to ',
@@ -166,6 +174,11 @@ export const TRANSLATIONS = {
     pre_reconnecting_to_room:
       '你有未完成的对局，即将重新连接，请选择你在本局决斗中使用的卡组并准备。',
     deck_incorrect_reconnect: '请选择你在本局决斗中使用的卡组。',
+    deck_correct_part1: '成功使用卡组 ',
+    deck_correct_part2: ' 参加比赛。',
+    deck_incorrect_part1: '您的卡组与报名卡组 ',
+    deck_incorrect_part2: ' 不符。注意卡组不能有包括卡片顺序在内的任何修改。',
+    deck_not_found: '，没有找到您的报名信息，请确定您使用昵称与报名ID一致。',
     reconnect_failed: '重新连接失败。',
     reconnecting_to_room: '正在重新连接到服务器……',
     side_timeout_part1: '你现在有',
