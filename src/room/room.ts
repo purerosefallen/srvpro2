@@ -105,6 +105,7 @@ import { OnRoomSidingStart } from './room-event/on-room-siding-start';
 import { OnRoomSidingReady } from './room-event/on-room-siding-ready';
 import { OnRoomFinger } from './room-event/on-room-finger';
 import { OnRoomSelectTp } from './room-event/on-room-select-tp';
+import { RoomCheckDeck } from './room-event/room-check-deck';
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 
@@ -156,7 +157,7 @@ export class Room {
       return this._cardReader;
     });
   }
-  private lflist = blankLFList;
+  lflist = blankLFList;
 
   private async findLFList() {
     const isTCG = this.hostinfo.rule === 1 && this.hostinfo.lflist === 0;
@@ -809,38 +810,25 @@ export class Room {
     // Check deck based on stage
     if (this.duelStage === DuelStage.Begin) {
       // Begin stage: check deck validity (lflist, etc.) if no_check_deck is false
-      if (!this.hostinfo.no_check_deck) {
-        const deckError = checkDeck(deck, cardReader, {
-          ot: this.hostinfo.rule,
-          lflist: this.lflist,
-          minMain: this.ctx.config.getInt('DECK_MAIN_MIN'),
-          maxMain: this.ctx.config.getInt('DECK_MAIN_MAX'),
-          maxExtra: this.ctx.config.getInt('DECK_EXTRA_MAX'),
-          maxSide: this.ctx.config.getInt('DECK_SIDE_MAX'),
-          maxCopies: this.ctx.config.getInt('DECK_MAX_COPIES'),
-        });
-
-        this.logger.debug(
-          {
-            deckError,
-            name: client.name,
-            deckErrorPayload: deckError?.toPayload(),
-          },
-          'Deck check result',
+      const sendDeckError = async (deckErrorCode: number) => {
+        // 先发送 PlayerChange NotReady 给自己 (client.deck 未设置，自动为 NOTREADY)
+        await client.send(client.prepareChangePacket());
+        // 然后发送错误消息给自己
+        await client.send(
+          new YGOProStocErrorMsg().fromPartial({
+            msg: ErrorMessageType.DECKERROR,
+            code: deckErrorCode,
+          }),
         );
+        return;
+      };
 
-        if (deckError) {
-          // 先发送 PlayerChange NotReady 给自己 (client.deck 未设置，自动为 NOTREADY)
-          await client.send(client.prepareChangePacket());
-          // 然后发送错误消息给自己
-          await client.send(
-            new YGOProStocErrorMsg().fromPartial({
-              msg: ErrorMessageType.DECKERROR,
-              code: deckError.toPayload(),
-            }),
-          );
-          return;
-        }
+      const deckErrorContainer = await this.ctx.dispatch(
+        new RoomCheckDeck(this, client, deck, cardReader),
+        client,
+      );
+      if (deckErrorContainer?.value) {
+        return sendDeckError(deckErrorContainer.value.toPayload());
       }
     } else if (this.duelStage === DuelStage.Siding) {
       // Siding stage: ALWAYS check if cards match original deck (无条件检查)
@@ -871,7 +859,7 @@ export class Room {
       this.allPlayers.forEach((p) => p.send(changeMsg));
       if (this.noHost) {
         let allReadyAndFull = true;
-        for (let i = 0; i < this.players.length; i++) { 
+        for (let i = 0; i < this.players.length; i++) {
           const p = this.players[i];
           if (!p || !p.deck) {
             allReadyAndFull = false;
