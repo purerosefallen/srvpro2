@@ -1842,12 +1842,4 @@ export class Room {
     // TODO: teammate surrender in tag duel
     return this.win({ player: 1 - this.getIngameDuelPos(client), type: 0x0 });
   }
-
-  async getFieldInfo() {
-    if (!this.ocgcore) {
-      return undefined;
-    }
-    const info = await this.ocgcore.queryFieldInfo();
-    return info.field.players[this.getIngameDuelPosByDuelPos(player)].lp;
-  }
 }
