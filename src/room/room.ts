@@ -1843,7 +1843,7 @@ export class Room {
     return this.win({ player: 1 - this.getIngameDuelPos(client), type: 0x0 });
   }
 
-  async getLP(player: number): Promise<number | undefined> {
+  async getFieldInfo() {
     if (!this.ocgcore) {
       return undefined;
     }

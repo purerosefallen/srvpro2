@@ -45,6 +45,13 @@ type ReplayPage = {
   nextCursor?: number;
 };
 
+type ReplayDetailMenuOptions = {
+  includeBack: boolean;
+  showReplayPassHint: boolean;
+};
+
+type DirectReplayPassAction = 'detail' | 'watch' | 'downloadYrp';
+
 declare module '../../room' {
   interface Room {
     identifier?: string;
@@ -78,7 +85,12 @@ export class CloudReplayService {
 
   async tryHandleJoinPass(pass: string, client: Client) {
     const normalized = (pass || '').trim().toUpperCase();
-    if (!normalized || !['R', 'W'].includes(normalized)) {
+    if (!normalized) {
+      return false;
+    }
+
+    const directPass = this.parseDirectReplayPass(normalized);
+    if (!['R', 'W'].includes(normalized) && !directPass) {
       return false;
     }
 
@@ -89,6 +101,27 @@ export class CloudReplayService {
 
     if (normalized === 'W') {
       await this.playRandomReplay(client);
+      return true;
+    }
+
+    if (directPass) {
+      const replayId = this.parseReplayId(directPass.replayIdText);
+      if (replayId == null) {
+        await client.die('#{cloud_replay_no}', ChatColor.RED);
+        return true;
+      }
+
+      if (directPass.action === 'detail') {
+        await this.openReplayDetailMenuById(client, replayId);
+        return true;
+      }
+
+      if (directPass.action === 'watch') {
+        await this.playReplayById(client, replayId);
+        return true;
+      }
+
+      await this.downloadReplayYrpById(client, replayId);
       return true;
     }
 
@@ -207,11 +240,6 @@ export class CloudReplayService {
   private async renderReplayListMenu(client: Client) {
     await this.menuManager.launchMenu(client, async () => {
       const page = await this.getReplayPage(client);
-      if (!page.entries.length) {
-        await client.die('#{cloud_replay_no}', ChatColor.RED);
-        return;
-      }
-
       const menu: MenuEntry[] = [];
       if (!this.isFirstReplayPage(client)) {
         menu.push({
@@ -227,8 +255,10 @@ export class CloudReplayService {
         menu.push({
           title: this.formatDate(replay.endTime),
           callback: async (currentClient) => {
-            currentClient.cloudReplaySelectedReplayId = replay.id;
-            await this.renderReplayDetailMenu(currentClient, replay.id);
+            await this.renderReplayDetailMenu(currentClient, replay.id, {
+              includeBack: true,
+              showReplayPassHint: true,
+            });
           },
         });
       }
@@ -246,24 +276,42 @@ export class CloudReplayService {
     });
   }
 
-  private async renderReplayDetailMenu(client: Client, replayId: number) {
-    const replay = await this.findOwnedReplayById(client, replayId);
+  private async renderReplayDetailMenu(
+    client: Client,
+    replayId: number,
+    options: ReplayDetailMenuOptions,
+  ) {
+    const replay = await this.findReplayById(replayId);
     if (!replay) {
-      await client.sendChat('#{cloud_replay_no}', ChatColor.RED);
-      await this.renderReplayListMenu(client);
+      if (options.includeBack) {
+        await client.sendChat('#{cloud_replay_no}', ChatColor.RED);
+        await this.renderReplayListMenu(client);
+      } else {
+        await client.die('#{cloud_replay_no}', ChatColor.RED);
+      }
       return;
     }
 
+    client.cloudReplaySelectedReplayId = replay.id;
+    if (options.showReplayPassHint) {
+      await client.sendChat(
+        `#{cloud_replay_detail_access_hint_part1}R#${replay.id}#{cloud_replay_detail_access_hint_part2}`,
+        ChatColor.BABYBLUE,
+      );
+    }
     await this.sendReplayDetail(client, replay);
 
     const menu: MenuEntry[] = [
       {
+        title: this.formatDate(replay.endTime),
+        callback: async (currentClient) => {
+          await this.renderReplayDetailMenu(currentClient, replay.id, options);
+        },
+      },
+      {
         title: '#{cloud_replay_menu_play}',
         callback: async (currentClient) => {
-          const selectedReplay = await this.findOwnedReplayById(
-            currentClient,
-            replayId,
-          );
+          const selectedReplay = await this.findReplayById(replay.id);
           if (!selectedReplay) {
             await currentClient.die('#{cloud_replay_no}', ChatColor.RED);
             return;
@@ -274,10 +322,7 @@ export class CloudReplayService {
       {
         title: '#{cloud_replay_menu_download_yrp}',
         callback: async (currentClient) => {
-          const selectedReplay = await this.findOwnedReplayById(
-            currentClient,
-            replayId,
-          );
+          const selectedReplay = await this.findReplayById(replay.id);
           if (!selectedReplay) {
             await currentClient.die('#{cloud_replay_no}', ChatColor.RED);
             return;
@@ -285,15 +330,43 @@ export class CloudReplayService {
           await this.downloadReplayYrp(currentClient, selectedReplay);
         },
       },
-      {
+    ];
+
+    if (options.includeBack) {
+      menu.push({
         title: '#{cloud_replay_menu_back}',
         callback: async (currentClient) => {
           await this.renderReplayListMenu(currentClient);
         },
-      },
-    ];
+      });
+    }
 
     await this.menuManager.launchMenu(client, menu);
+  }
+
+  private async openReplayDetailMenuById(client: Client, replayId: number) {
+    await this.renderReplayDetailMenu(client, replayId, {
+      includeBack: false,
+      showReplayPassHint: false,
+    });
+  }
+
+  private async playReplayById(client: Client, replayId: number) {
+    const replay = await this.findReplayById(replayId);
+    if (!replay) {
+      await client.die('#{cloud_replay_no}', ChatColor.RED);
+      return;
+    }
+    await this.playReplayStream(client, replay, false);
+  }
+
+  private async downloadReplayYrpById(client: Client, replayId: number) {
+    const replay = await this.findReplayById(replayId);
+    if (!replay) {
+      await client.die('#{cloud_replay_no}', ChatColor.RED);
+      return;
+    }
+    await this.downloadReplayYrp(client, replay, true);
   }
 
   private async sendReplayDetail(client: Client, replay: DuelRecordEntity) {
@@ -414,8 +487,15 @@ export class CloudReplayService {
     return !pos0Player?.isFirst;
   }
 
-  private async downloadReplayYrp(client: Client, replay: DuelRecordEntity) {
+  private async downloadReplayYrp(
+    client: Client,
+    replay: DuelRecordEntity,
+    withJoinGame = false,
+  ) {
     try {
+      if (withJoinGame) {
+        await client.send(this.createJoinGamePacket(replay));
+      }
       await client.send(new YGOProStocDuelStart());
       await client.send(this.createReplayPacket(replay));
       await client.send(new YGOProStocDuelEnd());
@@ -563,18 +643,6 @@ export class CloudReplayService {
     return qb.orderBy('replay.id', 'DESC').take(take).getMany();
   }
 
-  private async findOwnedReplayById(client: Client, replayId: number) {
-    const replay = await this.findReplayById(replayId);
-    if (!replay) {
-      return undefined;
-    }
-    const clientKey = this.clientKeyProvider.getClientKey(client);
-    const hasOwnedPlayer = replay.players.some(
-      (player) => player.clientKey === clientKey,
-    );
-    return hasOwnedPlayer ? replay : undefined;
-  }
-
   private async findReplayById(replayId: number) {
     const database = this.ctx.database;
     if (!database) {
@@ -716,5 +784,38 @@ export class CloudReplayService {
 
   private resolveSeatCount(hostInfo: HostInfo) {
     return this.isTagMode(hostInfo) ? 4 : 2;
+  }
+
+  private parseDirectReplayPass(pass: string) {
+    if (pass.startsWith('YRP#')) {
+      return {
+        action: 'downloadYrp' as DirectReplayPassAction,
+        replayIdText: pass.slice('YRP#'.length),
+      };
+    }
+    if (pass.startsWith('W#')) {
+      return {
+        action: 'watch' as DirectReplayPassAction,
+        replayIdText: pass.slice('W#'.length),
+      };
+    }
+    if (pass.startsWith('R#')) {
+      return {
+        action: 'detail' as DirectReplayPassAction,
+        replayIdText: pass.slice('R#'.length),
+      };
+    }
+    return undefined;
+  }
+
+  private parseReplayId(replayIdText: string) {
+    if (!/^\d+$/.test(replayIdText)) {
+      return undefined;
+    }
+    const replayId = Number(replayIdText);
+    if (!Number.isSafeInteger(replayId)) {
+      return undefined;
+    }
+    return replayId;
   }
 }
