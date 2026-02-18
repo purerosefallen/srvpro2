@@ -4,6 +4,7 @@ import { DialoguesProvider, TipsProvider } from '../feats/resource';
 import { RoomDeathService } from '../feats/room-death-service';
 import { DuelStage, RoomInfo, RoomManager } from '../room';
 import { LegacyRoomIdService } from './legacy-room-id-service';
+import { IpResolver } from '../client/ip-resolver';
 
 type ApiMessageHandler = {
   permission: string;
@@ -24,6 +25,7 @@ export class LegacyApiService {
   private logger = this.ctx.createLogger('LegacyApiService');
   private roomIdService = this.ctx.get(() => LegacyRoomIdService);
   private handlers = new Map<string, ApiMessageHandler>();
+  private ipResolver = this.ctx.get(() => IpResolver);
 
   constructor(private ctx: Context) {
     this.registerDefaultHandlers();
@@ -161,7 +163,7 @@ export class LegacyApiService {
             .map((player) => ({
               id: '-1',
               name: player.name,
-              ip: player.ip || null,
+              ip: this.ipResolver.toIpv4(player.ip) || null,
               status:
                 info.duelStage !== DuelStage.Begin
                   ? {

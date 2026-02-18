@@ -50,6 +50,7 @@ export class IpResolver {
   }
 
   toIpv4(ip: string): string {
+    if (!ip) return ip;
     if (ip.startsWith('::ffff:')) {
       return ip.slice(7);
     }
@@ -57,6 +58,7 @@ export class IpResolver {
   }
 
   toIpv6(ip: string): string {
+    if (!ip) return ip;
     if (/^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) {
       return '::ffff:' + ip;
     }
