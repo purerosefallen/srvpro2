@@ -316,8 +316,6 @@ export class WindBotProvider {
     }
     const retryLimit = 10;
     const retry = async () => {
-      // wait 200 ms
-      await new Promise((resolve) => setTimeout(resolve, 200));
       this.logger.warn(
         { roomToken: token, botName, retryCount },
         'Retrying windbot join by reverse ws',
