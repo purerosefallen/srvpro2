@@ -1,227 +1,231 @@
 # SRVPro2
 
-> Next-generation YGOPro server with direct ocgcore control
+SRVPro2 是 SRVPro 的下一代项目：一个直接控制 `ocgcore`（WASM）的 YGOPro 服务器实现。  
+它不再依赖“代理 ygopro 进程”的方案，而是用 TypeScript 在服务端直接管理对局、房间、扩展功能和重连流程。
 
-SRVPro2 is the modern successor to SRVPro, implementing a complete YGOPro server in TypeScript with direct ocgcore (WebAssembly) control, modular architecture, and advanced features like disconnect/reconnect support.
+## 推荐部署方式：Docker Compose
 
-## ✨ Features
+优先使用镜像：
 
-- 🎮 **Direct ocgcore Control** - Uses WebAssembly (koishipro-core.js) to directly interact with ocgcore instead of proxying through ygopro
-- 🔄 **Advanced Reconnect System** - Two-stage reconnect with deck verification and complete state reconstruction
-- 🧵 **Multi-threaded Architecture** - Each room runs in an isolated Worker thread for better performance and crash isolation
-- 🏗️ **Modular Design** - Clean separation of concerns with TransportModule, RoomModule, FeatsModule, and JoinHandlerModule
-- 📦 **Full Protocol Support** - Complete implementation of YGOPro network protocol via ygopro-msg-encode
-- 🔧 **Extensible** - Easy to add new features through middleware and module system
+`git-registry.moenext.com/nanahira/srvpro2`
 
-## 🏛️ Architecture
+下面给一个简化版单服示例：`windbot + postgres + srvpro2`，主服端口 `7911`。
 
-### Core Differences from SRVPro
+### 1. 准备目录
 
-| Aspect | SRVPro (v1) | SRVPro2 (v2) |
-|--------|-------------|--------------|
-| **Architecture** | Network proxy | Direct control |
-| **ocgcore Access** | Indirect (via ygopro subprocess) | Direct (via WASM) |
-| **Process Model** | Multi-process (Node.js + ygopro) | Single-process multi-threaded |
-| **Communication** | TCP/IP networking | In-memory message passing |
-| **State Query** | Message inference only | Full query API available |
-| **Reconnect** | Simple (swap connections) | Advanced (state reconstruction) |
-
-### Architecture Diagram
-
-```
-┌──────────────────────────────────────────────┐
-│  SRVPro2 (Node.js Process)                   │
-│                                              │
-│  ┌──────────────────────────────────────┐   │
-│  │  Main Thread                         │   │
-│  │  - Network I/O (WebSocket)           │   │
-│  │  - Room Management                   │   │
-│  │  - Client Handling                   │   │
-│  └──────────┬───────────────────────────┘   │
-│             │                                │
-│  ┌──────────┴───────────┬──────────────┐   │
-│  │ Worker Thread 1      │ Worker 2     │   │
-│  │ (Room A)             │ (Room B)     │   │
-│  │ ┌────────────────┐   │ ┌──────────┐ │   │
-│  │ │ ocgcore.wasm   │   │ │ ocgcore  │ │   │
-│  │ │ (Game Engine)  │   │ │  ...     │ │   │
-│  │ └────────────────┘   │ └──────────┘ │   │
-│  └──────────────────────┴──────────────┘   │
-└──────────────────────────────────────────────┘
+```bash
+mkdir -p srvpro2/{data,ssl,postgres}
+cd srvpro2
 ```
 
-### Module Structure
+### 2. 创建 `docker-compose.yml`
 
-- **TransportModule**: WebSocket transport and client connection management
-- **RoomModule**: Core game room logic (replicating ygopro functionality)
-- **FeatsModule**: Extended features (welcome messages, reconnect, player status notifications, etc.)
-- **JoinHandlerModule**: Room joining and matchmaking logic
+```yaml
+version: "2.4"
+services:
+  windbot:
+    restart: always
+    image: git-registry.moenext.com/nanahira/windbot:master
+    ports:
+      - "12399:2399"
 
-## 🚀 Getting Started
+  postgres:
+    restart: always
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: srvpro
+      POSTGRES_PASSWORD: CHANGE_ME_DB_PASS
+      POSTGRES_DB: srvpro2
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
 
-### Prerequisites
+  srvpro2:
+    restart: always
+    image: git-registry.moenext.com/nanahira/srvpro2:latest
+    depends_on:
+      - windbot
+      - postgres
+    ports:
+      - "7911:7911"
+      - "7912:7912"
+      - "7922:7922"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./config.yaml:/usr/src/app/config.yaml:ro
+      - ./ssl:/usr/src/app/ssl:ro
+      - ./data:/usr/src/app/data
+      # 如需使用自定义游戏资源可取消注释
+      # - ./ygopro:/usr/src/app/ygopro:ro
+    environment:
+      TZ: Asia/Shanghai
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: srvpro
+      DB_PASS: CHANGE_ME_DB_PASS
+      DB_NAME: srvpro2
+      PORT: "7911"
+      WS_PORT: "7912"
+      API_PORT: "7922"
+      ENABLE_SSL: "1"
+      TRUSTED_PROXIES: "127.0.0.0/8,::1/128,172.16.0.0/12"
+      WELCOME: "YGOPro Koishi Server"
+      ENABLE_WINDBOT: "1"
+      WINDBOT_ENDPOINT: "ws://windbot:2399"
+      ENABLE_RANDOM_DUEL: "1"
+      RANDOM_DUEL_BLANK_PASS_MODES: "M,S"
+      ENABLE_MENU: "1"
+      ENABLE_CLOUD_REPLAY: "1"
+```
 
-- Node.js 18+ (for Worker threads support)
-- TypeScript 5.x
-- YGOPro game resources (scripts, databases)
+### 3. 创建 `config.yaml`
 
-### Installation
+`config.yaml` 建议放“长期稳定配置”；端口、数据库地址、token 等易变信息放 `docker-compose.yml` 的 `environment`。
+
+```yaml
+host: "::"
+wsHost: ""
+apiHost: ""
+logLevel: info
+ygoproPath: ./ygopro
+
+enableReconnect: 1
+enableRoomlist: 1
+enableCloudReplay: 1
+enableRandomDuel: 1
+enableMenu: 1
+
+enableWindbot: 1
+windbotEndpoint: ws://windbot:2399
+
+enableSsl: 1
+sslPath: ./ssl
+```
+
+### 4. 启动
+
+```bash
+docker compose pull
+docker compose up -d
+docker compose logs -f srvpro2
+```
+
+停止：
+
+```bash
+docker compose down
+```
+
+## 配置怎么配（重点）
+
+配置入口：
+
+- `config.yaml`
+- `docker-compose.yml` 的 `environment`
+
+优先级：`environment > config.yaml > src/config.ts 默认值`
+
+### 键名和类型规则
+
+- `config.yaml` 建议使用 `camelCase`，如 `enableReconnect`
+- 环境变量使用全大写下划线，如 `ENABLE_RECONNECT`
+- 所有值最终都按字符串处理，开关建议统一写 `0` / `1`
+- 数组可写 YAML 数组，或写成逗号分隔字符串
+
+### 布尔值规则
+
+- 默认值为 `0` 的项：`'' / 0 / false / null` 为关闭，其他都为开启
+- 默认值为 `1` 的项：只有 `0 / false / null` 为关闭，其他都为开启
+
+为避免歧义，推荐只用 `0` 和 `1`。
+
+### 必配项建议
+
+1. 网络端口
+- `PORT` / `WS_PORT` / `API_PORT`
+
+2. 数据库
+- `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASS` / `DB_NAME`
+- `DB_HOST` 留空则数据库功能关闭（云回放等会不可用）
+
+3. Windbot
+- `ENABLE_WINDBOT=1`
+- `WINDBOT_ENDPOINT=ws://windbot:2399`
+
+4. SSL
+- `ENABLE_SSL=1`
+- `sslPath` 指向证书目录，或配置 `SSL_CERT` + `SSL_KEY`
+
+5. 常用功能开关
+- `ENABLE_RECONNECT`
+- `ENABLE_CLOUD_REPLAY`
+- `ENABLE_RANDOM_DUEL`
+- `ENABLE_ROOMLIST`
+- `ENABLE_MENU`
+
+### `menu` 示例（空密码菜单）
+
+要启用空密码菜单，至少需要：
+
+- `enableMenu: 1`（或 `ENABLE_MENU=1`）
+- 在 `config.yaml` 里配置 `menu`
+
+`menu` 的规则：
+
+- 键是显示给玩家的文本
+- 值为字符串时，表示对应的房间密码（会按该密码继续走加入逻辑）
+- 值为对象时，表示子菜单
+- 空对象 `{}` 常用于“返回上一层”
+
+示例：
+
+```yaml
+menu:
+  房间列表: L
+  随机对战:
+    单局: S
+    比赛: M
+    双打: T
+    返回: {}
+  人机对战:
+    单局: S
+    比赛: AI,M
+    双打: AI,T
+    返回: {}
+  更多:
+    云录像: R
+    人机列表: B
+    TCG匹配:
+      单局: TOR
+      比赛: TOMR
+      返回: {}
+    简体中文环境匹配:
+      单局: CR
+      比赛: CMR
+      返回: {}
+    观看随机对局录像: W
+    返回: {}
+```
+
+## Docker Compose 使用建议
+
+- 生产环境不要把密码和 token 直接写死在 `docker-compose.yml`，建议用 `.env` 或 secret 注入
+- `ENABLE_CLOUD_REPLAY=1` 时建议确保 PostgreSQL 已正常连接
+
+## 源码部署（可选）
 
 ```bash
 npm install
-```
-
-### Configuration
-
-1. Generate configuration template:
-```bash
 npm run gen:config-example
-```
-
-2. Copy and edit the configuration:
-```bash
 cp config.example.yaml config.yaml
-# Edit config.yaml with your settings
-```
-
-### Build and Run
-
-```bash
-# Development
-npm run dev
-
-# Production
 npm run build
 npm start
 ```
 
-## 🔧 Configuration
+## 参考文件
 
-Configuration meaning source of truth:
-
-- `src/config.ts` is the canonical place for all config keys and their meanings.
-- Use the comments in `src/config.ts` to understand what each field does.
-- `config.example.yaml` is generated from `src/config.ts` defaults for quick editing.
-- All config values are loaded as strings; follow each field's format note in `src/config.ts`.
-- Format examples used in `src/config.ts`: comma-separated lists, integer strings, and explicit time units (`ms` or `s`).
-
-Commonly used options:
-
-- `WELCOME`: Welcome message shown to players joining rooms
-- `RECONNECT_TIMEOUT`: Disconnect timeout before reconnect expires (default: 180000ms)
-- `ENABLE_RECONNECT`: Reconnect feature switch (default enabled)
-- Standard YGOPro settings (port, timeout, banlist, etc.)
-
-After modifying defaults in `src/config.ts`, regenerate the example config:
-```bash
-npm run gen:config-example
-```
-
-## 📚 Key Features
-
-### Disconnect/Reconnect System
-
-Unlike SRVPro's connection-swap approach, SRVPro2 implements a sophisticated two-stage reconnect:
-
-1. **Pre-reconnect**: Client enters room lobby, verifies deck
-2. **Full reconnect**: Complete game state reconstruction using ocgcore query APIs
-
-The system supports both passive reconnect (network loss) and kick reconnect (logging in from another device).
-
-### Direct State Query
-
-Because SRVPro2 controls ocgcore directly, it can query any game state at any time:
-
-```typescript
-// Query complete field state
-const field = await room.ocgcore.queryFieldInfo();
-const player0LP = field.field.lp0;
-
-// Query specific card
-const card = await room.ocgcore.queryCard({
-  player: 0,
-  location: LOCATION_MZONE,
-  sequence: 0,
-  queryFlag: QUERY_ATTACK | QUERY_DEFENSE
-});
-```
-
-This enables features impossible in proxy-based architectures.
-
-## 🛠️ Development
-
-### Project Structure
-
-```
-src/
-├── client/          # Client connection handling
-├── feats/           # Extended features (welcome, reconnect, etc.)
-├── join-handlers/   # Room joining logic
-├── room/            # Core room and game logic
-├── transport/       # WebSocket transport
-├── ocgcore-worker/  # Worker thread for ocgcore
-├── utility/         # Helper functions
-└── config.ts        # Configuration definitions
-```
-
-### Coding Guidelines
-
-See [AGENTS.md](./AGENTS.md) for detailed development guidelines, including:
-
-- Module organization principles
-- Import/export conventions
-- Middleware patterns
-- Event handling best practices
-
-### Adding New Features
-
-New features should be implemented as modules in `FeatsModule`:
-
-```typescript
-// src/feats/my-feature.ts
-export class MyFeature {
-  constructor(private ctx: Context) {
-    // Register middleware
-    this.ctx.middleware(SomeEvent, async (event, client, next) => {
-      // Your logic
-      return next();
-    });
-  }
-}
-
-// src/feats/feats-module.ts
-export const FeatsModule = createAppContext<ContextState>()
-  .provide(MyFeature)  // Add your module
-  .define();
-```
-
-## 🤝 Contributing
-
-Contributions are welcome. When contributing:
-
-1. Follow the coding guidelines in AGENTS.md
-2. Test your changes thoroughly
-3. Update documentation as needed
-4. Ensure `npm run build` completes successfully
-
-## 📄 License
-
-MIT License - see LICENSE file for details
-
-## 🙏 Acknowledgments
-
-- **YGOPro Team** - Original game engine and protocol
-- **SRVPro** - Foundation and inspiration for this project
-- **koishipro-core.js** - WASM wrapper for ocgcore
-- **nfkit** - IoC container and event system
-- **yuzuthread** - Worker thread management
-
-## 📖 Related Projects
-
-- [ygopro](https://github.com/Fluorohydride/ygopro) - Original YGOPro server
-- [koishipro-core.js](https://github.com/purerosefallen/koishipro-core.js) - WASM ocgcore wrapper
-- [ygopro-msg-encode](https://github.com/purerosefallen/ygopro-msg-encode) - YGOPro protocol library
-
----
-
-**SRVPro2** - Built with ❤️ by Nanahira
+- 配置定义：`src/config.ts`
+- 示例配置：`config.example.yaml`
+- 镜像构建：`Dockerfile`
+- 开发规范：`AGENTS.md`
