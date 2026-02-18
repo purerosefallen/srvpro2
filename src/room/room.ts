@@ -1330,15 +1330,21 @@ export class Room {
       ? path.resolve(process.cwd(), ocgcoreWasmPathConfig)
       : undefined;
 
-    this.ocgcore = await initWorker(OcgcoreWorker, {
-      seed: duelRecord.seed,
-      hostinfo: this.hostinfo,
-      ygoproPaths: this.resourceLoader.ygoproPaths,
-      extraScriptPaths,
-      ocgcoreWasmPath,
-      registry,
-      decks: duelRecord.toSwappedPlayers().map((p) => p.deck),
-    });
+    try {
+      this.ocgcore = await initWorker(OcgcoreWorker, {
+        seed: duelRecord.seed,
+        hostinfo: this.hostinfo,
+        ygoproPaths: this.resourceLoader.ygoproPaths,
+        extraScriptPaths,
+        ocgcoreWasmPath,
+        registry,
+        decks: duelRecord.toSwappedPlayers().map((p) => p.deck),
+      });
+    } catch (e) {
+      this.logger.error({ error: e }, 'Failed to initialize OCGCoreWorker');
+      await this.sendChat('Failed to initialize game engine.', ChatColor.RED);
+      return this.finalize(true);
+    }
 
     const [
       player0DeckCount,
@@ -1746,7 +1752,7 @@ export class Room {
           return;
         }
         if (encodeError) {
-          this.logger.warn(
+          this.logger.error(
             { encodeError, status },
             'Failed to decode game message in worker transport',
           );
@@ -1860,7 +1866,12 @@ export class Room {
     }
     this.lastResponseRequestMsg = undefined;
     this.isRetrying = false;
-    await this.ocgcore.setResponse(msg.response);
+    try {
+      await this.ocgcore.setResponse(msg.response);
+    } catch (e) {
+      this.logger.error({ error: e }, 'Failed to set response in ocgcore');
+      return this.finalize();
+    }
     return this.advance();
   }
 
