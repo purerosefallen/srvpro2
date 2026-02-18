@@ -74,4 +74,8 @@ export class ReverseWsClient extends Client {
   xffIp(): string | undefined {
     return undefined;
   }
+
+  expectHandshakeTimeout() {
+    return 500;
+  }
 }

@@ -122,7 +122,10 @@ export class ClientHandler {
         take(1),
         takeUntil(client.disconnect$),
       ),
-    ]).pipe(timeout(5000), takeUntil(client.disconnect$));
+    ]).pipe(
+      timeout(client.expectHandshakeTimeout()),
+      takeUntil(client.disconnect$),
+    );
 
     return firstValueFrom(handshake$)
       .then(() => {

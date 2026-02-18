@@ -259,4 +259,8 @@ export class Client {
         (this.deck ? PlayerChangeState.READY : PlayerChangeState.NOTREADY),
     });
   }
+
+  expectHandshakeTimeout() {
+    return 5000;
+  }
 }

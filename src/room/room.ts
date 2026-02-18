@@ -960,6 +960,9 @@ export class Room {
   }
 
   async sendChat(msg: string, type: number = ChatColor.BABYBLUE) {
+    if (this.finalizing) {
+      return;
+    }
     return Promise.all(this.allPlayers.map((p) => p.sendChat(msg, type)));
   }
 
