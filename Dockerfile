@@ -3,6 +3,7 @@ RUN apt update && apt -y install wget git && \
   mkdir -p /resources/ygopro /resources/windbot && \
   git clone --depth=1 https://code.moenext.com/nanahira/ygopro-scripts /resources/ygopro/script && \
   wget -O /resources/ygopro/cards.cdb https://cdntx.moecube.com/ygopro-database/zh-CN/cards.cdb && \
+  wget -O /resources/ygopro/lflist.conf https://cdntx.moecube.com/koishipro/contents/lflist.conf && \
   wget -O /resources/windbot/bots.json 'https://code.moenext.com/nanahira/windbot/-/raw/master/bots.json?inline=false'
 
 FROM node:lts-trixie-slim as base
