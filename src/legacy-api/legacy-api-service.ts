@@ -266,10 +266,10 @@ export class LegacyApiService {
       return `${duelText} Siding`;
     }
     if (info.duelStage === DuelStage.Finger) {
-      return `${duelText} Finger${deathSuffix}`;
+      return `${duelText} Finger`;
     }
     if (info.duelStage === DuelStage.FirstGo) {
-      return `${duelText} FirstGo${deathSuffix}`;
+      return `${duelText} FirstGo`;
     }
     if (info.duelStage === DuelStage.Dueling) {
       const turn = Number.isFinite(info.turnCount) ? Number(info.turnCount) : 0;
