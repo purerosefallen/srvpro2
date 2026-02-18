@@ -324,22 +324,6 @@ export class WindBotProvider {
         );
       });
 
-      const roomName = room.name;
-      setTimeout(() => {
-        if (!this.tokenDataMap.has(token)) {
-          return;
-        }
-        this.logger.warn(
-          {
-            roomToken: token,
-            roomName,
-            botName,
-            endpoint: url.toString(),
-          },
-          'Windbot join token still not consumed after reverse ws request',
-        );
-      }, 6000);
-
       return true;
     } catch (error) {
       this.logger.warn(

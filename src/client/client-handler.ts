@@ -130,7 +130,7 @@ export class ClientHandler {
         client.established = true;
       })
       .catch((error) => {
-        this.logger.warn(
+        this.logger.debug(
           {
             client: client.name || client.loggingIp(),
             ip: client.loggingIp(),
