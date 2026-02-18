@@ -1,4 +1,4 @@
-import { ChatColor } from 'ygopro-msg-encode';
+import { ChatColor, NetPlayerType } from 'ygopro-msg-encode';
 import { Context } from '../app';
 import { DialoguesProvider, TipsProvider } from '../feats/resource';
 import { RoomDeathService } from '../feats/room-death-service';
@@ -158,21 +158,32 @@ export class LegacyApiService {
       const roomInfos = await Promise.all(
         rooms.map(async (room) => {
           const info = await room.getInfo();
-          const users = [...info.players]
+          const users = [
+            ...info.players,
+            ...[...room.watchers].map((watcher) => ({
+              name: watcher.name,
+              ip: watcher.ip,
+              pos: watcher.pos,
+              score: undefined,
+              lp: undefined,
+              cardCount: undefined,
+            })),
+          ]
             .sort((a, b) => a.pos - b.pos)
-            .map((player) => ({
+            .map((member) => ({
               id: '-1',
-              name: player.name,
-              ip: this.ipResolver.toIpv4(player.ip) || null,
+              name: member.name,
+              ip: this.ipResolver.toIpv4(member.ip) || null,
               status:
-                info.duelStage !== DuelStage.Begin
+                info.duelStage !== DuelStage.Begin &&
+                member.pos !== NetPlayerType.OBSERVER
                   ? {
-                      score: player.score ?? 0,
-                      lp: player.lp ?? info.hostinfo.start_lp,
-                      cards: player.cardCount ?? info.hostinfo.start_hand,
+                      score: member.score ?? 0,
+                      lp: member.lp ?? info.hostinfo.start_lp,
+                      cards: member.cardCount ?? info.hostinfo.start_hand,
                     }
                   : null,
-              pos: player.pos,
+              pos: member.pos,
             }));
           return {
             roomid: this.roomIdService.getRoomIdString(info.identifier),
