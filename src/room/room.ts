@@ -498,7 +498,7 @@ export class Room {
 
   private disposeOcgcore() {
     try {
-      this.ocgcore?.dispose().catch();
+      void this.ocgcore?.dispose().catch(() => {});
       this.ocgcore = undefined;
     } catch {}
   }
