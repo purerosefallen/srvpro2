@@ -49,6 +49,12 @@ type ReplayDetailMenuOptions = {
 };
 
 type DirectReplayPassAction = 'detail' | 'watch' | 'downloadYrp';
+type ReplayWatchViewMode = 'default' | 'player0' | 'player1' | 'observer';
+type DirectReplayPass = {
+  action: DirectReplayPassAction;
+  replayIdText: string;
+  viewMode?: ReplayWatchViewMode;
+};
 
 declare module '../../client' {
   interface Client {
@@ -104,7 +110,7 @@ export class CloudReplayService {
       }
 
       if (directPass.action === 'watch') {
-        await this.playReplayById(client, replayId);
+        await this.playReplayById(client, replayId, directPass.viewMode);
         return true;
       }
 
@@ -334,13 +340,17 @@ export class CloudReplayService {
     });
   }
 
-  private async playReplayById(client: Client, replayId: number) {
+  private async playReplayById(
+    client: Client,
+    replayId: number,
+    viewMode: ReplayWatchViewMode = 'default',
+  ) {
     const replay = await this.findReplayById(replayId);
     if (!replay) {
       await client.die('#{cloud_replay_no}', ChatColor.RED);
       return;
     }
-    await this.playReplayStream(client, replay, false);
+    await this.playReplayStream(client, replay, false, viewMode);
   }
 
   private async downloadReplayYrpById(client: Client, replayId: number) {
@@ -380,6 +390,7 @@ export class CloudReplayService {
     client: Client,
     replay: DuelRecordEntity,
     withYrp: boolean,
+    viewMode: ReplayWatchViewMode = 'default',
   ) {
     try {
       await client.sendChat(
@@ -390,7 +401,10 @@ export class CloudReplayService {
       await this.sendReplayPlayers(client, replay);
       await client.send(new YGOProStocDuelStart());
 
-      const gameMessages = this.resolveReplayVisibleMessages(replay.messages);
+      const gameMessages = this.resolveReplayVisibleMessages(
+        replay.messages,
+        viewMode,
+      );
       for (const msg of gameMessages) {
         await client.send(msg);
       }
@@ -415,19 +429,45 @@ export class CloudReplayService {
     }
   }
 
-  private resolveReplayVisibleMessages(messagesBase64: string) {
-    return decodeMessagesBase64(messagesBase64).filter((packet) => {
-      const msg = packet.msg;
-      if (!msg) {
-        return false;
+  private resolveReplayVisibleMessages(
+    messagesBase64: string,
+    viewMode: ReplayWatchViewMode = 'default',
+  ) {
+    const visiblePackets = decodeMessagesBase64(messagesBase64).filter(
+      (packet) => {
+        const msg = packet.msg;
+        if (!msg) {
+          return false;
+        }
+        if (msg instanceof YGOProMsgResponseBase) {
+          return false;
+        }
+        if (msg instanceof YGOProMsgWin) {
+          return false;
+        }
+        return msg.getSendTargets().includes(NetPlayerType.OBSERVER);
+      },
+    );
+
+    if (viewMode === 'default') {
+      return visiblePackets;
+    }
+
+    return visiblePackets.map((packet) => {
+      const sourceMsg = packet.msg;
+      let mappedMsg = sourceMsg;
+
+      if (viewMode === 'player0') {
+        mappedMsg = sourceMsg.playerView(0);
+      } else if (viewMode === 'player1') {
+        mappedMsg = sourceMsg.playerView(1);
+      } else if (viewMode === 'observer') {
+        mappedMsg = sourceMsg.observerView();
       }
-      if (msg instanceof YGOProMsgResponseBase) {
-        return false;
-      }
-      if (msg instanceof YGOProMsgWin) {
-        return false;
-      }
-      return msg.getSendTargets().includes(NetPlayerType.OBSERVER);
+
+      return new YGOProStocGameMsg().fromPartial({
+        msg: mappedMsg,
+      });
     });
   }
 
@@ -788,7 +828,28 @@ export class CloudReplayService {
     return this.isTagMode(hostInfo) ? 4 : 2;
   }
 
-  private parseDirectReplayPass(pass: string) {
+  private parseDirectReplayPass(pass: string): DirectReplayPass | undefined {
+    if (pass.startsWith('W0#')) {
+      return {
+        action: 'watch' as DirectReplayPassAction,
+        replayIdText: pass.slice('W0#'.length),
+        viewMode: 'player0' as ReplayWatchViewMode,
+      };
+    }
+    if (pass.startsWith('W1#')) {
+      return {
+        action: 'watch' as DirectReplayPassAction,
+        replayIdText: pass.slice('W1#'.length),
+        viewMode: 'player1' as ReplayWatchViewMode,
+      };
+    }
+    if (pass.startsWith('W2#')) {
+      return {
+        action: 'watch' as DirectReplayPassAction,
+        replayIdText: pass.slice('W2#'.length),
+        viewMode: 'observer' as ReplayWatchViewMode,
+      };
+    }
     if (pass.startsWith('YRP#')) {
       return {
         action: 'downloadYrp' as DirectReplayPassAction,
@@ -799,6 +860,7 @@ export class CloudReplayService {
       return {
         action: 'watch' as DirectReplayPassAction,
         replayIdText: pass.slice('W#'.length),
+        viewMode: 'default' as ReplayWatchViewMode,
       };
     }
     if (pass.startsWith('R#')) {
