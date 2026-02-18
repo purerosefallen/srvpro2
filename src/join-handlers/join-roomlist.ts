@@ -2,7 +2,7 @@ import { YGOProCtosJoinGame } from 'ygopro-msg-encode';
 import { Context } from '../app';
 import { Client } from '../client';
 import { MenuEntry, MenuManager } from '../feats';
-import { RoomManager } from '../room';
+import { DuelStage, RoomManager } from '../room';
 
 export class JoinRoomlist {
   private logger = this.ctx.createLogger(this.constructor.name);
@@ -29,7 +29,12 @@ export class JoinRoomlist {
     await this.menuManager.launchMenu(client, async () => {
       const roomNames = this.roomManager
         .allRooms()
-        .filter((room) => room.native && !room.name.includes('$'))
+        .filter(
+          (room) =>
+            (room.native ||
+              (room.duelStage !== DuelStage.Begin && room.challongeInfo)) &&
+            !room.name.includes('$'),
+        )
         .map((room) => room.name);
 
       const menu: MenuEntry[] = roomNames.map((roomName) => ({
