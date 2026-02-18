@@ -17,6 +17,7 @@ import { CloudReplayService } from './cloud-replay';
 import { LpLowHintService } from './lp-low-hint-service';
 import { LockDeckService } from './lock-deck';
 import { BlockReplay } from './block-replay';
+import { RoomDeathService } from './room-death-service';
 
 export const FeatsModule = createAppContext()
   .provide(ClientKeyProvider)
@@ -31,6 +32,7 @@ export const FeatsModule = createAppContext()
   .provide(BlockReplay) // block replay packets for in-room players
   .provide(ChatgptService) // AI-room chat replies
   .provide(LpLowHintService) // low LP hint in duel
+  .provide(RoomDeathService) // srvpro-style death mode (model 2)
   .provide(LockDeckService) // srvpro-style tournament deck lock check
   .provide(RefreshFieldService)
   .provide(Reconnect)

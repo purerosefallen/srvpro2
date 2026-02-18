@@ -107,8 +107,7 @@ import { OnRoomFinger } from './room-event/on-room-finger';
 import { OnRoomSelectTp } from './room-event/on-room-select-tp';
 import { RoomCheckDeck } from './room-event/room-check-deck';
 import cryptoRandomString from 'crypto-random-string';
-import { pick } from 'koishi';
-import { get } from 'http';
+import { RoomCurrentFieldInfo, RoomInfo } from './room-info';
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 
@@ -144,7 +143,7 @@ export class Room {
 
   private overrideWinMatchCount?: number;
 
-  setOverrideWinMatchCount(value: number) { 
+  setOverrideWinMatchCount(value: number | undefined) {
     this.overrideWinMatchCount = value;
   }
 
@@ -528,7 +527,7 @@ export class Room {
       player: duelPos,
     });
     const lastDuelRecord = this.lastDuelRecord;
-    if (lastDuelRecord) {
+    if (lastDuelRecord && this.duelStage === DuelStage.Dueling) {
       lastDuelRecord.winPosition = duelPos;
       lastDuelRecord.endTime = new Date();
     }
@@ -1656,7 +1655,7 @@ export class Room {
         this.getIngameOperatingPlayer(this.turnIngamePos),
       );
     }
-    if (options.route) {
+    if (options.route && message) {
       await this.routeGameMsg(message, {
         sendToClient: options.sendToClient,
       });
@@ -1721,8 +1720,12 @@ export class Room {
   private matchKilled = false;
   private responsePos?: number;
 
+  private canAdvance() {
+    return this.duelStage === DuelStage.Dueling && !!this.ocgcore;
+  }
+
   private async advance() {
-    if (!this.ocgcore) {
+    if (!this.canAdvance()) {
       return;
     }
 
@@ -1731,7 +1734,11 @@ export class Room {
         status,
         message,
         encodeError,
-      } of this.ocgcore.advance()) {
+      } of this.ocgcore!.advance()) {
+        if (!this.canAdvance()) {
+          // If not in Dueling stage, that means duel got ended
+          return;
+        }
         if (encodeError) {
           this.logger.warn(
             { encodeError, status },
@@ -1758,6 +1765,10 @@ export class Room {
         }
 
         const handled = await this.dispatchGameMsg(message);
+        if (!handled) {
+          // message blocked by middleware, do not route
+          continue;
+        }
         if (handled instanceof YGOProMsgWin) {
           return this.win(handled, this.matchKilled ? 1 : undefined);
         }
@@ -1858,7 +1869,7 @@ export class Room {
     return this.win({ player: 1 - this.getIngameDuelPos(client), type: 0x0 });
   }
 
-  async getCurrentFieldInfo() {
+  async getCurrentFieldInfo(): Promise<RoomCurrentFieldInfo> {
     if (!this.ocgcore) {
       return undefined;
     }
@@ -1874,20 +1885,20 @@ export class Room {
     }));
   }
 
-  async getInfo() {
+  async getInfo(): Promise<RoomInfo> {
     const fieldInfo = await this.getCurrentFieldInfo();
     return {
-      ...pick(this as Room, [
-        'identifier',
-        'name',
-        'hostinfo',
-        'duelStage',
-        'turnCount',
-        'createTime',
-      ]),
+      identifier: this.identifier,
+      name: this.name,
+      hostinfo: this.hostinfo,
+      duelStage: this.duelStage,
+      turnCount: this.turnCount,
+      createTime: this.createTime,
       watcherCount: this.watchers.size,
       players: this.playingPlayers.map((p) => ({
-        ...pick(p, ['name', 'pos', 'ip']),
+        name: p.name,
+        pos: p.pos,
+        ip: p.ip,
         deck: p.deck?.toYdkeURL(),
         score:
           this.getDuelPos(p) >= 0 && this.getDuelPos(p) <= 1
@@ -1899,7 +1910,9 @@ export class Room {
       duels: this.duelRecords.map((d) => {
         const firstPos = d.isSwapped ? 1 : 0;
         return {
-          ...pick(d, ['startTime', 'endTime', 'winPosition']),
+          startTime: d.startTime,
+          endTime: d.endTime,
+          winPosition: d.winPosition,
           players: d.players.map((p, i) => ({
             deck: p.deck.toYdkeURL(),
             isFirst: this.getDuelPos(i) === firstPos,

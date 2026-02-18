@@ -139,6 +139,24 @@ export const TRANSLATIONS = {
     cloud_replay_menu_play: 'Play Cloud Replay',
     cloud_replay_menu_download_yrp: 'Download YRP Replay',
     cloud_replay_menu_back: 'Back',
+    death_cancel: 'Over-match has been canceled from this game.',
+    death_start:
+      'Over-time match has begun, player with higher LP will win the single game after 4 turns.',
+    death_start_siding:
+      'Extra time match starts, player with higher LP will win the single game after 4 turns.',
+    death_start_final:
+      'You are getting into sudden-death match, the Duel continues until the first change in LP happens.',
+    death_start_extra:
+      'The Duel is counted as extra duel which will end in 4 turns, player with higher LP will win.',
+    death_remain_part1: 'The Duel will be ended in ',
+    death_remain_part2:
+      ' turns. At the end of that turn, player with higher LP wins.',
+    death_remain_final:
+      'The Duel will continue until the first change in LP (and increase or a decrease), and at the end of the turn, the player with the highest LP total becomes the winner.',
+    death_finish_part1: 'Extra time duel ends, congratulations. ',
+    death_finish_part2: ', You win the Duel.',
+    death2_finish_part1: 'Extra time match ends, congratulations. ',
+    death2_finish_part2: ', You win the Match.',
     lp_low_opponent: 'もはやお前のライフは風前の灯！',
     lp_low_self: '*Low LP Alert*',
     botlist_menu_single: 'Single',
@@ -275,6 +293,21 @@ export const TRANSLATIONS = {
     cloud_replay_menu_play: '播放云录像',
     cloud_replay_menu_download_yrp: '下载 YRP 录像',
     cloud_replay_menu_back: '返回',
+    death_cancel: '已取消本房间的加时赛状态。',
+    death_start: '加时赛开始，从本回合开始计算4回合，基本分高的玩家获得本次决斗的胜利。',
+    death_start_siding: '加时赛开始，下次决斗的第4回合结束时，基本分高的玩家决斗胜利。',
+    death_start_final:
+      '本次决斗将进入猝死赛，基本分发生变动的回合结束时，基本分高的玩家将获得本次决斗的胜利。',
+    death_start_extra:
+      '本次决斗为额外决斗，第4回合结束时，基本分高的玩家获得本次决斗的胜利。',
+    death_remain_part1: '本次决斗将在',
+    death_remain_part2: '回合后结束，基本分高的玩家将获得本次决斗的胜利。',
+    death_remain_final:
+      '若本回合基本分发生变动，在该回合结束时决斗即告结束，基本分高的玩家获得本场决斗的胜利。',
+    death_finish_part1: '加时赛决斗结束，恭喜 ',
+    death_finish_part2: ' 获得本次决斗的胜利。',
+    death2_finish_part1: '加时赛结束，恭喜 ',
+    death2_finish_part2: ' 获得本次比赛的胜利。',
     lp_low_opponent: '你的生命已经如风中残烛了！',
     lp_low_self: '背水一战！',
     botlist_menu_single: '单局',

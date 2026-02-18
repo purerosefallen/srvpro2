@@ -1,7 +1,8 @@
 import { ChatColor } from 'ygopro-msg-encode';
 import { Context } from '../app';
 import { DialoguesProvider, TipsProvider } from '../feats/resource';
-import { DuelStage, RoomManager } from '../room';
+import { RoomDeathService } from '../feats/room-death-service';
+import { DuelStage, RoomInfo, RoomManager } from '../room';
 import { LegacyRoomIdService } from './legacy-room-id-service';
 
 type ApiMessageHandler = {
@@ -81,6 +82,44 @@ export class LegacyApiService {
       setTimeout(() => process.exit(0), 100);
       return ['reboot ok', value];
     });
+
+    this.addApiMessageHandler('death', 'start_death', async (value) => {
+      const roomDeathService = this.ctx.get(() => RoomDeathService);
+      const foundRooms =
+        value === 'all' ? this.ctx.get(() => RoomManager).allRooms() : this.findRoomByTarget(value);
+      if (!foundRooms.length) {
+        return ['room not found', value];
+      }
+      let changed = false;
+      for (const room of foundRooms) {
+        if (await roomDeathService.startDeath(room)) {
+          changed = true;
+        }
+      }
+      if (!changed) {
+        return ['room not found', value];
+      }
+      return ['death ok', value];
+    });
+
+    this.addApiMessageHandler('deathcancel', 'start_death', async (value) => {
+      const roomDeathService = this.ctx.get(() => RoomDeathService);
+      const foundRooms =
+        value === 'all' ? this.ctx.get(() => RoomManager).allRooms() : this.findRoomByTarget(value);
+      if (!foundRooms.length) {
+        return ['room not found', value];
+      }
+      let changed = false;
+      for (const room of foundRooms) {
+        if (await roomDeathService.cancelDeath(room)) {
+          changed = true;
+        }
+      }
+      if (!changed) {
+        return ['room not found', value];
+      }
+      return ['death cancel ok', value];
+    });
   }
 
   private registerRoutes() {
@@ -135,7 +174,7 @@ export class LegacyApiService {
             roommode: info.hostinfo.mode,
             needpass: (info.name.includes('$') ? true : false).toString(),
             users,
-            istart: this.buildRoomIstart(info),
+            istart: this.buildRoomIstart(info, room.death),
           };
         }),
       );
@@ -213,30 +252,37 @@ export class LegacyApiService {
     return roomById ? [roomById] : [];
   }
 
-  private buildRoomIstart(info: {
-    duelStage: DuelStage;
-    duels: unknown[];
-    turnCount?: number;
-  }) {
+  private buildRoomIstart(
+    info: Pick<RoomInfo, 'duelStage' | 'duels' | 'turnCount'>,
+    death?: number,
+  ) {
     if (info.duelStage === DuelStage.Begin) {
       return 'wait';
     }
 
     const duelText = `Duel:${info.duels.length}`;
+    const deathSuffix = this.formatDeathIstartSuffix(death);
     if (info.duelStage === DuelStage.Siding) {
       return `${duelText} Siding`;
     }
     if (info.duelStage === DuelStage.Finger) {
-      return `${duelText} Finger`;
+      return `${duelText} Finger${deathSuffix}`;
     }
     if (info.duelStage === DuelStage.FirstGo) {
-      return `${duelText} FirstGo`;
+      return `${duelText} FirstGo${deathSuffix}`;
     }
     if (info.duelStage === DuelStage.Dueling) {
       const turn = Number.isFinite(info.turnCount) ? Number(info.turnCount) : 0;
-      return `${duelText} Turn:${turn}`;
+      return `${duelText} Turn:${turn}${deathSuffix}`;
     }
 
     return 'start';
+  }
+
+  private formatDeathIstartSuffix(death?: number) {
+    if (!death) {
+      return '';
+    }
+    return `/${death > 0 ? death - 1 : 'Death'}`;
   }
 }
