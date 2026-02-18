@@ -311,6 +311,9 @@ export class WindBotProvider {
     url: URL,
     retryCount = 0,
   ): Promise<boolean> {
+    if (room.finalizing) {
+      return false;
+    }
     const retryLimit = 10;
     const retry = async () => {
       // wait 200 ms
