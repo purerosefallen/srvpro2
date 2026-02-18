@@ -29,7 +29,7 @@ import {
   TransportEncoder,
 } from 'yuzuthread';
 import { OcgcoreWorkerOptions } from './ocgcore-worker-options';
-import { Subject } from 'rxjs';
+import { ReplaySubject, Subject } from 'rxjs';
 import { calculateDuelOptions } from '../utility/calculate-duel-options';
 import initSqlJs from 'sql.js';
 import {
@@ -38,8 +38,10 @@ import {
   YGOProMsgRetry,
 } from 'ygopro-msg-encode';
 import * as fs from 'node:fs';
+import { isMainThread } from 'node:worker_threads';
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
+const OCGCORE_MESSAGE_REPLAY_BUFFER_SIZE = 128;
 
 // Serializable types for transport (noParse mode: only send binary data)
 interface SerializableProcessResult {
@@ -75,10 +77,10 @@ export class OcgcoreWorker {
 
   constructor(private options: OcgcoreWorkerOptions) {}
 
-  message$ = new Subject<{
+  message$ = new ReplaySubject<{
     message: string;
     type: OcgcoreMessageType;
-  }>();
+  }>(OCGCORE_MESSAGE_REPLAY_BUFFER_SIZE);
   registry$ = new Subject<Record<string, string>>();
 
   // this only exists in the worker thread
@@ -105,9 +107,9 @@ export class OcgcoreWorker {
     this.ocgcore = await createOcgcoreWrapper(
       wasmBinary ? { wasmBinary } : undefined,
     );
-    this.ocgcore.setMessageHandler((_, message, type) =>
-      this.handleMessage(message, type),
-    );
+    this.ocgcore.setMessageHandler(async (_, message, type) => {
+      await this.handleMessage(message, type);
+    });
 
     // Load script reader and card reader
     const sqlJs = await initSqlJs();

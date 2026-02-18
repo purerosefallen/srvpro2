@@ -1412,15 +1412,23 @@ export class Room {
     this.duelStage = DuelStage.Dueling;
 
     this.ocgcore.message$.subscribe((msg) => {
+      this.logger.info(
+        { message: msg.message, type: msg.type },
+        'Received message from OCGCoreWorker',
+      );
       if (
         msg.type === OcgcoreMessageType.DebugMessage &&
         !this.ctx.config.getBoolean('OCGCORE_DEBUG_LOG')
       ) {
         return;
       }
-      this.allPlayers.forEach((p) => p.sendChat(`Debug: ${msg.message}`));
+      this.sendChat(`Debug: ${msg.message}`, ChatColor.RED);
     });
     this.ocgcore.registry$.subscribe((registry) => {
+      this.logger.debug(
+        { registry },
+        'Received registry update from OCGCoreWorker',
+      );
       Object.assign(this.registry, registry);
     });
 
