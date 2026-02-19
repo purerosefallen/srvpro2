@@ -21,3 +21,4 @@ export * from './room-event/room-check-deck';
 export * from './default-hostinfo-provder';
 export * from './default-hostinfo';
 export * from './room-info';
+export * from './zombie-room-cleaner';

@@ -50,7 +50,7 @@ export class ReverseWsClient extends Client {
     });
   }
 
-  protected async _disconnect(): Promise<void> {
+  async _disconnect(): Promise<void> {
     if (this.sock.readyState === WebSocket.CLOSED) {
       return;
     }

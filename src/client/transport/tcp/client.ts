@@ -28,7 +28,7 @@ export class TcpClient extends Client {
     return fromEvent<Buffer>(this.sock, 'data');
   }
 
-  protected async _disconnect(): Promise<void> {
+  async _disconnect(): Promise<void> {
     if (this.sock.destroyed) {
       return;
     }

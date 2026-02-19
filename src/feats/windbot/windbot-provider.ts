@@ -47,11 +47,35 @@ export class WindBotProvider {
     return h('Chat', { color: 'Red' }, message);
   }
 
-  constructor(private ctx: Context) {
+  constructor(private ctx: Context) {}
+
+  async init() {
     if (!this.enabled) {
       return;
     }
+    this.registerKoishiCommand();
+    this.ctx
+      .middleware(OnRoomFinalize, async (event, _client, next) => {
+        this.deleteRoomToken(event.room.name);
+        return next();
+      })
+      .middleware(
+        RoomCheckDeck,
+        async (evt, client, next) => {
+          if (client.windbot) {
+            return undefined; // entirely skip check deck for windbot client
+          }
+          return next();
+        },
+        true,
+      );
+    await this.loadBotList();
+  }
 
+  private registerKoishiCommand() {
+    if (!this.enabled) {
+      return;
+    }
     const koishi = this.koishiContextService.instance;
     this.koishiContextService.attachI18n('ai', {
       description: 'koishi_cmd_ai_desc',
@@ -94,28 +118,6 @@ export class WindBotProvider {
       }
       await this.requestWindbotJoin(room, botName);
     });
-  }
-
-  async init() {
-    if (!this.enabled) {
-      return;
-    }
-    this.ctx
-      .middleware(OnRoomFinalize, async (event, _client, next) => {
-        this.deleteRoomToken(event.room.name);
-        return next();
-      })
-      .middleware(
-        RoomCheckDeck,
-        async (evt, client, next) => {
-          if (client.windbot) {
-            return undefined; // entirely skip check deck for windbot client
-          }
-          return next();
-        },
-        true,
-      );
-    await this.loadBotList();
   }
 
   get isEnabled() {

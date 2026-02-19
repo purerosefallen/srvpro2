@@ -9,7 +9,9 @@ export class CommandsService {
   private koishiContextService = this.ctx.get(() => KoishiContextService);
   private refreshFieldService = this.ctx.get(() => RefreshFieldService);
 
-  constructor(private ctx: Context) {
+  constructor(private ctx: Context) {}
+
+  async init() {
     const koishi = this.koishiContextService.instance;
     this.koishiContextService
       .attachI18n('surrender', {

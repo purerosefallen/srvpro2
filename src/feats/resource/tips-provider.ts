@@ -40,7 +40,21 @@ export class TipsProvider extends BaseResourceProvider<TipsData> {
       resourceName: 'tips',
       emptyData: EMPTY_TIPS_DATA,
     });
+  }
 
+  async init() {
+    if (this.enabled) {
+      this.registerKoishiCommand();
+      this.ctx.middleware(OnRoomDuelStart, async (event, _client, next) => {
+        await this.sendRandomTipToRoom(event.room);
+        return next();
+      });
+    }
+    await super.init();
+    this.registerAutoTipTimers();
+  }
+
+  private registerKoishiCommand() {
     if (!this.enabled) {
       return;
     }
@@ -58,17 +72,6 @@ export class TipsProvider extends BaseResourceProvider<TipsData> {
       }
       await this.sendRandomTip(commandContext.client, commandContext.room);
     });
-  }
-
-  async init() {
-    if (this.enabled) {
-      this.ctx.middleware(OnRoomDuelStart, async (event, _client, next) => {
-        await this.sendRandomTipToRoom(event.room);
-        return next();
-      });
-    }
-    await super.init();
-    this.registerAutoTipTimers();
   }
 
   private registerAutoTipTimers() {

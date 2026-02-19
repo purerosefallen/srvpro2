@@ -46,7 +46,7 @@ export class Client {
   protected _receive(): Observable<Buffer<ArrayBufferLike>> {
     return of();
   }
-  protected async _disconnect(): Promise<void> {}
+  async _disconnect(): Promise<void> {}
   protected _onDisconnect(): Observable<void> {
     return of();
   }
