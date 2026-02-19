@@ -20,6 +20,7 @@
 		"*.ts",
 		"src/**/*.ts",
 		"test/**/*.ts",
-		"tests/**/*.ts"
+		"tests/**/*.ts",
+		"plugins/**/*.ts"
 	]
 }

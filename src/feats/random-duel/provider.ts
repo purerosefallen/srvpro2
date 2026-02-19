@@ -100,6 +100,7 @@ export class RandomDuelProvider {
   private clientKeyProvider = this.ctx.get(() => ClientKeyProvider);
   private hidePlayerNameProvider = this.ctx.get(() => HidePlayerNameProvider);
   private defaultHostInfoProvider = this.ctx.get(() => DefaultHostInfoProvider);
+  private hidePlayerName = this.ctx.get(() => HidePlayerNameProvider);
 
   enabled = this.ctx.config.getBoolean('ENABLE_RANDOM_DUEL');
   noRematchCheck = this.ctx.config.getBoolean('RANDOM_DUEL_NO_REMATCH_CHECK');
@@ -530,7 +531,11 @@ export class RandomDuelProvider {
       await this.unwelcome(room, client);
     }
     if (abuseCount >= 5) {
-      await room.sendChat(`${client.name} #{chat_banned}`, ChatColor.RED);
+      await room.sendChat(
+        (sightPlayer) =>
+          `${this.hidePlayerName.getHidPlayerName(client, sightPlayer)} #{chat_banned}`,
+        ChatColor.RED,
+      );
       await this.punishPlayer(client, 'ABUSE');
       client.disconnect();
     }
@@ -746,7 +751,7 @@ export class RandomDuelProvider {
 
     const clientScoreText = await this.getScoreDisplay(
       this.getClientKey(client),
-      client.name,
+      this.hidePlayerName.getHidPlayerName(client, client),
     );
     for (const player of players) {
       if (clientScoreText) {
@@ -757,7 +762,7 @@ export class RandomDuelProvider {
       }
       const playerScoreText = await this.getScoreDisplay(
         this.getClientKey(player),
-        player.name,
+        this.hidePlayerName.getHidPlayerName(player, client),
       );
       if (playerScoreText) {
         await client.sendChat(playerScoreText, ChatColor.GREEN);

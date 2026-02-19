@@ -1,6 +1,7 @@
 import { NetPlayerType, YGOProStocHsPlayerEnter } from 'ygopro-msg-encode';
 import { Context } from '../app';
-import { DuelStage, OnRoomGameStart, RoomManager } from '../room';
+import { DuelStage, OnRoomGameStart, Room, RoomManager } from '../room';
+import { Client } from '../client';
 
 declare module '../room' {
   interface Room {
@@ -14,30 +15,42 @@ export class HidePlayerNameProvider {
 
   constructor(private ctx: Context) {}
 
+  getHidPlayerName(
+    client: Pick<Client, 'pos' | 'name' | 'roomName'>,
+    sightPlayer?: Client,
+  ) {
+    if (!sightPlayer?.roomName) {
+      return client.name;
+    }
+    const room = this.roomManager.findByName(
+      client.roomName || sightPlayer?.roomName,
+    );
+    if (!room?.hidePlayerNames || !this.shouldHide(room.duelStage)) {
+      return client.name;
+    }
+
+    if (
+      client.pos < 0 ||
+      client.pos >= NetPlayerType.OBSERVER ||
+      (sightPlayer && sightPlayer.pos === client.pos) ||
+      !client.name
+    ) {
+      return client.name;
+    }
+
+    return `Player ${client.pos + 1}`;
+  }
+
   async init() {
     if (!this.enabled) {
       return;
     }
 
     this.ctx.middleware(YGOProStocHsPlayerEnter, async (msg, client, next) => {
-      if (!client.roomName) {
-        return next();
+      const hidPlayerName = this.getHidPlayerName(msg, client);
+      if (hidPlayerName !== msg.name) {
+        msg.name = hidPlayerName;
       }
-      const room = this.roomManager.findByName(client.roomName);
-      if (!room?.hidePlayerNames || !this.shouldHide(room.duelStage)) {
-        return next();
-      }
-      const pos = msg.pos ?? -1;
-      if (
-        pos < 0 ||
-        pos >= NetPlayerType.OBSERVER ||
-        pos === client.pos ||
-        !msg.name
-      ) {
-        return next();
-      }
-
-      msg.name = `Player ${pos + 1}`;
       return next();
     });
 

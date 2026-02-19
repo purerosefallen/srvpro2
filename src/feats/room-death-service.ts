@@ -1,6 +1,7 @@
 import { ChatColor, YGOProMsgNewTurn } from 'ygopro-msg-encode';
 import { Context } from '../app';
 import { RoomManager, DuelStage, OnRoomDuelStart, Room } from '../room';
+import { HidePlayerNameProvider } from './hide-player-name-provider';
 
 const DEATH_WIN_REASON = 0x11;
 
@@ -12,6 +13,7 @@ declare module '../room' {
 
 export class RoomDeathService {
   private roomManager = this.ctx.get(() => RoomManager);
+  private hidePlayerNameProvider = this.ctx.get(() => HidePlayerNameProvider);
 
   constructor(private ctx: Context) {}
 
@@ -54,9 +56,17 @@ export class RoomDeathService {
       if (room.turnCount >= room.death) {
         if (lp0 !== lp1 && room.turnCount > 1) {
           const winner = lp0 > lp1 ? 0 : 1;
-          const winnerName = room.getDuelPosPlayers(winner)[0]?.name || '';
+          const winnerPlayer = room.getDuelPosPlayers(winner)[0];
           await room.sendChat(
-            `#{death_finish_part1}${winnerName}#{death_finish_part2}`,
+            (sightPlayer) =>
+              `#{death_finish_part1}${
+                winnerPlayer
+                  ? this.hidePlayerNameProvider.getHidPlayerName(
+                      winnerPlayer,
+                      sightPlayer,
+                    )
+                  : ''
+              }#{death_finish_part2}`,
             ChatColor.BABYBLUE,
           );
           await room.win({
@@ -96,9 +106,17 @@ export class RoomDeathService {
       score0 !== score1
     ) {
       const winner = score0 > score1 ? 0 : 1;
-      const winnerName = room.getDuelPosPlayers(winner)[0]?.name || '';
+      const winnerPlayer = room.getDuelPosPlayers(winner)[0];
       await room.sendChat(
-        `#{death2_finish_part1}${winnerName}#{death2_finish_part2}`,
+        (sightPlayer) =>
+          `#{death2_finish_part1}${
+            winnerPlayer
+              ? this.hidePlayerNameProvider.getHidPlayerName(
+                  winnerPlayer,
+                  sightPlayer,
+                )
+              : ''
+          }#{death2_finish_part2}`,
         ChatColor.BABYBLUE,
       );
       await room.win(

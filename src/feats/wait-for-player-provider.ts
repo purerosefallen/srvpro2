@@ -20,6 +20,7 @@ import {
   Room,
   RoomManager,
 } from '../room';
+import { HidePlayerNameProvider } from './hide-player-name-provider';
 import { OnClientWaitTimeout } from './random-duel/random-duel-events';
 
 export interface WaitForPlayerConfig {
@@ -52,6 +53,7 @@ interface WaitForPlayerTickRuntime {
 export class WaitForPlayerProvider {
   private logger = this.ctx.createLogger(this.constructor.name);
   private roomManager = this.ctx.get(() => RoomManager);
+  private hidePlayerNameProvider = this.ctx.get(() => HidePlayerNameProvider);
   private tickRuntimes = new Map<number, WaitForPlayerTickRuntime>();
   private nextTickId = 1;
 
@@ -392,7 +394,8 @@ export class WaitForPlayerProvider {
       ) {
         room.waitForPlayerReadyWarnRemain = remainSeconds;
         await room.sendChat(
-          `${target.name} ${remainSeconds} #{kick_count_down}`,
+          (sightPlayer) =>
+            `${this.hidePlayerNameProvider.getHidPlayerName(target, sightPlayer)} ${remainSeconds} #{kick_count_down}`,
           remainSeconds <= 9 ? ChatColor.RED : ChatColor.LIGHTBLUE,
         );
       }
@@ -411,7 +414,8 @@ export class WaitForPlayerProvider {
       return;
     }
     await room.sendChat(
-      `${latestTarget.name} #{kicked_by_system}`,
+      (sightPlayer) =>
+        `${this.hidePlayerNameProvider.getHidPlayerName(latestTarget, sightPlayer)} #{kicked_by_system}`,
       ChatColor.RED,
     );
     await this.ctx.dispatch(
@@ -462,7 +466,8 @@ export class WaitForPlayerProvider {
       room.lastActiveTime = new Date(nowMs);
       room.waitForPlayerHangWarnElapsed = undefined;
       await room.sendChat(
-        `${waitingPlayer.name} #{kicked_by_system}`,
+        (sightPlayer) =>
+          `${this.hidePlayerNameProvider.getHidPlayerName(waitingPlayer, sightPlayer)} #{kicked_by_system}`,
         ChatColor.RED,
       );
       await this.ctx.dispatch(
@@ -485,7 +490,8 @@ export class WaitForPlayerProvider {
       );
       if (remainSeconds > 0) {
         await room.sendChat(
-          `${waitingPlayer.name} #{afk_warn_part1}${remainSeconds}#{afk_warn_part2}`,
+          (sightPlayer) =>
+            `${this.hidePlayerNameProvider.getHidPlayerName(waitingPlayer, sightPlayer)} #{afk_warn_part1}${remainSeconds}#{afk_warn_part2}`,
           ChatColor.RED,
         );
       }

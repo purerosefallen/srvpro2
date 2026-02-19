@@ -2,3 +2,5 @@ webpack.config.js
 dist/*
 build/*
 *.js
+/ygopro
+/windbot
