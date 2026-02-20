@@ -582,11 +582,28 @@ export class Room {
   }
 
   @RoomMethod()
-  private async onDisconnect(client: Client, _msg: YGOProCtosDisconnect) {
+  private async onDisconnect(client: Client, msg: YGOProCtosDisconnect) {
+    if (!client) {
+      return;
+    }
+    return this.removePlayer(client, msg.bySystem);
+  }
+
+  async removePlayer(client: Client | undefined, bySystem = false) {
+    if (!client) {
+      return;
+    }
     if (this.finalizing) {
       return;
     }
     const wasObserver = client.pos === NetPlayerType.OBSERVER;
+    if (wasObserver) {
+      if (!this.watchers.has(client)) {
+        return;
+      }
+    } else if (this.players[client.pos] !== client) {
+      return;
+    }
     const oldPos = client.pos;
 
     if (wasObserver) {
@@ -631,7 +648,7 @@ export class Room {
         new OnRoomLeaveObserver(
           this,
           RoomLeaveObserverReason.Disconnect,
-          _msg.bySystem,
+          bySystem,
         ),
         client,
       );
@@ -641,7 +658,7 @@ export class Room {
           this,
           oldPos,
           RoomLeavePlayerReason.Disconnect,
-          _msg.bySystem,
+          bySystem,
         ),
         client,
       );

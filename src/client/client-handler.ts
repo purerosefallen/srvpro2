@@ -21,6 +21,7 @@ import {
   timer,
 } from 'rxjs';
 import { YGOProCtosDisconnect } from '../utility/ygopro-ctos-disconnect';
+import PQueue from 'p-queue';
 
 export class ClientHandler {
   private static readonly CLIENT_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
@@ -69,6 +70,9 @@ export class ClientHandler {
       .middleware(
         YGOProCtosBase,
         async (msg, client, next) => {
+          if (msg instanceof YGOProCtosDisconnect) {
+            return next();
+          }
           const bypassEstablished =
             msg instanceof YGOProCtosJoinGame && msg.bypassEstablished;
           if (bypassEstablished) {
@@ -76,7 +80,7 @@ export class ClientHandler {
             return next();
           }
 
-          if (client.established === this.isPreHandshakeMsg(msg)) {
+          if (!client.established && !this.isPreHandshakeMsg(msg)) {
             // disallow any messages before handshake is complete, except for the ones needed for handshake
             return undefined;
           }
@@ -102,23 +106,10 @@ export class ClientHandler {
 
     // 合并 receive$ 和 disconnect$
     const receive$ = merge(client.receive$, disconnect$);
+    const dispatchQueue = new PQueue({ concurrency: 1 });
 
-    receive$.subscribe(async (msg) => {
-      this.logger.debug(
-        {
-          msgName: msg.constructor.name,
-          client: client.name || client.loggingIp(),
-          payload: JSON.stringify(msg),
-        },
-        'Received client message',
-      );
-      try {
-        await this.ctx.dispatch(msg, client);
-      } catch (e) {
-        this.logger.warn(
-          `Error dispatching message ${msg.constructor.name} from ${client.loggingIp()}: ${(e as Error).stack}`,
-        );
-      }
+    receive$.subscribe((msg) => {
+      dispatchQueue.add(async () => this.dispatchClientMessage(client, msg));
     });
 
     const handshake$ = forkJoin([
@@ -157,6 +148,24 @@ export class ClientHandler {
         client.disconnect();
         return false;
       });
+  }
+
+  private async dispatchClientMessage(client: Client, msg: YGOProCtosBase) {
+    this.logger.debug(
+      {
+        msgName: msg.constructor.name,
+        client: client.name || client.loggingIp(),
+        payload: JSON.stringify(msg),
+      },
+      'Received client message',
+    );
+    try {
+      await this.ctx.dispatch(msg, client);
+    } catch (e) {
+      this.logger.warn(
+        `Error dispatching message ${msg.constructor.name} from ${client.loggingIp()}: ${(e as Error).stack}`,
+      );
+    }
   }
 
   private installIdleDisconnectGuard(client: Client) {

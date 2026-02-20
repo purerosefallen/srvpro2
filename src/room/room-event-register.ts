@@ -51,6 +51,21 @@ export class RoomEventRegister {
       if (ctosParamIndex === -1 || !ctosParamType) {
         continue;
       }
+      if (clientParamIndex === -1) {
+        const fallbackClientIndex = paramTypes.findIndex(
+          (_paramType, index) => index !== ctosParamIndex,
+        );
+        if (fallbackClientIndex === -1) {
+          this.logger.warn(
+            `Method ${method} has no resolvable client parameter index, skipping`,
+          );
+          continue;
+        }
+        clientParamIndex = fallbackClientIndex;
+        this.logger.warn(
+          `Method ${method} has no explicit Client param metadata, fallback to arg[${clientParamIndex}] for client`,
+        );
+      }
 
       // 获取方法选项
       const options: RoomMethodOptions = metadata;

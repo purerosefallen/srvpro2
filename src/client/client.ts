@@ -30,6 +30,7 @@ import {
   resolveColoredMessages,
   splitColoredMessagesByLine,
 } from '../utility';
+import { RoomManager } from '../room';
 
 export class Client {
   protected async _send(data: Buffer): Promise<void> {
@@ -68,7 +69,7 @@ export class Client {
     ).pipe(
       take(1),
       tap(() => {
-        this.disconnected = new Date();
+        this.disconnected ??= new Date();
       }),
       share(),
     );
@@ -101,6 +102,13 @@ export class Client {
   disconnected?: Date;
 
   disconnect(): undefined {
+    this.disconnected ??= new Date();
+    if (this.roomName) {
+      const room = this.ctx.get(() => RoomManager).findByName(this.roomName);
+      if (room) {
+        room.removePlayer(this, true);
+      }
+    }
     this.disconnectSubject.next();
     this.disconnectSubject.complete();
     this._disconnect().then();
