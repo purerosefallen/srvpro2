@@ -22,9 +22,9 @@ import { DuelStage, Room, RoomManager } from '../../room';
 import { getSpecificFields } from '../../utility/metadata';
 import { YGOProCtosDisconnect } from '../../utility/ygopro-ctos-disconnect';
 import { isUpdateDeckPayloadEqual } from '../../utility/deck-compare';
+import { PlayerName } from '../../utility';
 import { CanReconnectCheck } from './can-reconnect-check';
 import { ClientKeyProvider } from '../client-key-provider';
-import { HidePlayerNameProvider } from '../hide-player-name-provider';
 import { RefreshFieldService } from './refresh-field-service';
 
 interface DisconnectInfo {
@@ -58,7 +58,6 @@ export class Reconnect {
   private disconnectList = new Map<string, DisconnectInfo>();
   private reconnectTimeout = this.ctx.config.getInt('RECONNECT_TIMEOUT'); // 超时时间，单位：毫秒（默认 180000ms = 3分钟）
   private clientKeyProvider = this.ctx.get(() => ClientKeyProvider);
-  private hidePlayerNameProvider = this.ctx.get(() => HidePlayerNameProvider);
   private refreshFieldService = this.ctx.get(() => RefreshFieldService);
 
   constructor(private ctx: Context) {}
@@ -147,8 +146,7 @@ export class Reconnect {
 
     // 通知房间
     await room.sendChat(
-      (sightPlayer) =>
-        `${this.hidePlayerNameProvider.getHidPlayerName(client, sightPlayer)} #{disconnect_from_game}`,
+      [PlayerName(client), ' #{disconnect_from_game}'],
       ChatColor.LIGHTBLUE,
     );
 
@@ -286,8 +284,7 @@ export class Reconnect {
 
       // 通知房间
       await room.sendChat(
-        (sightPlayer) =>
-          `${this.hidePlayerNameProvider.getHidPlayerName(client, sightPlayer)} #{reconnect_to_game}`,
+        [PlayerName(client), ' #{reconnect_to_game}'],
         ChatColor.LIGHTBLUE,
       );
 
@@ -312,8 +309,7 @@ export class Reconnect {
 
       // 通知房间
       await room.sendChat(
-        (sightPlayer) =>
-          `${this.hidePlayerNameProvider.getHidPlayerName(client, sightPlayer)} #{reconnect_to_game}`,
+        [PlayerName(client), ' #{reconnect_to_game}'],
         ChatColor.LIGHTBLUE,
       );
 
@@ -327,8 +323,6 @@ export class Reconnect {
         .then(() => oldClient.disconnect());
     }
   }
-
-  private hidePlayerName = this.ctx.get(() => HidePlayerNameProvider);
 
   private async sendPreReconnectInfo(
     client: Client,
@@ -363,7 +357,7 @@ export class Reconnect {
       if (player) {
         await client.send(
           new YGOProStocHsPlayerEnter().fromPartial({
-            name: this.hidePlayerNameProvider.getHidPlayerName(player, client),
+            name: player.name,
             pos: player.pos,
           }),
         );

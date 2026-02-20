@@ -27,6 +27,7 @@ import { CanReconnectCheck } from '../reconnect';
 import { WaitForPlayerProvider } from '../wait-for-player-provider';
 import { ClientKeyProvider } from '../client-key-provider';
 import { HidePlayerNameProvider } from '../hide-player-name-provider';
+import { KoishiElement, PlayerName } from '../../utility';
 import { RandomDuelScore } from './score.entity';
 import {
   formatRemainText,
@@ -531,8 +532,7 @@ export class RandomDuelProvider {
     }
     if (abuseCount >= 5) {
       await room.sendChat(
-        (sightPlayer) =>
-          `${this.hidePlayerName.getHidPlayerName(client, sightPlayer)} #{chat_banned}`,
+        [PlayerName(client), ' #{chat_banned}'],
         ChatColor.RED,
       );
       await this.punishPlayer(client, 'ABUSE');
@@ -751,11 +751,10 @@ export class RandomDuelProvider {
     const clientScoreText = await this.getScoreDisplay(
       this.getClientKey(client),
     );
-    const nameFactory = this.hidePlayerName.getHidPlayerNameFactory(client);
     for (const player of players) {
       if (clientScoreText) {
         await player.sendChat(
-          clientScoreText(nameFactory(player)),
+          clientScoreText(PlayerName(client)),
           ChatColor.GREEN,
         );
       }
@@ -767,7 +766,7 @@ export class RandomDuelProvider {
       );
       if (playerScoreText) {
         await client.sendChat(
-          playerScoreText(this.hidePlayerName.getHidPlayerName(player, client)),
+          playerScoreText(PlayerName(player)),
           ChatColor.GREEN,
         );
       }
@@ -780,14 +779,14 @@ export class RandomDuelProvider {
       return undefined;
     }
     const score = await repo.findOneBy({ name });
-    return (displayName: string) => {
+    return (displayName: string | KoishiElement) => {
       if (!score) {
-        return `${displayName} #{random_score_blank}`;
+        return [displayName, ' #{random_score_blank}'];
       }
 
       const total = score.winCount + score.loseCount;
       if (score.winCount < 2 && total < 3) {
-        return `${displayName} #{random_score_not_enough}`;
+        return [displayName, ' #{random_score_not_enough}'];
       }
 
       const safeTotal = total > 0 ? total : 1;
@@ -795,9 +794,17 @@ export class RandomDuelProvider {
       const fleeRate = Math.ceil((score.fleeCount / safeTotal) * 100);
 
       if (score.winCombo >= 2) {
-        return `#{random_score_part1}${displayName} #{random_score_part2} ${winRate}#{random_score_part3} ${fleeRate}#{random_score_part4_combo}${score.winCombo}#{random_score_part5_combo}`;
+        return [
+          '#{random_score_part1}',
+          displayName,
+          ` #{random_score_part2} ${winRate}#{random_score_part3} ${fleeRate}#{random_score_part4_combo}${score.winCombo}#{random_score_part5_combo}`,
+        ];
       }
-      return `#{random_score_part1}${displayName} #{random_score_part2} ${winRate}#{random_score_part3} ${fleeRate}#{random_score_part4}`;
+      return [
+        '#{random_score_part1}',
+        displayName,
+        ` #{random_score_part2} ${winRate}#{random_score_part3} ${fleeRate}#{random_score_part4}`,
+      ];
     };
   }
 

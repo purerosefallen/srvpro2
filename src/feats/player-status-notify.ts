@@ -1,12 +1,10 @@
 import { ChatColor, NetPlayerType } from 'ygopro-msg-encode';
 import { Context } from '../app';
-import { HidePlayerNameProvider } from './hide-player-name-provider';
 import { OnRoomJoinObserver } from '../room/room-event/on-room-join-observer';
 import { OnRoomLeave } from '../room/room-event/on-room-leave';
+import { PlayerName } from '../utility';
 
 export class PlayerStatusNotify {
-  private hidePlayerNameProvider = this.ctx.get(() => HidePlayerNameProvider);
-
   constructor(private ctx: Context) {}
 
   async init() {
@@ -14,8 +12,7 @@ export class PlayerStatusNotify {
     this.ctx.middleware(OnRoomJoinObserver, async (event, client, next) => {
       const room = event.room;
       await room.sendChat(
-        (sightPlayer) =>
-          `${this.hidePlayerNameProvider.getHidPlayerName(client, sightPlayer)} #{watch_join}`,
+        [PlayerName(client), ' #{watch_join}'],
         ChatColor.LIGHTBLUE,
       );
       return next();
@@ -27,15 +24,13 @@ export class PlayerStatusNotify {
       if (client.pos === NetPlayerType.OBSERVER) {
         // 观战者离开
         await room.sendChat(
-          (sightPlayer) =>
-            `${this.hidePlayerNameProvider.getHidPlayerName(client, sightPlayer)} #{quit_watch}`,
+          [PlayerName(client), ' #{quit_watch}'],
           ChatColor.LIGHTBLUE,
         );
       } else {
         // 玩家离开
         await room.sendChat(
-          (sightPlayer) =>
-            `${this.hidePlayerNameProvider.getHidPlayerName(client, sightPlayer)} #{left_game}`,
+          [PlayerName(client), ' #{left_game}'],
           ChatColor.LIGHTBLUE,
         );
       }

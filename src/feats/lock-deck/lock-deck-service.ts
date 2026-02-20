@@ -6,7 +6,7 @@ import { ChatColor } from 'ygopro-msg-encode';
 import { Context } from '../../app';
 import { RoomCheckDeck } from '../../room';
 import { isUpdateDeckPayloadEqual } from '../../utility/deck-compare';
-import { HidePlayerNameProvider } from '../hide-player-name-provider';
+import { PlayerName } from '../../utility';
 import { LockDeckExpectedDeckCheck } from './lock-deck-check';
 
 class SrvproDeckBadError extends YGOProLFListError {
@@ -21,8 +21,6 @@ class SrvproDeckBadError extends YGOProLFListError {
 }
 
 export class LockDeckService {
-  private hidePlayerNameProvider = this.ctx.get(() => HidePlayerNameProvider);
-
   constructor(private ctx: Context) {}
 
   async init() {
@@ -47,11 +45,10 @@ export class LockDeckService {
       }
 
       if (expectedDeck === null) {
-        const playerName = this.hidePlayerNameProvider.getHidPlayerName(
-          client,
-          client,
+        await client.sendChat(
+          [PlayerName(client), '#{deck_not_found}'],
+          ChatColor.RED,
         );
-        await client.sendChat(`${playerName}#{deck_not_found}`, ChatColor.RED);
         return msg.use(new SrvproDeckBadError());
       }
 

@@ -9,9 +9,9 @@ import {
   OnRoomSidingStart,
   Room,
 } from '../room';
-import { HidePlayerNameProvider } from './hide-player-name-provider';
 import { merge, Subscription, timer } from 'rxjs';
 import { filter, finalize, share, take, takeUntil } from 'rxjs/operators';
+import { PlayerName } from '../utility';
 
 declare module '../room' {
   interface Room {
@@ -23,7 +23,6 @@ declare module '../room' {
 export class SideTimeout {
   private logger = this.ctx.createLogger('SideTimeout');
   private sideTimeoutMinutes = this.ctx.config.getInt('SIDE_TIMEOUT_MINUTES');
-  private hidePlayerNameProvider = this.ctx.get(() => HidePlayerNameProvider);
   private onSidingReady$ = this.ctx.event$(OnRoomSidingReady).pipe(share());
   private onLeavePlayer$ = this.ctx.event$(OnRoomLeavePlayer).pipe(share());
   private onGameStart$ = this.ctx.event$(OnRoomGameStart).pipe(share());
@@ -150,8 +149,7 @@ export class SideTimeout {
     if (remainMinutes <= 1) {
       this.clearSideTimeout(room, pos);
       await room.sendChat(
-        (sightPlayer) =>
-          `${this.hidePlayerNameProvider.getHidPlayerName(client, sightPlayer)} #{side_overtime_room}`,
+        [PlayerName(client), ' #{side_overtime_room}'],
         ChatColor.BABYBLUE,
       );
       await client.sendChat('#{side_overtime}', ChatColor.RED);

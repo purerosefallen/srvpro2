@@ -1,7 +1,9 @@
 import { NetPlayerType, YGOProStocHsPlayerEnter } from 'ygopro-msg-encode';
+import { h } from 'koishi';
 import { Context } from '../app';
-import { DuelStage, OnRoomGameStart, Room, RoomManager } from '../room';
+import { DuelStage, OnRoomGameStart, RoomManager } from '../room';
 import { Client } from '../client';
+import { OnSendChatElement, PlayerNameClient } from '../utility';
 
 declare module '../room' {
   interface Room {
@@ -41,14 +43,32 @@ export class HidePlayerNameProvider {
     return `Player ${client.pos + 1}`;
   }
 
-  getHidPlayerNameFactory(client: Pick<Client, 'pos' | 'name' | 'roomName'>) {
-    return (sightPlayer?: Client) => this.getHidPlayerName(client, sightPlayer);
-  }
-
   async init() {
     if (!this.enabled) {
       return;
     }
+
+    this.ctx.middleware(OnSendChatElement, async (event, client, next) => {
+      const element = event.value;
+      if (!element || element.type !== 'PlayerName') {
+        return next();
+      }
+      const sourceClient = element.attrs?.client as
+        | PlayerNameClient
+        | undefined;
+      if (!sourceClient) {
+        return next();
+      }
+      const hidPlayerName = this.getHidPlayerName(sourceClient, client);
+      event.use(
+        h(
+          'PlayerName',
+          { client: sourceClient },
+          hidPlayerName || sourceClient.name || '',
+        ),
+      );
+      return next();
+    });
 
     this.ctx.middleware(YGOProStocHsPlayerEnter, async (msg, client, next) => {
       const hidPlayerName = this.getHidPlayerName(msg, client);

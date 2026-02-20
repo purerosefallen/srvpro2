@@ -1,22 +1,6 @@
-import {
-  filter,
-  from,
-  lastValueFrom,
-  merge,
-  Observable,
-  of,
-  Subject,
-} from 'rxjs';
-import {
-  concatMap,
-  defaultIfEmpty,
-  ignoreElements,
-  map,
-  share,
-  take,
-  takeUntil,
-  tap,
-} from 'rxjs/operators';
+import { filter, merge, Observable, of, Subject } from 'rxjs';
+import { map, share, take, takeUntil, tap } from 'rxjs/operators';
+import { h } from 'koishi';
 import { Context } from '../app';
 import {
   YGOProCtos,
@@ -38,6 +22,14 @@ import { Chnroute } from './chnroute';
 import YGOProDeck from 'ygopro-deck-encode';
 import PQueue from 'p-queue';
 import { ClientRoomField } from '../utility/decorators';
+import {
+  collectKoishiTextTokens,
+  KoishiElement,
+  KoishiFragment,
+  OnSendChatElement,
+  resolveColoredMessages,
+  splitColoredMessagesByLine,
+} from '../utility';
 
 export class Client {
   protected async _send(data: Buffer): Promise<void> {
@@ -149,42 +141,47 @@ export class Client {
     });
   }
 
-  async sendChat(msg: string, type: number = ChatColor.BABYBLUE) {
+  async sendChat(msg: KoishiFragment, type: number = ChatColor.BABYBLUE) {
     if (this.isInternal) {
       return;
     }
-    if (type <= NetPlayerType.OBSERVER) {
-      return this.send(
+    const normalizedType = typeof type === 'number' ? type : ChatColor.BABYBLUE;
+    const elements = h.normalize(msg) as KoishiElement[];
+    const tokens = await collectKoishiTextTokens(elements, (element) =>
+      this.resolveSendChatElement(element, normalizedType),
+    );
+    const messages = splitColoredMessagesByLine(
+      resolveColoredMessages(tokens, normalizedType),
+    );
+    if (!messages.length) {
+      return;
+    }
+
+    const locale = this.getLocale();
+    for (const message of messages) {
+      const line = await this.resolveChatLine(
+        message.text,
+        message.color,
+        locale,
+      );
+      await this.send(
         new YGOProStocChat().fromPartial({
-          msg: msg,
-          player_type: type,
+          msg: line,
+          player_type: message.color,
         }),
       );
     }
-    const locale = this.getLocale();
-    const lines = type <= NetPlayerType.OBSERVER ? [msg] : msg.split(/\r?\n/);
-    const sendTasks: Promise<unknown>[] = [];
+  }
 
-    await lastValueFrom(
-      from(lines).pipe(
-        concatMap((rawLine) => this.resolveChatLine(rawLine, type, locale)),
-        tap((line: string) => {
-          const sendTask = this.send(
-            new YGOProStocChat().fromPartial({
-              msg: line,
-              player_type: type,
-            }),
-          );
-          if (sendTask) {
-            sendTasks.push(sendTask);
-          }
-        }),
-        ignoreElements(),
-        defaultIfEmpty(undefined),
-      ),
+  private async resolveSendChatElement(element: KoishiElement, type: number) {
+    const event = await this.ctx.dispatch(
+      new OnSendChatElement(this, type, element),
+      this,
     );
-
-    await Promise.all(sendTasks);
+    if (!event || event.value === undefined) {
+      return undefined;
+    }
+    return event.value;
   }
 
   private async resolveChatLine(rawLine: string, type: number, locale: string) {

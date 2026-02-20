@@ -108,6 +108,7 @@ import { OnRoomSelectTp } from './room-event/on-room-select-tp';
 import { RoomCheckDeck } from './room-event/room-check-deck';
 import cryptoRandomString from 'crypto-random-string';
 import { RoomCurrentFieldInfo, RoomInfo } from './room-info';
+import { KoishiFragment } from '../utility';
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 
@@ -959,19 +960,11 @@ export class Room {
     return this.sendChat(msg.msg, this.getIngamePos(client));
   }
 
-  async sendChat(
-    msg: string | ((p: Client) => Awaitable<string>),
-    type: number = ChatColor.BABYBLUE,
-  ) {
+  async sendChat(msg: KoishiFragment, type: number = ChatColor.BABYBLUE) {
     if (this.finalizing) {
       return;
     }
-    return Promise.all(
-      this.allPlayers.map(async (p) => {
-        const resolvedMessage = typeof msg === 'function' ? await msg(p) : msg;
-        return p.sendChat(resolvedMessage, type);
-      }),
-    );
+    return Promise.all(this.allPlayers.map((p) => p.sendChat(msg, type)));
   }
 
   firstgoPos?: number;

@@ -1,35 +1,23 @@
 import {
   Bot,
   Context as KoishiContext,
-  Fragment as KoishiFragment,
   Session as KoishiSession,
   Universal,
-  h,
 } from 'koishi';
 import * as koishiHelpModule from '@koishijs/plugin-help';
-import { ChatColor, YGOProCtosChat } from 'ygopro-msg-encode';
+import { YGOProCtosChat } from 'ygopro-msg-encode';
 import { Context } from '../app';
 import { Client } from '../client';
 import { ClientKeyProvider } from '../feats';
 import { I18nService } from '../client/i18n';
 import { Room, RoomManager } from '../room';
-type KoishiElement = h;
+import { KoishiFragment } from '../utility';
 const koishiHelp =
   (koishiHelpModule as any).default || (koishiHelpModule as any);
 
 type KoishiReferrer = {
   roomName: string;
   userId: string;
-};
-
-type ChatToken = {
-  text: string;
-  color?: number;
-};
-
-type ColoredChatMessage = {
-  text: string;
-  color: number;
 };
 
 type CommandContext = {
@@ -310,22 +298,8 @@ export class KoishiContextService {
       return [];
     }
 
-    const messages = this.resolveColoredMessages(h.normalize(content));
-    if (!messages.length) {
-      return [];
-    }
-
-    const messageIds: string[] = [];
-    for (let i = 0; i < messages.length; i += 1) {
-      const message = messages[i];
-      await Promise.all(
-        targets.map((target) => target.sendChat(message.text, message.color)),
-      );
-      messageIds.push(
-        `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
-      );
-    }
-    return messageIds;
+    await Promise.all(targets.map((target) => target.sendChat(content)));
+    return [`${Date.now()}-${Math.random().toString(36).slice(2, 8)}`];
   }
 
   private resolveSendTargets(room: Room, session?: KoishiSession) {
@@ -335,140 +309,5 @@ export class KoishiContextService {
     }
     const target = this.findClientByUserId(room, referrer.userId);
     return target ? [target] : [];
-  }
-
-  private resolveColoredMessages(
-    elements: KoishiElement[],
-  ): ColoredChatMessage[] {
-    const tokens = this.collectTextTokens(elements);
-    if (!tokens.length) {
-      return [];
-    }
-
-    const cleanedTokens = tokens.filter((token) => token.text.length > 0);
-    if (!cleanedTokens.length) {
-      return [];
-    }
-
-    const firstColoredIndex = cleanedTokens.findIndex(
-      (token) => typeof token.color === 'number',
-    );
-    if (firstColoredIndex === -1) {
-      return [
-        {
-          text: cleanedTokens.map((token) => token.text).join(''),
-          color: ChatColor.BABYBLUE,
-        },
-      ];
-    }
-
-    let currentColor = cleanedTokens[firstColoredIndex].color as number;
-    let currentText = cleanedTokens
-      .slice(0, firstColoredIndex + 1)
-      .map((token) => token.text)
-      .join('');
-    const result: ColoredChatMessage[] = [];
-
-    for (let i = firstColoredIndex + 1; i < cleanedTokens.length; i += 1) {
-      const token = cleanedTokens[i];
-      if (typeof token.color === 'number' && token.color !== currentColor) {
-        if (currentText) {
-          result.push({
-            text: currentText,
-            color: currentColor,
-          });
-        }
-        currentColor = token.color;
-        currentText = token.text;
-      } else {
-        currentText += token.text;
-      }
-    }
-
-    if (currentText) {
-      result.push({
-        text: currentText,
-        color: currentColor,
-      });
-    }
-
-    if (!result.length) {
-      return [];
-    }
-
-    return result;
-  }
-
-  private collectTextTokens(
-    elements: KoishiElement[],
-    inheritedColor?: number,
-  ): ChatToken[] {
-    const tokens: ChatToken[] = [];
-    for (const element of elements) {
-      if (!element) {
-        continue;
-      }
-
-      const color = this.resolveElementColor(element) ?? inheritedColor;
-
-      if (element.type === 'text') {
-        const content = element.attrs?.content;
-        if (typeof content === 'string' && content.length > 0) {
-          tokens.push({
-            text: content,
-            color,
-          });
-        }
-      } else if (element.type === 'br') {
-        tokens.push({
-          text: '\n',
-          color,
-        });
-      }
-
-      if (element.children?.length) {
-        tokens.push(
-          ...this.collectTextTokens(element.children as KoishiElement[], color),
-        );
-      }
-    }
-    return tokens;
-  }
-
-  private resolveElementColor(element: KoishiElement): number | undefined {
-    const isChatElement =
-      typeof element.type === 'string' && element.type.toLowerCase() === 'chat';
-    const rawColor = isChatElement
-      ? element.attrs?.color
-      : element.attrs?.chatColor;
-    if (rawColor == null) {
-      return undefined;
-    }
-    if (typeof rawColor === 'number') {
-      return this.normalizeChatColor(rawColor);
-    }
-    if (typeof rawColor !== 'string') {
-      return undefined;
-    }
-    const normalized = rawColor.replace(/[^a-z0-9]/gi, '').toUpperCase();
-    if (!normalized) {
-      return undefined;
-    }
-    const enumValue = (ChatColor as any)[normalized];
-    if (typeof enumValue === 'number') {
-      return enumValue;
-    }
-    const parsed = Number(rawColor);
-    if (Number.isFinite(parsed)) {
-      return this.normalizeChatColor(parsed);
-    }
-    return undefined;
-  }
-
-  private normalizeChatColor(value: number): number {
-    if (typeof (ChatColor as any)[value] === 'string') {
-      return value;
-    }
-    return ChatColor.BABYBLUE;
   }
 }

@@ -2,12 +2,11 @@ import { ChatColor, YGOProCtosJoinGame } from 'ygopro-msg-encode';
 import { Context } from '../app';
 import { LegacyBanEntity } from './legacy-ban.entity';
 import { RoomManager } from '../room';
-import { HidePlayerNameProvider } from '../feats';
 import { LegacyApiService } from './legacy-api-service';
+import { PlayerName } from '../utility';
 
 export class LegacyBanService {
   private logger = this.ctx.createLogger('LegacyBanService');
-  private hidePlayerNameProvider = this.ctx.get(() => HidePlayerNameProvider);
 
   constructor(private ctx: Context) {
     this.ctx
@@ -78,8 +77,7 @@ export class LegacyBanService {
         }
 
         await room.sendChat(
-          (sightPlayer) =>
-            `${this.hidePlayerNameProvider.getHidPlayerName(player, sightPlayer)} #{kicked_by_system}`,
+          [PlayerName(player), ' #{kicked_by_system}'],
           ChatColor.RED,
         );
         await room.kick(player);
