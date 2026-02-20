@@ -220,16 +220,7 @@ export class Room {
     ]);
   }
 
-  private finalizors: RoomFinalizor[] = [
-    () => this.disposeOcgcore(),
-    () => {
-      if (this._cardReader) {
-        try {
-          this._cardReader.finalize?.();
-        } catch (e) {}
-      }
-    },
-  ];
+  private finalizors: RoomFinalizor[] = [() => this.disposeOcgcore()];
 
   addFinalizor(finalizor: RoomFinalizor, atEnd = false) {
     if (atEnd) {

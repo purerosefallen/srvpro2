@@ -16,12 +16,10 @@ export class YGOProResourceLoader {
 
   private logger = this.ctx.createLogger(this.constructor.name);
 
+  private _cardReader = DirCardReader(this.ctx.SQL, ...this.ygoproPaths);
+
   async getCardReader() {
-    this.logger.debug(
-      { ygoproPaths: this.ygoproPaths, sql: typeof this.ctx.SQL.Database },
-      'Getting card reader',
-    );
-    return DirCardReader(this.ctx.SQL, ...this.ygoproPaths);
+    return this._cardReader;
   }
 
   async *getLFLists() {
