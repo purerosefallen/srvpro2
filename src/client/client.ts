@@ -145,21 +145,22 @@ export class Client {
     if (this.isInternal) {
       return;
     }
-    const normalizedType = typeof type === 'number' ? type : ChatColor.BABYBLUE;
     const elements = h.normalize(msg) as KoishiElement[];
-    const tokens = await collectKoishiTextTokens(elements, (element) =>
-      this.resolveSendChatElement(element, normalizedType),
+    const tokens = await collectKoishiTextTokens(
+      elements,
+      (element) => this.resolveSendChatElement(element, type),
+      type,
     );
     if (type <= NetPlayerType.OBSERVER) {
       return this.send(
         new YGOProStocChat().fromPartial({
           msg: tokens.map((token) => token.text).join(''),
-          player_type: normalizedType,
+          player_type: type,
         }),
       );
     }
     const messages = splitColoredMessagesByLine(
-      resolveColoredMessages(tokens, normalizedType),
+      resolveColoredMessages(tokens, type),
     );
     if (!messages.length) {
       return;
