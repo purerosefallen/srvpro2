@@ -103,11 +103,12 @@ export class ChatgptService {
     }
 
     const moduleName = 'tiktoken';
-    this.tiktokenModulePromise = import(moduleName).catch(() => {
+    this.tiktokenModulePromise = import(moduleName).catch((e) => {
       this.tiktokenUnavailable = true;
       if (!this.tiktokenUnavailableLogged) {
         this.tiktokenUnavailableLogged = true;
         this.logger.warn(
+          { error: (e as Error).toString() },
           'tiktoken is unavailable, using approximate token counting',
         );
       }
@@ -377,11 +378,12 @@ export class ChatgptService {
       }
       this.tokenizerByModel.set(model, encoder);
       return encoder;
-    } catch {
+    } catch(e) {
       this.tiktokenUnavailable = true;
       if (!this.tiktokenUnavailableLogged) {
         this.tiktokenUnavailableLogged = true;
         this.logger.warn(
+          { error: (e as Error).toString() },
           'tiktoken is unavailable, using approximate token counting',
         );
       }
