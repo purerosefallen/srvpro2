@@ -4,7 +4,6 @@ import {
   OcgcoreWrapper,
   createOcgcoreWrapper,
   DirScriptReaderEx,
-  DirCardReader,
   _OcgcoreConstants,
   parseCardQuery,
   parseFieldCardQuery,
@@ -31,14 +30,12 @@ import {
 import { OcgcoreWorkerOptions } from './ocgcore-worker-options';
 import { ReplaySubject, Subject } from 'rxjs';
 import { calculateDuelOptions } from '../utility/calculate-duel-options';
-import initSqlJs from 'sql.js';
 import {
   YGOProMessages,
   YGOProMsgResponseBase,
   YGOProMsgRetry,
 } from 'ygopro-msg-encode';
 import * as fs from 'node:fs';
-import { isMainThread } from 'node:worker_threads';
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 const OCGCORE_MESSAGE_REPLAY_BUFFER_SIZE = 128;
@@ -112,9 +109,8 @@ export class OcgcoreWorker {
     });
 
     // Load script reader and card reader
-    const sqlJs = await initSqlJs();
     const scriptReader = await DirScriptReaderEx(...this.options.ygoproPaths);
-    const cardReader = await DirCardReader(sqlJs, ...this.options.ygoproPaths);
+    const cardReader = this.options.cardStorage.toCardReader();
     this.ocgcore.setScriptReader(scriptReader);
     this.ocgcore.setCardReader(cardReader);
 

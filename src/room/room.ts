@@ -60,7 +60,7 @@ import {
   OcgcoreMessageType,
   _OcgcoreConstants,
 } from 'koishipro-core.js';
-import { YGOProResourceLoader } from './ygopro-resource-loader';
+import { YGOProResourceLoader } from '../ygopro';
 import { blankLFList } from '../utility/blank-lflist';
 import { Client } from '../client';
 import { RoomMethod } from '../utility/decorators';
@@ -1337,6 +1337,7 @@ export class Room {
     const ocgcoreWasmPath = ocgcoreWasmPathConfig
       ? path.resolve(process.cwd(), ocgcoreWasmPathConfig)
       : undefined;
+    const cardStorage = await this.resourceLoader.getCardStorage();
 
     try {
       this.ocgcore = await initWorker(OcgcoreWorker, {
@@ -1344,6 +1345,7 @@ export class Room {
         hostinfo: this.hostinfo,
         ygoproPaths: this.resourceLoader.ygoproPaths,
         extraScriptPaths,
+        cardStorage,
         ocgcoreWasmPath,
         registry,
         decks: duelRecord.toSwappedPlayers().map((p) => p.deck),

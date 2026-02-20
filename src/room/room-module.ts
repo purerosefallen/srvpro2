@@ -1,6 +1,6 @@
 import { createAppContext } from 'nfkit';
 import { ContextState } from '../app';
-import { YGOProResourceLoader } from './ygopro-resource-loader';
+import { YGOProResourceLoader } from '../ygopro';
 import { DefaultHostInfoProvider } from './default-hostinfo-provder';
 import { RoomManager } from './room-manager';
 import { DefaultDeckChecker } from './default-deck-checker';
