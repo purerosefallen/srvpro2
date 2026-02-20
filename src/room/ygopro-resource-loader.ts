@@ -24,7 +24,7 @@ export class YGOProResourceLoader {
   }
 
   private async mergeDatabase() {
-    const db = new YGOProCdb(this.ctx.SQL);
+    const db = new YGOProCdb(this.ctx.SQL).noTexts();
     let dbCount = 0;
     for await (const file of searchYGOProResource(...this.ygoproPaths)) {
       const filename = path.basename(file.path);
@@ -34,7 +34,7 @@ export class YGOProResourceLoader {
       try {
         const currentDb = new this.ctx.SQL.Database(await file.read());
         try {
-          const currentCdb = new YGOProCdb(currentDb);
+          const currentCdb = new YGOProCdb(currentDb).noTexts();
           const cards = currentCdb.find();
           for (const card of cards) {
             if (!db.findById(card.code)) {
