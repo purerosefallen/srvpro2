@@ -154,7 +154,10 @@ export class Client {
     if (type <= NetPlayerType.OBSERVER) {
       return this.send(
         new YGOProStocChat().fromPartial({
-          msg: tokens.map((token) => token.text).join(''),
+          msg:
+            typeof msg === 'string'
+              ? msg
+              : tokens.map((token) => token.text).join(''),
           player_type: type,
         }),
       );
