@@ -18,6 +18,8 @@
   - 禁止直接引用具体文件：不要使用 `'../room/room'` `'../client/client'` 这样的路径
 - 如果正在写的算法代码与 this 和业务无关，那么不要放在类方法里面，而是在 utility 目录新开一个 ts 文件放进去
 - 如果正在移植 srvpro 的功能，那么 i18n 必须严格和 srvpro 保持一致，不能改动 i18n 的 key 和 value。新功能或者原有功能的额外部分可以写新的。
+- 禁止在 constructor 注册 Koishi 指令或者 middleware。请在 async init() 里面注册。
+- async init() 不需要加重复调用护栏。这在 nfkit 里面保证了只调用 1 次。
 
 ## 模块结构
 
