@@ -150,6 +150,14 @@ export class Client {
     const tokens = await collectKoishiTextTokens(elements, (element) =>
       this.resolveSendChatElement(element, normalizedType),
     );
+    if (type <= NetPlayerType.OBSERVER) {
+      return this.send(
+        new YGOProStocChat().fromPartial({
+          msg: tokens.map((token) => token.text).join(''),
+          player_type: normalizedType,
+        }),
+      );
+    }
     const messages = splitColoredMessagesByLine(
       resolveColoredMessages(tokens, normalizedType),
     );
