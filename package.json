@@ -71,7 +71,7 @@
     "https-proxy-agent": "^7.0.6",
     "ipaddr.js": "^2.3.0",
     "koishi": "^4.18.10",
-    "koishipro-core.js": "^1.3.5",
+    "koishipro-core.js": "^1.3.7",
     "nfkit": "^1.0.35",
     "p-queue": "6.6.2",
     "pg": "^8.18.0",

@@ -56,7 +56,7 @@ import {
 } from 'ygopro-msg-encode';
 import { DefaultHostInfoProvider } from './default-hostinfo-provder';
 import {
-  CardReaderFinalized,
+  CardReader,
   OcgcoreMessageType,
   _OcgcoreConstants,
 } from 'koishipro-core.js';
@@ -108,7 +108,7 @@ import { OnRoomSelectTp } from './room-event/on-room-select-tp';
 import { RoomCheckDeck } from './room-event/room-check-deck';
 import cryptoRandomString from 'crypto-random-string';
 import { RoomCurrentFieldInfo, RoomInfo } from './room-info';
-import { KoishiFragment } from '../utility';
+import { KoishiFragment, readCardWithReader } from '../utility';
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 
@@ -165,7 +165,7 @@ export class Room {
   private get resourceLoader() {
     return this.ctx.get(() => YGOProResourceLoader);
   }
-  private _cardReader?: CardReaderFinalized;
+  private _cardReader?: CardReader;
   private cardReaderLock = new BetterLock();
   private async getCardReader() {
     return this.cardReaderLock.acquire(async () => {
@@ -825,7 +825,7 @@ export class Room {
     // we have to distinguish main and extra deck cards
     const cardReader = await this.getCardReader();
     for (const card of msg.deck.main) {
-      const cardEntry = cardReader.apply(card);
+      const cardEntry = readCardWithReader(cardReader, card);
       if (
         cardEntry?.type &&
         cardEntry.type & OcgcoreCommonConstants.TYPES_EXTRA_DECK

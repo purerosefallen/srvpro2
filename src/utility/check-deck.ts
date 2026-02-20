@@ -6,6 +6,7 @@ import {
   YGOProLFListItem,
 } from 'ygopro-lflist-encode';
 import { OcgcoreCommonConstants } from 'ygopro-msg-encode';
+import { readCardWithReader } from './read-card-with-reader';
 
 // Constants from ygopro
 const { TYPES_EXTRA_DECK, TYPE_TOKEN } = OcgcoreCommonConstants;
@@ -101,8 +102,7 @@ export const checkDeck = (
     code: number,
     location: 'main' | 'extra' | 'side',
   ): YGOProLFListError | null => {
-    const cardData =
-      typeof reader === 'function' ? reader(code) : reader.apply(code);
+    const cardData = readCardWithReader(reader, code);
 
     if (!cardData) {
       return new YGOProLFListError(YGOProLFListErrorReason.UNKNOWNCARD, code);

@@ -3,7 +3,7 @@ import { Client } from '../../client';
 import { ValueContainer } from '../../utility/value-container';
 import { Room } from '../room';
 import { YGOProLFListError } from 'ygopro-lflist-encode';
-import { CardReaderFinalized } from 'koishipro-core.js';
+import { CardReader } from 'koishipro-core.js';
 
 export class RoomCheckDeck extends ValueContainer<
   YGOProLFListError | undefined
@@ -12,7 +12,7 @@ export class RoomCheckDeck extends ValueContainer<
     public room: Room,
     public client: Client,
     public deck: YGOProDeck,
-    public cardReader: CardReaderFinalized,
+    public cardReader: CardReader,
   ) {
     super(undefined);
   }

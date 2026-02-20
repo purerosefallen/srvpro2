@@ -1,7 +1,8 @@
 import { Context } from '../app';
-import { DirCardReader, searchYGOProResource } from 'koishipro-core.js';
+import { searchYGOProResource, SqljsCardReader } from 'koishipro-core.js';
 import { YGOProLFList } from 'ygopro-lflist-encode';
 import path from 'node:path';
+import { YGOProCdb } from 'ygopro-cdb-encode';
 
 export class YGOProResourceLoader {
   constructor(private ctx: Context) {}
@@ -16,10 +17,43 @@ export class YGOProResourceLoader {
 
   private logger = this.ctx.createLogger(this.constructor.name);
 
-  private _cardReader = DirCardReader(this.ctx.SQL, ...this.ygoproPaths);
+  private cardReader = this.mergeDatabase().then((db) => SqljsCardReader(db));
 
   async getCardReader() {
-    return this._cardReader;
+    return this.cardReader;
+  }
+
+  private async mergeDatabase() {
+    const db = new YGOProCdb(this.ctx.SQL);
+    let dbCount = 0;
+    for await (const file of searchYGOProResource(...this.ygoproPaths)) {
+      const filename = path.basename(file.path);
+      if (!filename?.endsWith('.cdb')) {
+        continue;
+      }
+      try {
+        const currentDb = new this.ctx.SQL.Database(await file.read());
+        try {
+          const currentCdb = new YGOProCdb(currentDb);
+          const cards = currentCdb.find();
+          for (const card of cards) {
+            if (!db.findById(card.code)) {
+              db.addCard(card);
+            }
+          }
+          ++dbCount;
+        } finally {
+          currentDb.close();
+        }
+      } catch (e) {
+        this.logger.warn(`Failed to read ${file.path}: ${e}`);
+        continue;
+      }
+    }
+    this.logger.info(
+      `Merged database from ${dbCount} databases with ${db.find().length} cards`,
+    );
+    return db;
   }
 
   async *getLFLists() {
