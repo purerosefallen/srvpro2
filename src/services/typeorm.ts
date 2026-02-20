@@ -7,6 +7,7 @@ import { DuelRecordEntity, DuelRecordPlayer } from '../feats/cloud-replay';
 import { LegacyApiRecordEntity } from '../legacy-api/legacy-api-record.entity';
 import { LegacyBanEntity } from '../legacy-api/legacy-ban.entity';
 import { LegacyDeckEntity } from '../legacy-api/legacy-deck.entity';
+import { collectPluginTypeormEntities } from './plugin-typeorm-entity-loader';
 
 export class TypeormLoader {
   constructor(private ctx: AppContext) {}
@@ -35,6 +36,26 @@ export const TypeormFactory = async (ctx: AppContext) => {
   const password = config.getString('DB_PASS');
   const database = config.getString('DB_NAME');
   const synchronize = !config.getBoolean('DB_NO_INIT');
+  const staticEntities: Function[] = [
+    RandomDuelScore,
+    DuelRecordEntity,
+    DuelRecordPlayer,
+    LegacyApiRecordEntity,
+    LegacyBanEntity,
+    LegacyDeckEntity,
+  ];
+  const pluginEntities = collectPluginTypeormEntities(logger);
+  const entities = [...new Set<Function>([...staticEntities, ...pluginEntities])];
+
+  if (pluginEntities.length > 0) {
+    logger.info(
+      {
+        count: pluginEntities.length,
+        entities: pluginEntities.map((entity) => entity.name),
+      },
+      'Collected plugin typeorm entities',
+    );
+  }
 
   const dataSource = new DataSource({
     type: 'postgres',
@@ -44,14 +65,7 @@ export const TypeormFactory = async (ctx: AppContext) => {
     password,
     database,
     synchronize,
-    entities: [
-      RandomDuelScore,
-      DuelRecordEntity,
-      DuelRecordPlayer,
-      LegacyApiRecordEntity,
-      LegacyBanEntity,
-      LegacyDeckEntity,
-    ],
+    entities,
   });
 
   try {
