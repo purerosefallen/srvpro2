@@ -12,6 +12,7 @@ import { ClientKeyProvider } from './client-key-provider';
 import { HidePlayerNameProvider } from './hide-player-name-provider';
 import { CommandsService, KoishiContextService } from '../koishi';
 import { ChatgptService } from './chatgpt-service';
+import { ChatLengthCheck } from './chat-length-check';
 import { CloudReplayService } from './cloud-replay';
 import { LpLowHintService } from './lp-low-hint-service';
 import { LockDeckService } from './lock-deck';
@@ -32,6 +33,7 @@ export const FeatsModule = createAppContext()
   .provide(CloudReplayService) // persist duel records
   .provide(BlockReplay) // block replay packets for in-room players
   .provide(ChatgptService) // AI-room chat replies
+  .provide(ChatLengthCheck) // block blank/overlong chat messages
   .provide(LpLowHintService) // low LP hint in duel
   .provide(RoomDeathService) // srvpro-style death mode (model 2)
   .provide(RoomAutoDeathService) // auto trigger death mode after duel start

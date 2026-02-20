@@ -92,11 +92,11 @@ export class BadwordProvider extends BaseResourceProvider<BadwordsData> {
         if (filtered.blocked) {
           await client.sendChat('#{chat_warn_level2}', ChatColor.RED);
           return;
-        }
-
-        if (filtered.message !== msg.msg) {
+        } else if (filtered.message !== msg.msg) {
           msg.msg = filtered.message;
           await client.sendChat('#{chat_warn_level1}', ChatColor.BABYBLUE);
+        } else if (filtered.level === 0) { 
+          await client.sendChat('#{chat_warn_level0}', ChatColor.BABYBLUE);
         }
 
         return next();
