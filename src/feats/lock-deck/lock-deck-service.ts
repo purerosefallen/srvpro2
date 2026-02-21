@@ -24,7 +24,10 @@ export class LockDeckService {
   constructor(private ctx: Context) {}
 
   async init() {
-    if (!this.ctx.config.getBoolean('TOURNAMENT_MODE_CHECK_DECK')) {
+    if (
+      !this.ctx.config.getBoolean('TOURNAMENT_MODE') ||
+      !this.ctx.config.getBoolean('TOURNAMENT_MODE_CHECK_DECK')
+    ) {
       return;
     }
 
