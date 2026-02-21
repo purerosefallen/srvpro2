@@ -25,6 +25,9 @@ export class CardStorage {
   @TransportType(() => Buffer)
   private hashValues: Buffer;
 
+  @TransportType(() => Buffer)
+  ocgcoreWasmBinary?: Buffer;
+
   private hashMask: number;
   size: number;
 
@@ -32,17 +35,22 @@ export class CardStorage {
     entries: Buffer,
     hashKeys: Buffer,
     hashValues: Buffer,
+    ocgcoreWasmBinary: Buffer | undefined,
     hashMask: number,
     size: number,
   ) {
     this.entries = entries;
     this.hashKeys = hashKeys;
     this.hashValues = hashValues;
+    this.ocgcoreWasmBinary = ocgcoreWasmBinary;
     this.hashMask = hashMask;
     this.size = size;
   }
 
-  static fromCards(cards: Iterable<CardDataEntry>): CardStorage {
+  static fromCards(
+    cards: Iterable<CardDataEntry>,
+    ocgcoreWasmBinary?: Buffer,
+  ): CardStorage {
     const uniqueCards: CardDataEntry[] = [];
     const seen = new Set<number>();
     for (const card of cards) {
@@ -63,6 +71,7 @@ export class CardStorage {
       entries,
       hashKeys,
       hashValues,
+      ocgcoreWasmBinary,
       hashCapacity - 1,
       uniqueCards.length,
     );

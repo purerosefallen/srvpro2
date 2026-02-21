@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import { createHash, Hash } from 'node:crypto';
 import { searchYGOProResource } from 'koishipro-core.js';
 import type { CardDataEntry } from 'ygopro-cdb-encode';
 import { YGOProCdb } from 'ygopro-cdb-encode';
@@ -12,6 +13,17 @@ const isFileNotFoundError = (error: unknown): error is NodeJS.ErrnoException =>
   'code' in error &&
   (error as NodeJS.ErrnoException).code === 'ENOENT';
 
+const hashWithSizePrefix = (hash: Hash, payload: Buffer) => {
+  const sizePrefix = Buffer.allocUnsafe(4);
+  sizePrefix.writeUInt32BE(payload.length >>> 0, 0);
+  hash.update(sizePrefix);
+  hash.update(payload);
+};
+
+const hashWithSizePrefixText = (hash: Hash, text: string) => {
+  hashWithSizePrefix(hash, Buffer.from(text, 'utf8'));
+};
+
 export class CardLoadWorkerResult {
   @TransportType(() => CardStorage)
   cardStorage: CardStorage;
@@ -20,7 +32,7 @@ export class CardLoadWorkerResult {
   failedFiles: string[];
 
   @TransportType(() => Buffer)
-  ocgcoreWasmBinary?: Buffer;
+  sha512: Buffer;
 }
 
 @DefineWorker()
@@ -38,6 +50,7 @@ export class CardLoadWorker {
     const seen = new Set<number>();
     let dbCount = 0;
     const failedFiles: string[] = [];
+    const sha512 = createHash('sha512');
 
     for await (const file of searchYGOProResource(...this.ygoproPaths)) {
       if (!file.path.endsWith('.cdb')) {
@@ -45,7 +58,8 @@ export class CardLoadWorker {
       }
 
       try {
-        const currentDb = new SQL.Database(await file.read());
+        const cdbBody = await file.read();
+        const currentDb = new SQL.Database(cdbBody);
         try {
           const currentCdb = new YGOProCdb(currentDb).noTexts();
           for (const card of currentCdb.step()) {
@@ -57,6 +71,8 @@ export class CardLoadWorker {
             cards.push(card);
           }
           ++dbCount;
+          hashWithSizePrefixText(sha512, file.path);
+          hashWithSizePrefix(sha512, Buffer.from(cdbBody));
         } finally {
           currentDb.close();
         }
@@ -69,7 +85,11 @@ export class CardLoadWorker {
     let ocgcoreWasmBinary: Buffer | undefined;
     if (this.ocgcoreWasmPath) {
       try {
-        const wasmBinary = await fs.promises.readFile(this.ocgcoreWasmPath);
+        const wasmBinary = Buffer.from(
+          await fs.promises.readFile(this.ocgcoreWasmPath),
+        );
+        hashWithSizePrefixText(sha512, this.ocgcoreWasmPath);
+        hashWithSizePrefix(sha512, wasmBinary);
         ocgcoreWasmBinary = toShared(wasmBinary);
       } catch (error) {
         if (!isFileNotFoundError(error)) {
@@ -79,10 +99,12 @@ export class CardLoadWorker {
     }
 
     const result = new CardLoadWorkerResult();
-    result.cardStorage = toShared(CardStorage.fromCards(cards));
+    result.cardStorage = toShared(
+      CardStorage.fromCards(cards, ocgcoreWasmBinary),
+    );
     result.dbCount = dbCount;
     result.failedFiles = failedFiles;
-    result.ocgcoreWasmBinary = ocgcoreWasmBinary;
+    result.sha512 = toShared(sha512.digest());
     return result;
   }
 }
