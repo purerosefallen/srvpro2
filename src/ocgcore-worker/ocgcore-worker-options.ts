@@ -8,7 +8,8 @@ export class OcgcoreWorkerOptions {
   extraScriptPaths: string[];
   @TransportType(() => CardStorage)
   cardStorage: CardStorage;
-  ocgcoreWasmPath?: string;
+  @TransportType(() => Buffer)
+  ocgcoreWasmBinary?: Buffer;
   seed: number[];
   hostinfo: HostInfo;
   @TransportType(() => [YGOProDeck])

@@ -3,11 +3,10 @@ import type { CardReaderFn } from 'koishipro-core.js';
 import { searchYGOProResource } from 'koishipro-core.js';
 import { YGOProLFList } from 'ygopro-lflist-encode';
 import path from 'node:path';
-import type { CardDataEntry } from 'ygopro-cdb-encode';
-import { YGOProCdb } from 'ygopro-cdb-encode';
-import { toShared } from 'yuzuthread';
+import { runInWorker } from 'yuzuthread';
 import BetterLock from 'better-lock';
 import { CardStorage } from './card-storage';
+import { CardLoadWorker } from './card-load-worker';
 
 export class YGOProResourceLoader {
   constructor(private ctx: Context) {
@@ -27,6 +26,7 @@ export class YGOProResourceLoader {
   private loadingCardStorage?: Promise<CardStorage>;
   private currentCardStorage?: CardStorage;
   private currentCardReader?: CardReaderFn;
+  private currentOcgcoreWasmBinary?: Buffer;
 
   async getCardStorage() {
     if (this.currentCardStorage) {
@@ -46,6 +46,11 @@ export class YGOProResourceLoader {
     const reader = storage.toCardReader();
     this.currentCardReader = reader;
     return reader;
+  }
+
+  async getOcgcoreWasmBinary() {
+    await this.getCardStorage();
+    return this.currentOcgcoreWasmBinary;
   }
 
   async loadYGOProCdbs() {
@@ -69,45 +74,30 @@ export class YGOProResourceLoader {
   }
 
   private async loadCardStorage() {
-    const cards: CardDataEntry[] = [];
-    const seen = new Set<number>();
-    let dbCount = 0;
+    const ocgcoreWasmPathConfig =
+      this.ctx.config.getString('OCGCORE_WASM_PATH');
+    const ocgcoreWasmPath = ocgcoreWasmPathConfig
+      ? path.resolve(process.cwd(), ocgcoreWasmPathConfig)
+      : undefined;
+    const { cardStorage, dbCount, failedFiles, ocgcoreWasmBinary } =
+      await runInWorker(
+        CardLoadWorker,
+        (worker) => worker.load(),
+        this.ygoproPaths,
+        ocgcoreWasmPath,
+      );
 
-    for await (const file of searchYGOProResource(...this.ygoproPaths)) {
-      const filename = path.basename(file.path);
-      if (!filename?.endsWith('.cdb')) {
-        continue;
-      }
-      try {
-        const currentDb = new this.ctx.SQL.Database(await file.read());
-        try {
-          const currentCdb = new YGOProCdb(currentDb).noTexts();
-          for (const card of currentCdb.find()) {
-            const cardId = card.code >>> 0;
-            if (seen.has(cardId)) {
-              continue;
-            }
-            seen.add(cardId);
-            cards.push(card);
-          }
-          ++dbCount;
-        } finally {
-          currentDb.close();
-        }
-      } catch (e) {
-        this.logger.warn(`Failed to read ${file.path}: ${e}`);
-        continue;
-      }
+    this.currentOcgcoreWasmBinary = ocgcoreWasmBinary;
+    for (const failedFile of failedFiles) {
+      this.logger.warn(`Failed to read ${failedFile}`);
     }
-
-    const storage = toShared(CardStorage.fromCards(cards));
     this.logger.info(
       {
-        size: storage.byteLength,
+        size: cardStorage.byteLength,
       },
-      `Merged database from ${dbCount} databases with ${storage.size} cards`,
+      `Merged database from ${dbCount} databases with ${cardStorage.size} cards`,
     );
-    return storage;
+    return cardStorage;
   }
 
   async *getLFLists() {

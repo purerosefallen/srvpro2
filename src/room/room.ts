@@ -98,7 +98,6 @@ import { getMessageIdentifier } from '../utility/get-message-identifier';
 import { canIncreaseTime } from '../utility/can-increase-time';
 import { TimerState } from './timer-state';
 import { makeArray } from 'aragami/dist/src/utility/utility';
-import path from 'path';
 import { OnRoomCreate } from './room-event/on-room-create';
 import { OnRoomFinalize } from './room-event/on-room-finalize';
 import { OnRoomSidingStart } from './room-event/on-room-siding-start';
@@ -1349,12 +1348,8 @@ export class Room {
       'Initializing OCGCoreWorker',
     );
 
-    const ocgcoreWasmPathConfig =
-      this.ctx.config.getString('OCGCORE_WASM_PATH');
-    const ocgcoreWasmPath = ocgcoreWasmPathConfig
-      ? path.resolve(process.cwd(), ocgcoreWasmPathConfig)
-      : undefined;
     const cardStorage = await this.resourceLoader.getCardStorage();
+    const ocgcoreWasmBinary = await this.resourceLoader.getOcgcoreWasmBinary();
 
     try {
       this.ocgcore = await initWorker(OcgcoreWorker, {
@@ -1363,7 +1358,7 @@ export class Room {
         ygoproPaths: this.resourceLoader.ygoproPaths,
         extraScriptPaths,
         cardStorage,
-        ocgcoreWasmPath,
+        ocgcoreWasmBinary,
         registry,
         decks: duelRecord.toSwappedPlayers().map((p) => p.deck),
       });

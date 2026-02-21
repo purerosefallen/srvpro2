@@ -35,7 +35,6 @@ import {
   YGOProMsgResponseBase,
   YGOProMsgRetry,
 } from 'ygopro-msg-encode';
-import * as fs from 'node:fs';
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 const OCGCORE_MESSAGE_REPLAY_BUFFER_SIZE = 128;
@@ -95,10 +94,7 @@ export class OcgcoreWorker {
 
   @WorkerInit()
   async init() {
-    let wasmBinary: Uint8Array | undefined;
-    if (this.options.ocgcoreWasmPath) {
-      wasmBinary = await fs.promises.readFile(this.options.ocgcoreWasmPath);
-    }
+    const wasmBinary = this.options.ocgcoreWasmBinary;
 
     // Create ocgcore wrapper
     this.ocgcore = await createOcgcoreWrapper(

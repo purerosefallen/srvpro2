@@ -62,9 +62,9 @@ export class RoomEventRegister {
           continue;
         }
         clientParamIndex = fallbackClientIndex;
-        this.logger.warn(
-          `Method ${method} has no explicit Client param metadata, fallback to arg[${clientParamIndex}] for client`,
-        );
+        // this.logger.warn(
+        //   `Method ${method} has no explicit Client param metadata, fallback to arg[${clientParamIndex}] for client`,
+        // );
       }
 
       // 获取方法选项
