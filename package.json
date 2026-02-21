@@ -1,23 +1,7 @@
 {
   "name": "srvpro2",
-  "description": "Next-generation YGOPro server with direct ocgcore control via WASM and modern TypeScript architecture",
   "version": "1.0.0",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "scripts": {
-    "lint": "eslint --fix .",
-    "build": "node scripts/clean-dist.js && tsc",
-    "gen:config-example": "npm run build && node dist/src/scripts/gen-config-example.js",
-    "test": "jest --passWithNoTests",
-    "dev": "npm run build && npm start",
-    "start": "node dist/index.js"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://code.moenext.com/nanahira/srvpro2.git"
-  },
-  "author": "Nanahira <nanahira@momobako.com>",
-  "license": "MIT",
+  "description": "Next-generation YGOPro server with direct ocgcore control via WASM and modern TypeScript architecture",
   "keywords": [
     "ygopro",
     "yugioh",
@@ -26,40 +10,42 @@
     "wasm",
     "typescript"
   ],
+  "homepage": "https://code.moenext.com/nanahira/srvpro2",
   "bugs": {
     "url": "https://code.moenext.com/nanahira/srvpro2/issues"
   },
-  "homepage": "https://code.moenext.com/nanahira/srvpro2",
+  "repository": {
+    "type": "git",
+    "url": "https://code.moenext.com/nanahira/srvpro2.git"
+  },
+  "license": "MIT",
+  "author": "Nanahira <nanahira@momobako.com>",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "node scripts/clean-dist.js && tsc",
+    "dev": "npm run build && npm start",
+    "gen:config-example": "npm run build && node dist/src/scripts/gen-config-example.js",
+    "lint": "eslint --fix .",
+    "start": "node dist/index.js",
+    "test": "jest --passWithNoTests"
+  },
   "jest": {
+    "collectCoverageFrom": [
+      "**/*.(t|j)s"
+    ],
+    "coverageDirectory": "../coverage",
     "moduleFileExtensions": [
       "js",
       "json",
       "ts"
     ],
     "rootDir": "tests",
+    "testEnvironment": "node",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
-    },
-    "collectCoverageFrom": [
-      "**/*.(t|j)s"
-    ],
-    "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
-  },
-  "devDependencies": {
-    "@types/jest": "^30.0.0",
-    "@types/node": "^25.2.3",
-    "@types/ws": "^8.18.1",
-    "@typescript-eslint/eslint-plugin": "^8.55.0",
-    "@typescript-eslint/parser": "^8.55.0",
-    "eslint": "^8.57.1",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-prettier": "^5.5.5",
-    "jest": "^30.2.0",
-    "prettier": "^3.8.1",
-    "ts-jest": "^29.4.6",
-    "typescript": "^5.9.3"
+    }
   },
   "dependencies": {
     "@koishijs/plugin-help": "^2.4.6",
@@ -84,11 +70,25 @@
     "typeorm": "^0.3.28",
     "ws": "^8.19.0",
     "yaml": "^2.8.2",
-    "ygopro-cdb-encode": "^1.0.3",
+    "ygopro-cdb-encode": "^1.0.4",
     "ygopro-deck-encode": "^1.0.15",
     "ygopro-lflist-encode": "^1.0.3",
     "ygopro-msg-encode": "^1.1.31",
     "ygopro-yrp-encode": "^1.0.1",
     "yuzuthread": "^1.0.8"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.2.3",
+    "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^8.55.0",
+    "@typescript-eslint/parser": "^8.55.0",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "jest": "^30.2.0",
+    "prettier": "^3.8.1",
+    "ts-jest": "^29.4.6",
+    "typescript": "^5.9.3"
   }
 }
