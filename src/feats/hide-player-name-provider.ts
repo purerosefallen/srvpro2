@@ -92,13 +92,7 @@ export class HidePlayerNameProvider {
           if (player === sightPlayer) {
             continue;
           }
-          await sightPlayer.send(
-            new YGOProStocHsPlayerEnter().fromPartial({
-              name: player.name,
-              pos: player.pos,
-            }),
-            true,
-          );
+          await sightPlayer.send(player.prepareEnterPacket(), true);
         }
       }
       return next();
