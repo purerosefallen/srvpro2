@@ -180,10 +180,12 @@ export class ClientHandler {
           const room = this.ctx
             .get(() => RoomManager)
             .findByName(client.roomName);
-          return !(
-            room &&
-            client.pos === NetPlayerType.OBSERVER &&
-            room.duelStage !== DuelStage.Begin
+          return (
+            !(
+              room &&
+              client.pos === NetPlayerType.OBSERVER &&
+              room.duelStage !== DuelStage.Begin
+            ) && !client.isInternal
           );
         }),
         take(1),
