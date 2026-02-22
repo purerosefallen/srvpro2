@@ -1,18 +1,45 @@
 import {
   NetPlayerType,
+  OcgcoreCommonConstants,
   OcgcoreScriptConstants,
+  YGOProMsgDeckTop,
   YGOProMsgHint,
   YGOProMsgNewPhase,
   YGOProMsgNewTurn,
+  YGOProMsgReverseDeck,
   YGOProMsgWaiting,
   YGOProStocGameMsg,
 } from 'ygopro-msg-encode';
 import { Context } from '../../app';
 import { Client } from '../../client';
-import { DuelStage, Room } from '../../room';
+import { DuelStage, OnRoomDuelStart, Room, RoomManager } from '../../room';
+
+declare module '../../room/' {
+  interface Room {
+    deckReversed?: boolean;
+  }
+}
 
 export class RefreshFieldService {
   constructor(private ctx: Context) {}
+
+  async init() {
+    this.ctx
+      .middleware(OnRoomDuelStart, async (event, client, next) => {
+        const room = event.room;
+        room.deckReversed = false;
+        return next();
+      })
+      .middleware(YGOProMsgReverseDeck, async (event, client, next) => {
+        const room = this.ctx
+          .get(() => RoomManager)
+          .findByName(client.roomName);
+        if (room) {
+          room.deckReversed = !room.deckReversed;
+        }
+        return next();
+      });
+  }
 
   async sendReconnectDuelingMessages(client: Client, room: Room) {
     this.assertRefreshAllowed(client, room);
@@ -36,9 +63,48 @@ export class RefreshFieldService {
     await client.send(await this.requestField(room));
     await this.sendRefreshMessages(client, room);
 
-    const needResendRequest = this.isReconnectingPlayerOperating(client, room);
+    if (room.deckReversed) {
+      await client.send(
+        new YGOProStocGameMsg().fromPartial({
+          msg: new YGOProMsgReverseDeck(),
+        }),
+      );
+    }
 
-    if (needResendRequest) {
+    for (let igp = 0; igp < 2; ++igp) {
+      const deckQuery = await room.ocgcore.queryFieldCard({
+        player: igp,
+        location: OcgcoreScriptConstants.LOCATION_DECK,
+        queryFlag:
+          OcgcoreCommonConstants.QUERY_CODE |
+          OcgcoreCommonConstants.QUERY_POSITION,
+        useCache: 0,
+      });
+      const lastCard = deckQuery.cards[deckQuery.cards.length - 1];
+      if (lastCard) {
+        let code = lastCard.code;
+        const isFaceUp =
+          (lastCard.position & OcgcoreCommonConstants.POS_FACEUP) !== 0;
+        if (isFaceUp) {
+          code |= 0x80000000;
+        }
+        if (room.deckReversed || isFaceUp) {
+          await client.send(
+            new YGOProStocGameMsg().fromPartial({
+              msg: new YGOProMsgDeckTop().fromPartial({
+                player: igp,
+                sequence: 0,
+                code,
+              }),
+            }),
+          );
+        }
+      }
+    }
+
+    await room.sendTimeLimit(1 - room.getDuelPos(client), client);
+
+    if (client === room.responsePlayer) {
       const lastHint = this.findLastHintForClient(client, room);
       if (lastHint) {
         await client.send(
@@ -58,14 +124,14 @@ export class RefreshFieldService {
         );
         await room.setResponseTimer(room.getDuelPos(client));
       }
-      return;
+    } else {
+      await client.send(
+        new YGOProStocGameMsg().fromPartial({
+          msg: new YGOProMsgWaiting(),
+        }),
+      );
+      await room.sendTimeLimit(room.getDuelPos(client), client);
     }
-
-    await client.send(
-      new YGOProStocGameMsg().fromPartial({
-        msg: new YGOProMsgWaiting(),
-      }),
-    );
   }
 
   private assertRefreshAllowed(client: Client, room: Room) {
@@ -140,12 +206,6 @@ export class RefreshFieldService {
         );
       }
     }
-  }
-
-  private isReconnectingPlayerOperating(client: Client, room: Room): boolean {
-    const ingameDuelPos = room.getIngameDuelPos(client);
-    const operatingPlayer = room.getIngameOperatingPlayer(ingameDuelPos);
-    return operatingPlayer === client;
   }
 
   private findLastHintForClient(

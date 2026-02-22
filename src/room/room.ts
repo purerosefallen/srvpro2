@@ -1226,7 +1226,7 @@ export class Room {
     this.timerState.backedMs[originalDuelPos] -= 1000;
   }
 
-  private async sendTimeLimit(originalDuelPos: number) {
+  async sendTimeLimit(originalDuelPos: number, toSpecficClient?: Client) {
     if (!this.hasTimeLimit || ![0, 1].includes(originalDuelPos)) {
       return;
     }
@@ -1236,7 +1236,11 @@ export class Room {
       player: ingameDuelPos,
       left_time: Math.ceil(leftTime / 1000),
     });
-    await Promise.all(this.playingPlayers.map((p) => p.send(msg)));
+    await Promise.all(
+      this.playingPlayers
+        .filter((p) => !toSpecficClient || p === toSpecficClient)
+        .map((p) => p.send(msg)),
+    );
   }
 
   private async onResponseTimeout(originalDuelPos: number) {
