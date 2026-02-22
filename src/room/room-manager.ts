@@ -25,6 +25,7 @@ export class RoomManager {
   }
 
   findByName(name: string) {
+    if (!name) return undefined;
     return this.rooms.get(name);
   }
 

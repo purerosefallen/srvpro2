@@ -1,4 +1,5 @@
 import {
+  NetPlayerType,
   YGOProCtosBase,
   YGOProCtosExternalAddress,
   YGOProCtosJoinGame,
@@ -22,6 +23,7 @@ import {
 } from 'rxjs';
 import { YGOProCtosDisconnect } from '../utility/ygopro-ctos-disconnect';
 import PQueue from 'p-queue';
+import { DuelStage, RoomManager } from '../room';
 
 export class ClientHandler {
   private static readonly CLIENT_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
@@ -174,6 +176,16 @@ export class ClientHandler {
         filter((msg) => !this.isPreHandshakeMsg(msg)),
         startWith(undefined),
         switchMap(() => timer(ClientHandler.CLIENT_IDLE_TIMEOUT_MS)),
+        filter(() => {
+          const room = this.ctx
+            .get(() => RoomManager)
+            .findByName(client.roomName);
+          return !(
+            room &&
+            client.pos === NetPlayerType.OBSERVER &&
+            room.duelStage !== DuelStage.Begin
+          );
+        }),
         take(1),
         takeUntil(client.disconnect$),
       )
