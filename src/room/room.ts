@@ -1379,6 +1379,9 @@ export class Room {
       return this.finalize(true);
     }
 
+    this.duelRecords.push(duelRecord);
+    this.duelStage = DuelStage.Dueling;
+
     const [
       player0DeckCount,
       player0ExtraCount,
@@ -1429,9 +1432,6 @@ export class Room {
       ...duelPos1Clients.map((p) => p.send(createStartMsg(1))),
       ...[...this.watchers].map((p) => p.send(watcherMsg)),
     ]);
-
-    this.duelRecords.push(duelRecord);
-    this.duelStage = DuelStage.Dueling;
 
     this.ocgcore.message$.subscribe((msg) => {
       this.logger.info(
