@@ -348,7 +348,10 @@ export class Room {
   private async sendPostWatchMessages(client: Client) {
     await client.send(new YGOProStocDuelStart());
 
-    const previousDuels = this.duelRecords.slice(0, -1);
+    const previousDuels =
+      this.duelStage === DuelStage.Dueling
+        ? this.duelRecords.slice(0, -1)
+        : this.duelRecords;
     if (previousDuels.length) {
       for (const duelRecord of previousDuels) {
         for (const message of duelRecord.toObserverPlayback((msg) =>
