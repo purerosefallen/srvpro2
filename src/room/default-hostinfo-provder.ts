@@ -258,6 +258,9 @@ export class DefaultHostInfoProvider {
           return {};
         }
         return { duel_rule: duelRule };
+      })
+      .registerRoomMode('(NOWATCH|NW)', {
+        no_watch: 1,
       });
   }
 }

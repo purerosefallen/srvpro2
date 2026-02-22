@@ -109,6 +109,12 @@ import cryptoRandomString from 'crypto-random-string';
 import { RoomCurrentFieldInfo, RoomInfo } from './room-info';
 import { KoishiFragment, readCardWithReader } from '../utility';
 
+declare module 'ygopro-msg-encode' {
+  export interface HostInfo {
+    no_watch?: number;
+  }
+}
+
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 
 export type RoomFinalizor = (self: Room) => Awaitable<any>;
@@ -388,6 +394,9 @@ export class Room {
     if (isPlayer) {
       this.players[firstEmptyPlayerSlot] = client;
       client.pos = firstEmptyPlayerSlot;
+    } else if (this.hostinfo.no_watch) {
+      // not allowing watchers
+      return client.die('#{watch_denied}', ChatColor.RED);
     } else {
       this.watchers.add(client);
       client.pos = NetPlayerType.OBSERVER;

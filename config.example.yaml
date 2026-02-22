@@ -110,3 +110,5 @@ hostinfoStartLp: 8000
 hostinfoStartHand: 5
 hostinfoDrawCount: 1
 hostinfoTimeLimit: 240
+hostinfoNoWatch: 0
+hostinfoAutoDeath: 0

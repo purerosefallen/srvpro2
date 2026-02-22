@@ -178,6 +178,8 @@ export const TRANSLATIONS = {
     botlist_menu_single: 'Single',
     botlist_menu_match: 'Match',
     botlist_menu_back: 'Back',
+    watch_denied: 'Duel has begun, spectating is unallowed',
+    watch_denied_room: 'Spectating is unallowed in this room',
   },
   'zh-CN': {
     update_required: '请更新你的客户端版本',

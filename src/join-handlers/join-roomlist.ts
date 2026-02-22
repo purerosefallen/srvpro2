@@ -34,8 +34,9 @@ export class JoinRoomlist {
         .filter(
           (room) =>
             (room.native ||
-              (room.duelStage !== DuelStage.Begin && room.challongeInfo)) &&
-            !room.name.includes('$'),
+              (room.duelStage !== DuelStage.Begin && !room.windbot)) &&
+            !room.name.includes('$') &&
+            !(room.duelStage !== DuelStage.Begin && room.hostinfo?.no_watch),
         )
         .map((room) => room.name);
 
