@@ -1327,7 +1327,6 @@ export class Room {
         deck: shuffledDecks[index],
       }));
     }
-    this.duelRecords.push(duelRecord);
 
     const extraScriptPaths = [
       './script/patches/entry.lua',
@@ -1349,7 +1348,7 @@ export class Room {
     };
     if (isMatchMode) {
       // Match mode uses completed duel count in gframe (before current duel result).
-      registry.duel_count = String(this.duelRecords.length - 1);
+      registry.duel_count = String(this.duelRecords.length);
     }
     duelRecord.players.forEach((player, i) => {
       registry[`player_name_${i}`] = player.name;
@@ -1431,6 +1430,7 @@ export class Room {
       ...[...this.watchers].map((p) => p.send(watcherMsg)),
     ]);
 
+    this.duelRecords.push(duelRecord);
     this.duelStage = DuelStage.Dueling;
 
     this.ocgcore.message$.subscribe((msg) => {
