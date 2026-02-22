@@ -1381,6 +1381,10 @@ export class Room {
 
     this.duelRecords.push(duelRecord);
     this.duelStage = DuelStage.Dueling;
+    this.turnCount = 0;
+    this.turnIngamePos = 0;
+    this.phase = undefined;
+    this.resetResponseRequestState();
 
     const [
       player0DeckCount,
@@ -1453,11 +1457,6 @@ export class Room {
       );
       Object.assign(this.registry, registry);
     });
-
-    this.turnCount = 0;
-    this.turnIngamePos = 0;
-    this.phase = undefined;
-    this.resetResponseRequestState();
 
     await this.dispatchGameMsg(watcherMsg.msg);
     await this.ctx.dispatch(
