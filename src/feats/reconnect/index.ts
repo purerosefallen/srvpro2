@@ -355,7 +355,7 @@ export class Reconnect {
     // 发送其他玩家信息
     for (const player of room.players) {
       if (player) {
-        await client.send(player.prepareChangePacket());
+        await client.send(player.prepareEnterPacket());
       }
     }
   }
