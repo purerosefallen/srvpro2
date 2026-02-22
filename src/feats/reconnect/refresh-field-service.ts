@@ -122,92 +122,24 @@ export class RefreshFieldService {
     const selfIngamePos = room.getIngameDuelPos(client);
     const opponentIngamePos = 1 - selfIngamePos;
 
-    await room.refreshLocations(
-      {
-        player: opponentIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_MZONE,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-    await room.refreshLocations(
-      {
-        player: selfIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_MZONE,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
+    const locations = [
+      OcgcoreScriptConstants.LOCATION_MZONE,
+      OcgcoreScriptConstants.LOCATION_SZONE,
+      OcgcoreScriptConstants.LOCATION_HAND,
+      OcgcoreScriptConstants.LOCATION_GRAVE,
+      OcgcoreScriptConstants.LOCATION_EXTRA,
+      OcgcoreScriptConstants.LOCATION_REMOVED,
+    ];
+    const players = [opponentIngamePos, selfIngamePos];
 
-    await room.refreshLocations(
-      {
-        player: opponentIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_SZONE,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-    await room.refreshLocations(
-      {
-        player: selfIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_SZONE,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-
-    await room.refreshLocations(
-      {
-        player: opponentIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_HAND,
-      },
-      { queryFlag, sendToClient: client },
-    );
-    await room.refreshLocations(
-      { player: selfIngamePos, location: OcgcoreScriptConstants.LOCATION_HAND },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-
-    await room.refreshLocations(
-      {
-        player: opponentIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_GRAVE,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-    await room.refreshLocations(
-      {
-        player: selfIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_GRAVE,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-
-    await room.refreshLocations(
-      {
-        player: opponentIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_EXTRA,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-    await room.refreshLocations(
-      {
-        player: selfIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_EXTRA,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-
-    await room.refreshLocations(
-      {
-        player: opponentIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_REMOVED,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
-    await room.refreshLocations(
-      {
-        player: selfIngamePos,
-        location: OcgcoreScriptConstants.LOCATION_REMOVED,
-      },
-      { queryFlag, sendToClient: client, useCache: 0 },
-    );
+    for (const location of locations) {
+      for (const player of players) {
+        await room.refreshLocations(
+          { player, location },
+          { queryFlag, sendToClient: client, useCache: 0 },
+        );
+      }
+    }
   }
 
   private isReconnectingPlayerOperating(client: Client, room: Room): boolean {
