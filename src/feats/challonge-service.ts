@@ -12,6 +12,8 @@ import {
   Tournament,
 } from './challonge-api';
 import { LockDeckExpectedDeckCheck } from './lock-deck';
+import { ClientRoomField } from '../utility';
+import { Client } from '../client';
 
 export type ChallongeParticipantUpload = {
   name: string;
@@ -56,6 +58,8 @@ declare module '../client' {
     challongeInfo?: Participant;
   }
 }
+
+ClientRoomField()(Client.prototype, 'challongeInfo');
 
 declare module '../room' {
   interface Room {

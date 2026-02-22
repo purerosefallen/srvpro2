@@ -17,6 +17,7 @@ import { ValueContainer } from '../../utility/value-container';
 import { pickRandom } from '../../utility/pick-random';
 import { BaseResourceProvider } from './base-resource-provider';
 import { DialoguesData, EMPTY_DIALOGUES_DATA } from './types';
+import { ClientRoomField } from '../../utility';
 
 export class DialoguesLookup extends ValueContainer<string[]> {
   constructor(
@@ -159,3 +160,5 @@ declare module '../../client' {
     readyTrap?: boolean;
   }
 }
+
+ClientRoomField()(Client.prototype, 'readyTrap');
