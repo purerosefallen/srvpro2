@@ -26,6 +26,7 @@ import { PlayerName } from '../../utility';
 import { CanReconnectCheck } from './can-reconnect-check';
 import { ClientKeyProvider } from '../client-key-provider';
 import { RefreshFieldService } from './refresh-field-service';
+import { HidePlayerNameProvider } from '../hide-player-name-provider';
 
 interface DisconnectInfo {
   key: string;
@@ -352,10 +353,14 @@ export class Reconnect {
       }),
     );
 
+    const hidePlayerNameService = this.ctx.get(() => HidePlayerNameProvider);
+
     // 发送其他玩家信息
     for (const player of room.players) {
       if (player) {
-        await client.send(player.prepareEnterPacket());
+        const packet = player.prepareEnterPacket();
+        packet.name = hidePlayerNameService.getHidPlayerName(player, oldClient);
+        await client.send(packet);
       }
     }
   }
