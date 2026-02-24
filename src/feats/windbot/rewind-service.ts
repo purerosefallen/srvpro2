@@ -95,7 +95,7 @@ export class RewindService {
       description: 'koishi_cmd_rewind_desc',
     });
 
-    koishi.command('rewind', '').action(async ({ session }) => {
+    koishi.command('undo', '').action(async ({ session }) => {
       const commandContext =
         this.koishiContextService.resolveCommandContext(session);
       if (!commandContext) {
