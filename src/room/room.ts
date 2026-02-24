@@ -1303,35 +1303,10 @@ export class Room {
     }
   }
 
-  @RoomMethod({ allowInDuelStages: DuelStage.FirstGo })
-  private async onDuelStart(client: Client, msg: YGOProCtosTpResult) {
-    // 检查是否是该玩家选先后手（duelPos 的第一个玩家）
-    const duelPos = this.getDuelPos(client);
-    if (duelPos !== this.firstgoPos) {
-      return;
+  async createOcgcore(duelRecord: DuelRecord) {
+    if (this.ocgcore) {
+      this.disposeOcgcore();
     }
-    const firstgoPlayers = this.getDuelPosPlayers(duelPos);
-    if (client !== firstgoPlayers[0]) {
-      return;
-    }
-    this.isPosSwapped =
-      (msg.res === TurnPlayerResult.FIRST) !== (this.getDuelPos(client) === 0);
-    const duelRecord = new DuelRecord(
-      generateSeed(),
-      this.playingPlayers.map((p) => ({ name: p.name, deck: p.deck! })),
-      this.isPosSwapped,
-    );
-    if (!this.hostinfo.no_shuffle_deck) {
-      const shuffledDecks = shuffleDecksBySeed(
-        duelRecord.players.map((p) => p.deck),
-        duelRecord.seed,
-      );
-      duelRecord.players = duelRecord.players.map((player, index) => ({
-        ...player,
-        deck: shuffledDecks[index],
-      }));
-    }
-
     const extraScriptPaths = [
       './script/patches/entry.lua',
       './script/special.lua',
@@ -1377,10 +1352,46 @@ export class Room {
         registry,
         decks: duelRecord.toSwappedPlayers().map((p) => p.deck),
       });
+      return true;
     } catch (e) {
       this.logger.error({ error: e }, 'Failed to initialize OCGCoreWorker');
       await this.sendChat('Failed to initialize game engine.', ChatColor.RED);
-      return this.finalize(true);
+      await this.finalize(true);
+      return false;
+    }
+  }
+
+  @RoomMethod({ allowInDuelStages: DuelStage.FirstGo })
+  private async onDuelStart(client: Client, msg: YGOProCtosTpResult) {
+    // 检查是否是该玩家选先后手（duelPos 的第一个玩家）
+    const duelPos = this.getDuelPos(client);
+    if (duelPos !== this.firstgoPos) {
+      return;
+    }
+    const firstgoPlayers = this.getDuelPosPlayers(duelPos);
+    if (client !== firstgoPlayers[0]) {
+      return;
+    }
+    this.isPosSwapped =
+      (msg.res === TurnPlayerResult.FIRST) !== (this.getDuelPos(client) === 0);
+    const duelRecord = new DuelRecord(
+      generateSeed(),
+      this.playingPlayers.map((p) => ({ name: p.name, deck: p.deck! })),
+      this.isPosSwapped,
+    );
+    if (!this.hostinfo.no_shuffle_deck) {
+      const shuffledDecks = shuffleDecksBySeed(
+        duelRecord.players.map((p) => p.deck),
+        duelRecord.seed,
+      );
+      duelRecord.players = duelRecord.players.map((player, index) => ({
+        ...player,
+        deck: shuffledDecks[index],
+      }));
+    }
+
+    if (!(await this.createOcgcore(duelRecord))) {
+      return;
     }
 
     this.duelRecords.push(duelRecord);
