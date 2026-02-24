@@ -91,7 +91,7 @@ export class RewindService {
     }
 
     const koishi = this.koishiContextService.instance;
-    this.koishiContextService.attachI18n('rewind', {
+    this.koishiContextService.attachI18n('undo', {
       description: 'koishi_cmd_rewind_desc',
     });
 
