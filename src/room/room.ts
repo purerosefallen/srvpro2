@@ -1172,7 +1172,7 @@ export class Room {
   get turnPos() {
     return this.getIngameDuelPosByDuelPos(this.turnIngamePos);
   }
-  phase = undefined;
+  phase: number | undefined = undefined;
   timerState = new TimerState();
   lastResponseRequestMsg?: YGOProMsgResponseBase;
   isRetrying = false;
@@ -1501,9 +1501,30 @@ export class Room {
     return this.advance();
   }
 
-  private async onNewTurn(tp: number) {
+  setNewTurn(tp: number) {
+    if (tp & 0x2) {
+      return;
+    }
+    tp = tp & 0x1;
     ++this.turnCount;
     this.turnIngamePos = tp;
+    return this;
+  }
+
+  setNewPhase(phase: number) {
+    this.phase = phase;
+    return this;
+  }
+
+  setLastResponseRequestMsg(message: YGOProMsgResponseBase) {
+    this.lastResponseRequestMsg = message;
+    this.isRetrying = false;
+    this.responsePos = this.getIngameDuelPosByDuelPos(message.responsePlayer());
+    return this;
+  }
+
+  private async onNewTurn(tp: number) {
+    this.setNewTurn(tp);
     if (!this.hasTimeLimit) {
       return;
     }
@@ -1516,7 +1537,7 @@ export class Room {
   }
 
   private async onNewPhase(phase: number) {
-    this.phase = phase;
+    this.setNewPhase(phase);
   }
 
   getIngameOperatingPlayer(ingameDuelPos: number): Client | undefined {
@@ -1691,11 +1712,7 @@ export class Room {
     }
 
     if (message instanceof YGOProMsgResponseBase) {
-      this.lastResponseRequestMsg = message;
-      this.isRetrying = false;
-      this.responsePos = this.getIngameDuelPosByDuelPos(
-        message.responsePlayer(),
-      );
+      this.setLastResponseRequestMsg(message);
       await this.sendWaitingToNonOperator(message.responsePlayer());
       await this.setResponseTimer(this.responsePos);
       return;
@@ -1804,7 +1821,7 @@ export class Room {
     );
   }
 
-  private canAdvance() {
+  canAdvance() {
     return this.duelStage === DuelStage.Dueling && !!this.ocgcore;
   }
 
