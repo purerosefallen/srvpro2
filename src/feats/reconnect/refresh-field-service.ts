@@ -7,6 +7,7 @@ import {
   YGOProMsgNewPhase,
   YGOProMsgNewTurn,
   YGOProMsgReverseDeck,
+  YGOProMsgStart,
   YGOProMsgWaiting,
   YGOProStocGameMsg,
 } from 'ygopro-msg-encode';
@@ -43,6 +44,7 @@ export class RefreshFieldService {
 
   async sendReconnectDuelingMessages(client: Client, room: Room) {
     this.assertRefreshAllowed(client, room);
+    await this.sendMsgStart(client, room);
     await this.sendNewTurnMessages(client, room);
     await this.sendRefreshFieldMessages(client, room);
   }
@@ -145,7 +147,29 @@ export class RefreshFieldService {
     }
   }
 
-  private async sendNewTurnMessages(client: Client, room: Room) {
+  async sendMsgStart(client: Client, room: Room) {
+    const playerType = room.getIngameDuelPos(client);
+    await client.send(
+      new YGOProStocGameMsg().fromPartial({
+        msg: new YGOProMsgStart().fromPartial({
+          playerType,
+          duelRule: room.hostinfo.duel_rule,
+          startLp0: room.hostinfo.start_lp,
+          startLp1: room.hostinfo.start_lp,
+          player0: {
+            deckCount: 0,
+            extraCount: 0,
+          },
+          player1: {
+            deckCount: 0,
+            extraCount: 0,
+          },
+        }),
+      }),
+    );
+  }
+
+  async sendNewTurnMessages(client: Client, room: Room) {
     const turnCount = Math.max(1, room.turnCount || 0);
     if (room.isTag) {
       const newTurnCount = turnCount % 4 || 4;

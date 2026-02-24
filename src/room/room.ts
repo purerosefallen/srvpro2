@@ -511,12 +511,14 @@ export class Room {
     return this.duelRecords[this.duelRecords.length - 1];
   }
 
-  private disposeOcgcore() {
+  private disposeOcgcore(ocgcore = this.ocgcore) {
     try {
-      void this.ocgcore?.dispose().catch((e) => {
+      void ocgcore?.dispose().catch((e) => {
         this.logger.warn({ error: e }, 'Error disposing ocgcore');
       });
-      this.ocgcore = undefined;
+      if (ocgcore === this.ocgcore) {
+        this.ocgcore = undefined;
+      }
     } catch {}
   }
 
@@ -1305,9 +1307,7 @@ export class Room {
   }
 
   async createOcgcore(duelRecord: DuelRecord) {
-    if (this.ocgcore) {
-      this.disposeOcgcore();
-    }
+    const oldOcgcore = this.ocgcore;
     const extraScriptPaths = [
       './script/patches/entry.lua',
       './script/special.lua',
@@ -1343,7 +1343,7 @@ export class Room {
     const ocgcoreWasmBinary = await this.resourceLoader.getOcgcoreWasmBinary();
 
     try {
-      this.ocgcore = await initWorker(OcgcoreWorker, {
+      const ocgcore = await initWorker(OcgcoreWorker, {
         seed: duelRecord.seed,
         hostinfo: this.hostinfo,
         ygoproPaths: this.resourceLoader.ygoproPaths,
@@ -1353,11 +1353,33 @@ export class Room {
         registry,
         decks: duelRecord.toSwappedPlayers().map((p) => p.deck),
       });
+      ocgcore.message$.subscribe((msg) => {
+        this.logger.info(
+          { message: msg.message, type: msg.type },
+          'Received message from OCGCoreWorker',
+        );
+        if (
+          msg.type === OcgcoreMessageType.DebugMessage &&
+          !this.ctx.config.getBoolean('OCGCORE_DEBUG_LOG')
+        ) {
+          return;
+        }
+        this.sendChat(`Debug: ${msg.message}`, ChatColor.RED);
+      });
+      ocgcore.registry$.subscribe((registry) => {
+        this.logger.debug(
+          { registry },
+          'Received registry update from OCGCoreWorker',
+        );
+        Object.assign(this.registry, registry);
+      });
+      this.ocgcore = ocgcore;
+      if (oldOcgcore) {
+        this.disposeOcgcore(oldOcgcore);
+      }
       return true;
     } catch (e) {
       this.logger.error({ error: e }, 'Failed to initialize OCGCoreWorker');
-      await this.sendChat('Failed to initialize game engine.', ChatColor.RED);
-      await this.finalize(true);
       return false;
     }
   }
@@ -1401,6 +1423,7 @@ export class Room {
     }
 
     if (!(await this.createOcgcore(duelRecord))) {
+      this.finalize(true);
       return;
     }
 
@@ -1459,27 +1482,6 @@ export class Room {
       ...duelPos1Clients.map((p) => p.send(createStartMsg(1))),
       ...[...this.watchers].map((p) => p.send(watcherMsg)),
     ]);
-
-    this.ocgcore.message$.subscribe((msg) => {
-      this.logger.info(
-        { message: msg.message, type: msg.type },
-        'Received message from OCGCoreWorker',
-      );
-      if (
-        msg.type === OcgcoreMessageType.DebugMessage &&
-        !this.ctx.config.getBoolean('OCGCORE_DEBUG_LOG')
-      ) {
-        return;
-      }
-      this.sendChat(`Debug: ${msg.message}`, ChatColor.RED);
-    });
-    this.ocgcore.registry$.subscribe((registry) => {
-      this.logger.debug(
-        { registry },
-        'Received registry update from OCGCoreWorker',
-      );
-      Object.assign(this.registry, registry);
-    });
 
     await this.dispatchGameMsg(watcherMsg.msg);
     await this.ctx.dispatch(
@@ -1540,7 +1542,10 @@ export class Room {
     this.setNewPhase(phase);
   }
 
-  getIngameOperatingPlayer(ingameDuelPos: number): Client | undefined {
+  getIngameOperatingPlayer(
+    ingameDuelPos: number,
+    turnCount = this.turnCount,
+  ): Client | undefined {
     const players = this.getIngameDuelPosPlayers(ingameDuelPos);
     if (!this.isTag) {
       return players[0];
@@ -1552,7 +1557,7 @@ export class Room {
     // tag_duel.cpp cur_player equivalent, computed from turnCount:
     // duelPos 0: start from players[0], toggle every two turns from turn 3
     // duelPos 1: start from players[1], toggle every two turns from turn 2
-    const tc = Math.max(0, this.turnCount);
+    const tc = Math.max(0, turnCount);
     if (ingameDuelPos === 0) {
       const idx = Math.floor(Math.max(0, tc - 1) / 2) % 2;
       return players[idx];
@@ -1714,12 +1719,12 @@ export class Room {
     if (message instanceof YGOProMsgResponseBase) {
       this.setLastResponseRequestMsg(message);
       await this.sendWaitingToNonOperator(message.responsePlayer());
-      await this.setResponseTimer(this.responsePos);
+      await this.setResponseTimer(this.responsePos!);
       return;
     }
     if (message instanceof YGOProMsgRetry && this.responsePos != null) {
-      if (this.lastDuelRecord.responsesWithPos.length > 0) {
-        this.lastDuelRecord.responsesWithPos.pop();
+      if (this.lastDuelRecord.responses.length > 0) {
+        this.lastDuelRecord.responses.pop();
       }
       this.isRetrying = true;
       await this.sendWaitingToNonOperator(
@@ -1935,7 +1940,7 @@ export class Room {
     const responsePos = this.responsePos;
     const responseRequestMsg = this.lastResponseRequestMsg;
     const response = Buffer.from(msg.response);
-    this.lastDuelRecord.responsesWithPos.push({ pos: responsePos, response });
+    this.lastDuelRecord.responses.push(response);
     if (this.hasTimeLimit) {
       this.clearResponseTimer(true);
       const msgType = this.isRetrying

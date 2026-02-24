@@ -119,7 +119,7 @@ export class DuelRecordEntity extends BaseTimeEntity {
     duelRecord.winPosition = this.resolveWinPosition();
     duelRecord.winReason = this.winReason;
     duelRecord.messages = decodeMessagesBase64(this.messages).map(
-      (packet) => packet.msg,
+      (packet) => packet.msg!,
     );
     duelRecord.responses = decodeResponsesBase64(this.responses);
     return duelRecord;

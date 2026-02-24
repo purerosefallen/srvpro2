@@ -1,10 +1,16 @@
 import {
+  YGOProMsgBase,
+  YGOProMsgHint,
   YGOProMsgNewPhase,
   YGOProMsgNewTurn,
   YGOProMsgResponseBase,
   YGOProMsgRetry,
 } from 'ygopro-msg-encode';
 import { Room } from '../room';
+import { isUpdateMessage } from './is-update-message';
+
+const isVerifySkippingMessage = (message: YGOProMsgBase) => 
+  message instanceof YGOProMsgHint || isUpdateMessage(message);
 
 export const sliceOcgcore = async (room: Room, i: number) => {
   if (
@@ -16,8 +22,8 @@ export const sliceOcgcore = async (room: Room, i: number) => {
   }
   room.resetDuelState();
   const useResponses = room.lastDuelRecord.responses.slice(0, i);
-  let messagePointer = 0; // 1st message is MSG_START and we skip it
-  while (useResponses.length) {
+  let messagePointer = 1; // 1st message is MSG_START and we skip it
+  while (true) {
     for await (const { message, status, raw } of room.ocgcore!.advance()) {
       if (!message) {
         if (status) {
@@ -33,15 +39,22 @@ export const sliceOcgcore = async (room: Room, i: number) => {
         throw new Error('Unexpected retry message');
       }
 
-      const expectedMessage = room.lastDuelRecord.messages[++messagePointer];
+      if (isVerifySkippingMessage(message)) {
+        continue; // skip update messages
+      }
+
+      let expectedMessage = room.lastDuelRecord.messages[messagePointer++];
+      while (expectedMessage && isVerifySkippingMessage(expectedMessage)) {
+        expectedMessage = room.lastDuelRecord.messages[messagePointer++];
+      }
       if (!expectedMessage) {
         throw new Error(
-          `No more expected messages but got ${message.constructor.name} with payload ${Buffer.from(raw).toString('hex')}`,
+          `No more expected messages but got ${message.constructor.name} with payload ${Buffer.from(raw).toString('hex')} body ${JSON.stringify(message)}`,
         );
       }
       if (!Buffer.from(raw).equals(Buffer.from(expectedMessage.toPayload()))) {
         throw new Error(
-          `Message mismatch at position ${messagePointer - 1}: expected ${expectedMessage.constructor.name} with payload ${Buffer.from(expectedMessage.toPayload()).toString('hex')}, got ${message.constructor.name} with payload ${Buffer.from(raw).toString('hex')}`,
+          `Message mismatch at position ${messagePointer - 1}: expected ${expectedMessage.constructor.name} with payload ${Buffer.from(expectedMessage.toPayload()).toString('hex')} body ${JSON.stringify(expectedMessage)}, got ${message.constructor.name} with payload ${Buffer.from(raw).toString('hex')} body ${JSON.stringify(message)}`,
         );
       }
       if (message instanceof YGOProMsgNewTurn) {
@@ -60,6 +73,6 @@ export const sliceOcgcore = async (room: Room, i: number) => {
     }
     await room.ocgcore!.setResponse(response);
   }
-  room.lastDuelRecord.responsesWithPos.splice(i);
-  room.lastDuelRecord.messages.splice(messagePointer + 1);
+  room.lastDuelRecord.responses.splice(i);
+  room.lastDuelRecord.messages.splice(messagePointer);
 };

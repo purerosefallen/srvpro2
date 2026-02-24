@@ -489,28 +489,6 @@ export class Reconnect {
     // Dueling 阶段：决斗中
     // 这是原来的完整重连逻辑
     await newClient.send(new YGOProStocDuelStart());
-    // Dueling 阶段不发 DeckCount
-
-    // 发送 MSG_START，卡组数量全部为 0（重连时不显示卡组数量）
-    const playerType = room.getIngameDuelPos(newClient);
-    await newClient.send(
-      new YGOProStocGameMsg().fromPartial({
-        msg: new YGOProMsgStart().fromPartial({
-          playerType,
-          duelRule: room.hostinfo.duel_rule,
-          startLp0: room.hostinfo.start_lp,
-          startLp1: room.hostinfo.start_lp,
-          player0: {
-            deckCount: 0,
-            extraCount: 0,
-          },
-          player1: {
-            deckCount: 0,
-            extraCount: 0,
-          },
-        }),
-      }),
-    );
 
     await this.refreshFieldService.sendReconnectDuelingMessages(
       newClient,

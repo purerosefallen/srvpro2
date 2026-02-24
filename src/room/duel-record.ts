@@ -28,11 +28,7 @@ export class DuelRecord {
   endTime?: Date;
   winPosition?: number;
   winReason?: number;
-  responsesWithPos: { pos: number; response: Buffer }[] = [];
-  // responses: Buffer[] = [];
-  get responses() {
-    return this.responsesWithPos.map((item) => item.response);
-  }
+  responses: Buffer[] = [];
   messages: YGOProMsgBase[] = [];
 
   toSwappedPlayers() {
