@@ -354,7 +354,7 @@ export class Room {
         : this.duelRecords;
     if (previousDuels.length) {
       for (const duelRecord of previousDuels) {
-        for (const message of duelRecord.toObserverPlayback((msg) =>
+        for (const message of duelRecord.toPlayback((msg) =>
           msg.observerView(),
         )) {
           await client.send(message);
@@ -375,7 +375,7 @@ export class Room {
       await client.send(new YGOProStocWaitingSide());
     } else if (this.duelStage === DuelStage.Dueling) {
       // Dueling 阶段不发 DeckCount，直接发送观战消息
-      for (const message of this.lastDuelRecord?.toObserverPlayback((msg) =>
+      for (const message of this.lastDuelRecord?.toPlayback((msg) =>
         msg.observerView(),
       ) || []) {
         await client.send(message);

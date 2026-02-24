@@ -427,7 +427,7 @@ export class CloudReplayService {
     duelRecord: DuelRecord,
     viewMode: ReplayWatchViewMode = 'default',
   ) {
-    return duelRecord.toObserverPlayback(
+    return duelRecord.toPlayback(
       viewMode === 'default'
         ? (msg) => msg
         : viewMode === 'observer'

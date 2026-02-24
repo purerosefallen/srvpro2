@@ -5,6 +5,7 @@ import {
   NetPlayerType,
   YGOProMsgBase,
   YGOProMsgResponseBase,
+  YGOProMsgStart,
   YGOProMsgWin,
   YGOProStocGameMsg,
 } from 'ygopro-msg-encode';
@@ -118,14 +119,21 @@ export class DuelRecord {
     return yrp;
   }
 
-  *toObserverPlayback(
+  *toPlayback(
     cb: (msg: YGOProMsgBase) => YGOProMsgBase | undefined = (msg) => msg,
+    options: {
+      includeResponse?: boolean;
+      includeNonObserver?: boolean;
+      msgStartPos?: number;
+    } = {},
   ): Generator<YGOProStocGameMsg, void, unknown> {
     let recordedWinMsg: YGOProMsgWin | undefined;
 
-    for (const message of this.messages) {
+    for (let message of this.messages) {
       if (message instanceof YGOProMsgResponseBase) {
-        continue;
+        if (!options.includeResponse) {
+          continue;
+        }
       }
       if (message instanceof YGOProMsgWin) {
         if (!recordedWinMsg) {
@@ -133,8 +141,17 @@ export class DuelRecord {
         }
         continue;
       }
-      if (!message.getSendTargets().includes(NetPlayerType.OBSERVER)) {
+      if (
+        !options.includeNonObserver &&
+        !message.getSendTargets().includes(NetPlayerType.OBSERVER)
+      ) {
         continue;
+      }
+      if (options.msgStartPos != null && message instanceof YGOProMsgStart) {
+        message = new YGOProMsgStart().fromPartial({
+          ...message,
+          playerType: options.msgStartPos,
+        });
       }
       const mappedMsg = cb(message);
       if (!mappedMsg) {
