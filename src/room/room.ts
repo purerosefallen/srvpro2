@@ -1168,6 +1168,7 @@ export class Room {
   private registry: Record<string, string> = {};
   turnCount = 0;
   turnIngamePos = 0;
+  responsePos?: number;
   get turnPos() {
     return this.getIngameDuelPosByDuelPos(this.turnIngamePos);
   }
@@ -1361,6 +1362,15 @@ export class Room {
     }
   }
 
+  resetDuelState() {
+    this.turnCount = 0;
+    this.turnIngamePos = 0;
+    this.phase = undefined;
+    this.responsePos = undefined;
+    this.lastResponseRequestMsg = undefined;
+    this.isRetrying = false;
+  }
+
   @RoomMethod({ allowInDuelStages: DuelStage.FirstGo })
   private async onDuelStart(client: Client, msg: YGOProCtosTpResult) {
     // 检查是否是该玩家选先后手（duelPos 的第一个玩家）
@@ -1396,9 +1406,7 @@ export class Room {
 
     this.duelRecords.push(duelRecord);
     this.duelStage = DuelStage.Dueling;
-    this.turnCount = 0;
-    this.turnIngamePos = 0;
-    this.phase = undefined;
+    this.resetDuelState();
     this.resetResponseRequestState();
 
     const [
@@ -1693,8 +1701,8 @@ export class Room {
       return;
     }
     if (message instanceof YGOProMsgRetry && this.responsePos != null) {
-      if (this.lastDuelRecord.responses.length > 0) {
-        this.lastDuelRecord.responses.pop();
+      if (this.lastDuelRecord.responsesWithPos.length > 0) {
+        this.lastDuelRecord.responsesWithPos.pop();
       }
       this.isRetrying = true;
       await this.sendWaitingToNonOperator(
@@ -1786,7 +1794,6 @@ export class Room {
     });
 
   private matchKilled = false;
-  private responsePos?: number;
 
   get responsePlayer() {
     if (this.responsePos == null) {
@@ -1911,7 +1918,7 @@ export class Room {
     const responsePos = this.responsePos;
     const responseRequestMsg = this.lastResponseRequestMsg;
     const response = Buffer.from(msg.response);
-    this.lastDuelRecord.responses.push(response);
+    this.lastDuelRecord.responsesWithPos.push({ pos: responsePos, response });
     if (this.hasTimeLimit) {
       this.clearResponseTimer(true);
       const msgType = this.isRetrying
