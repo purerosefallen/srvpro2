@@ -1,4 +1,5 @@
 import { Awaitable, MayBeArray, ProtoMiddlewareDispatcher } from 'nfkit';
+import type { Subscription } from 'rxjs';
 import { Context } from '../app';
 import BetterLock from 'better-lock';
 import {
@@ -1167,6 +1168,10 @@ export class Room {
   }
 
   ocgcore?: OcgcoreWorker;
+  private ocgcoreRegistrySubscriptions = new WeakMap<
+    OcgcoreWorker,
+    Subscription
+  >();
   private registry: Record<string, string> = {};
   turnCount = 0;
   turnIngamePos = 0;
@@ -1366,15 +1371,18 @@ export class Room {
         }
         this.sendChat(`Debug: ${msg.message}`, ChatColor.RED);
       });
-      ocgcore.registry$.subscribe((registry) => {
+      const registrySubscription = ocgcore.registry$.subscribe((registry) => {
         this.logger.debug(
           { registry },
           'Received registry update from OCGCoreWorker',
         );
         Object.assign(this.registry, registry);
       });
+      this.ocgcoreRegistrySubscriptions.set(ocgcore, registrySubscription);
       this.ocgcore = ocgcore;
       if (oldOcgcore) {
+        this.ocgcoreRegistrySubscriptions.get(oldOcgcore)?.unsubscribe();
+        this.ocgcoreRegistrySubscriptions.delete(oldOcgcore);
         this.disposeOcgcore(oldOcgcore);
       }
       return true;
