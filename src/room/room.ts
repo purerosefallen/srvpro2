@@ -385,15 +385,11 @@ export class Room {
   }
 
   async join(client: Client, toObserver = false) {
-    client.roomName = this.name;
     const firstEmptyPlayerSlot = this.players.findIndex((p) => !p);
     const isPlayer =
       !toObserver &&
       firstEmptyPlayerSlot >= 0 &&
       this.duelStage === DuelStage.Begin;
-    client.isHost = this.noHost
-      ? false
-      : isPlayer && !this.playingPlayers.length;
 
     if (isPlayer) {
       this.players[firstEmptyPlayerSlot] = client;
@@ -405,6 +401,12 @@ export class Room {
       this.watchers.add(client);
       client.pos = NetPlayerType.OBSERVER;
     }
+
+    client.roomName = this.name;
+
+    client.isHost = this.noHost
+      ? false
+      : isPlayer && !this.playingPlayers.length;
 
     // send to client
     await client.send(this.joinGameMessage);
