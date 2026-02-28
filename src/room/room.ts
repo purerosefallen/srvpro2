@@ -392,7 +392,7 @@ export class Room {
       this.duelStage === DuelStage.Begin;
 
     // 记录进房前是否已经有玩家，用于判定首个玩家为房主
-    const hasPlayerBeforeJoin = this.playingPlayers.length > 0;
+    const hasPlayerBeforeJoin = this.allPlayers.length > 0;
 
     if (isPlayer) {
       this.players[firstEmptyPlayerSlot] = client;

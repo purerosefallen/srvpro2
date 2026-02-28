@@ -9,8 +9,8 @@ import {
 import { Room } from '../room';
 import { isUpdateMessage } from './is-update-message';
 
-const isVerifySkippingMessage = (message: YGOProMsgBase) => 
-  message instanceof YGOProMsgHint || isUpdateMessage(message);
+const isVerifySkippingMessage = (message: YGOProMsgBase) =>
+  isUpdateMessage(message) || message instanceof YGOProMsgHint;
 
 export const sliceOcgcore = async (room: Room, i: number) => {
   if (
