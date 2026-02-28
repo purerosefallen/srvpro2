@@ -19,7 +19,7 @@ sslKey: ""
 trustedProxies:
   - 127.0.0.0/8
   - ::1/128
-noConnectCountLimit: 0
+noConnectCountLimit: 1
 ygoproVersion: "0x1362"
 altVersions:
   - 2330
