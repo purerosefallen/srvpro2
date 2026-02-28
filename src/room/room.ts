@@ -391,6 +391,9 @@ export class Room {
       firstEmptyPlayerSlot >= 0 &&
       this.duelStage === DuelStage.Begin;
 
+    // 记录进房前是否已经有玩家，用于判定首个玩家为房主
+    const hasPlayerBeforeJoin = this.playingPlayers.length > 0;
+
     if (isPlayer) {
       this.players[firstEmptyPlayerSlot] = client;
       client.pos = firstEmptyPlayerSlot;
@@ -404,9 +407,7 @@ export class Room {
 
     client.roomName = this.name;
 
-    client.isHost = this.noHost
-      ? false
-      : isPlayer && !this.playingPlayers.length;
+    client.isHost = !this.noHost && isPlayer && !hasPlayerBeforeJoin;
 
     // send to client
     await client.send(this.joinGameMessage);
