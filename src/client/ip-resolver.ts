@@ -112,6 +112,14 @@ export class IpResolver {
       return false;
     }
 
+    const noConnectCountLimit = this.ctx.config.getBoolean(
+      'NO_CONNECT_COUNT_LIMIT',
+    );
+
+    if (noConnectCountLimit) {
+      return false;
+    }
+
     // Decrement count for previous IP
     if (prevIp) {
       const prevCount = await this.getConnectedIpCount(prevIp);
@@ -128,9 +136,6 @@ export class IpResolver {
     client.isLocal = isLocal;
 
     // Increment count for new IP
-    const noConnectCountLimit = this.ctx.config.getBoolean(
-      'NO_CONNECT_COUNT_LIMIT',
-    );
     let connectCount = await this.getConnectedIpCount(newIp);
 
     if (
