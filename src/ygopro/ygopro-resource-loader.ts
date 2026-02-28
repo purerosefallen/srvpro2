@@ -18,11 +18,9 @@ export class YGOProResourceLoader {
 
   ygoproPaths = this.ctx.config
     .getStringArray('YGOPRO_PATH')
-    .map((p) => path.resolve(process.cwd(), p))
-    .flatMap((p) => [path.join(p, 'expansions'), p]);
-  extraScriptPaths = this.ctx.config
-    .getStringArray('EXTRA_SCRIPT_PATH')
     .map((p) => path.resolve(process.cwd(), p));
+
+  extraScriptPaths = this.ctx.config.getStringArray('EXTRA_SCRIPT_PATH');
 
   private logger = this.ctx.createLogger(this.constructor.name);
   private loadingLock = new BetterLock();
