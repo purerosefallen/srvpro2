@@ -50,7 +50,7 @@ export const defaultConfig = {
   TRUSTED_PROXIES: '127.0.0.0/8,::1/128',
   // Disable per-IP connection count limit.
   // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
-  NO_CONNECT_COUNT_LIMIT: '',
+  NO_CONNECT_COUNT_LIMIT: '1',
   // Restrict accepted YGOPro version. Format: version string; empty means no restriction.
   YGOPRO_VERSION: '0x1362',
   // Additional accepted versions. Format: comma-separated version strings.
