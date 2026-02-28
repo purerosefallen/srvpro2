@@ -55,8 +55,11 @@ export class ClientHandler {
         return next();
       })
       .middleware(YGOProCtosPlayerInfo, async (msg, client, next) => {
-        if (!client.ip) {
-          await this.ctx.get(() => IpResolver).setClientIp(client);
+        if (
+          !client.ip &&
+          (await this.ctx.get(() => IpResolver).setClientIp(client))
+        ) {
+          return;
         }
         const [name, vpass] = msg.name.split('$');
         client.name = name;
@@ -153,6 +156,10 @@ export class ClientHandler {
   }
 
   private async dispatchClientMessage(client: Client, msg: YGOProCtosBase) {
+    if (client.disconnected) {
+      // disallow processing any messages after disconnection, including those already in the queue
+      return;
+    }
     this.logger.debug(
       {
         msgName: msg.constructor.name,
