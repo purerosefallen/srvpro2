@@ -41,17 +41,21 @@ export class ClientHandler {
   async init() {
     this.ctx
       .middleware(YGOProCtosExternalAddress, async (msg, client, next) => {
+        client.hostname = msg.hostname?.split(':')[0] || '';
         if (client.ip) {
           // ws/reverse-ws should already have IP from connection metadata, skip overwrite
           return next();
         }
-        await this.ctx
-          .get(() => IpResolver)
-          .setClientIp(
-            client,
-            msg.real_ip === '0.0.0.0' ? undefined : msg.real_ip,
-          );
-        client.hostname = msg.hostname?.split(':')[0] || '';
+        if (
+          await this.ctx
+            .get(() => IpResolver)
+            .setClientIp(
+              client,
+              msg.real_ip === '0.0.0.0' ? undefined : msg.real_ip,
+            )
+        ) {
+          return;
+        }
         return next();
       })
       .middleware(YGOProCtosPlayerInfo, async (msg, client, next) => {
