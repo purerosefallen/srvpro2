@@ -160,7 +160,7 @@ export class ClientHandler {
   }
 
   private async dispatchClientMessage(client: Client, msg: YGOProCtosBase) {
-    if (client.disconnected) {
+    if (client.disconnected && !(msg instanceof YGOProCtosDisconnect)) {
       // disallow processing any messages after disconnection, including those already in the queue
       return;
     }
