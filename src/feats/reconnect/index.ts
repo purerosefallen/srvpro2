@@ -60,6 +60,7 @@ export class Reconnect {
   private reconnectTimeout = this.ctx.config.getInt('RECONNECT_TIMEOUT'); // 超时时间，单位：毫秒（默认 180000ms = 3分钟）
   private clientKeyProvider = this.ctx.get(() => ClientKeyProvider);
   private refreshFieldService = this.ctx.get(() => RefreshFieldService);
+  private logger = this.ctx.createLogger(this.constructor.name);
 
   constructor(private ctx: Context) {}
 
@@ -375,11 +376,17 @@ export class Reconnect {
       const key = client.preReconnectDisconnectKey;
       const disconnectInfo = key ? this.disconnectList.get(key) : undefined;
       if (!disconnectInfo) {
+        this.logger.warn(
+          `verifyReconnectDeck(normal): disconnectInfo not found for client ip=${client.ip} name_vpass=${client.name_vpass} key=${key}`,
+        );
         return false;
       }
 
       const oldStartDeck = disconnectInfo.oldClient.startDeck;
       if (!oldStartDeck) {
+        this.logger.warn(
+          `verifyReconnectDeck(normal): oldClient has no startDeck, client ip=${client.ip} name_vpass=${client.name_vpass} oldClient ip=${disconnectInfo.oldClient.ip} name_vpass=${disconnectInfo.oldClient.name_vpass}`,
+        );
         return false;
       }
 
@@ -392,11 +399,17 @@ export class Reconnect {
         ? roomManager.findByName(client.preReconnectRoomName)
         : undefined;
       if (!room) {
+        this.logger.warn(
+          `verifyReconnectDeck(kick): room not found for client ip=${client.ip} name_vpass=${client.name_vpass} roomName=${client.preReconnectRoomName}`,
+        );
         return false;
       }
 
       const oldClient = room.players[client.pos];
       if (!oldClient?.startDeck) {
+        this.logger.warn(
+          `verifyReconnectDeck(kick): oldClient has no startDeck, client ip=${client.ip} name_vpass=${client.name_vpass} pos=${client.pos} roomName=${room.name} oldClient ip=${oldClient?.ip} name_vpass=${oldClient?.name_vpass}`,
+        );
         return false;
       }
 
