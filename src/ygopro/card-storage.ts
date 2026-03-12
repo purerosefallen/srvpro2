@@ -121,6 +121,7 @@ export class CardStorage {
         lscale: data.lscale,
         rscale: data.rscale,
         linkMarker: data.linkMarker,
+        ruleCode: data.ruleCode,
       };
     };
   }
@@ -178,6 +179,7 @@ export class CardStorage {
               lscale: card.lscale,
               rscale: card.rscale,
               linkMarker: card.linkMarker,
+              ruleCode: card.ruleCode,
               category: card.category,
             })
             .toPayload();
