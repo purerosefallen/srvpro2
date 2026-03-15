@@ -38,6 +38,7 @@ import {
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 const OCGCORE_MESSAGE_REPLAY_BUFFER_SIZE = 128;
+const ADVANCE_PROCESS_TIMEOUT_MS = 2 * 60 * 1000;
 
 // Serializable types for transport (noParse mode: only send binary data)
 interface SerializableProcessResult {
@@ -378,7 +379,8 @@ export class OcgcoreWorker {
 
   async *advance(): AsyncGenerator<OcgcoreProcessResultWithEncodeError> {
     while (true) {
-      const processedResults = this.splitProcessResult(await this.process());
+      const processResult = await this.processWithTimeout();
+      const processedResults = this.splitProcessResult(processResult);
 
       for (const res of processedResults) {
         if (res.raw.length === 0) {
@@ -398,6 +400,28 @@ export class OcgcoreWorker {
         if (res.message instanceof YGOProMsgResponseBase) {
           return;
         }
+      }
+    }
+  }
+
+  private async processWithTimeout(): Promise<OcgcoreProcessResultWithEncodeError> {
+    let timeout: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        this.process(),
+        new Promise<OcgcoreProcessResultWithEncodeError>((_, reject) => {
+          timeout = setTimeout(() => {
+            reject(
+              new Error(
+                `ocgcore process timed out after ${ADVANCE_PROCESS_TIMEOUT_MS}ms`,
+              ),
+            );
+          }, ADVANCE_PROCESS_TIMEOUT_MS);
+        }),
+      ]);
+    } finally {
+      if (timeout) {
+        clearTimeout(timeout);
       }
     }
   }
