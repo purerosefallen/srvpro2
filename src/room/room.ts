@@ -945,7 +945,9 @@ export class Room {
         const prevWinPos =
           this.duelRecords[this.duelRecords.length - 1]?.winPosition;
         return this.startGame(
-          prevWinPos == null ? undefined : ((1 - prevWinPos) as 0 | 1),
+          prevWinPos == null || prevWinPos > 1
+            ? undefined
+            : ((1 - prevWinPos) as 0 | 1),
         );
       }
     }
@@ -1892,8 +1894,16 @@ export class Room {
         await this.routeGameMsg(handled);
       }
     } catch (e) {
-      this.logger.warn({ error: e }, 'Error while advancing ocgcore');
-      return this.finalize();
+      this.logger.warn(
+        { error: e, roomName: this.name },
+        'Error while advancing ocgcore',
+      );
+      const drawGame = new YGOProMsgWin().fromPartial({
+        type: 0x11,
+        player: 2,
+      });
+      await this.sendChat('#{draw_due_to_error}', ChatColor.RED);
+      return this.win(drawGame);
     }
   }
 

@@ -38,7 +38,7 @@ import {
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 const OCGCORE_MESSAGE_REPLAY_BUFFER_SIZE = 128;
-const ADVANCE_PROCESS_TIMEOUT_MS = 2 * 60 * 1000;
+const ADVANCE_PROCESS_TIMEOUT_MS = 1 * 60 * 1000;
 
 // Serializable types for transport (noParse mode: only send binary data)
 interface SerializableProcessResult {
