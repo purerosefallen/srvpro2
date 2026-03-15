@@ -18,7 +18,7 @@ import {
 } from 'ygopro-msg-encode';
 import { Context } from '../../app';
 import { Client } from '../../client';
-import { DuelStage, Room, RoomManager } from '../../room';
+import { DuelStage, OnRoomFinalize, Room, RoomManager } from '../../room';
 import { getSpecificFields } from '../../utility/metadata';
 import { YGOProCtosDisconnect } from '../../utility/ygopro-ctos-disconnect';
 import { isUpdateDeckPayloadEqual } from '../../utility/deck-compare';
@@ -31,10 +31,8 @@ import { HidePlayerNameProvider } from '../hide-player-name-provider';
 interface DisconnectInfo {
   key: string;
   roomName: string;
-  clientPos: number;
-  playerName: string;
+  roomPos: number;
   disconnectTime: Date;
-  oldClient: Client;
   timeout: NodeJS.Timeout;
 }
 
@@ -45,6 +43,7 @@ declare module '../../client' {
     preReconnecting?: boolean;
     reconnectType?: ReconnectType;
     preReconnectRoomName?: string; // 临时保存重连的目标房间名
+    preReconnectRoomPos?: number; // 临时保存重连的目标玩家槽位
     preReconnectDisconnectKey?: string;
   }
 }
@@ -57,6 +56,7 @@ declare module '../../room' {
 
 export class Reconnect {
   private disconnectList = new Map<string, DisconnectInfo>();
+  private disconnectListByRoomName = new Map<string, Set<string>>();
   private reconnectTimeout = this.ctx.config.getInt('RECONNECT_TIMEOUT'); // 超时时间，单位：毫秒（默认 180000ms = 3分钟）
   private clientKeyProvider = this.ctx.get(() => ClientKeyProvider);
   private refreshFieldService = this.ctx.get(() => RefreshFieldService);
@@ -110,11 +110,16 @@ export class Reconnect {
     });
 
     // 拦截 JOIN_GAME 消息
-    this.ctx.middleware(YGOProCtosJoinGame, async (msg, client, next) => {
-      if (await this.tryPreReconnect(client, msg)) {
+    this.ctx.middleware(YGOProCtosJoinGame, async (_msg, client, next) => {
+      if (await this.tryPreReconnect(client)) {
         return; // 进入 pre_reconnect 状态
       }
       return next(); // 正常加入流程
+    });
+
+    this.ctx.middleware(OnRoomFinalize, async (event, _client, next) => {
+      this.clearDisconnectInfoByRoomName(event.room.name);
+      return next();
     });
 
     // 拦截 UPDATE_DECK 消息
@@ -145,6 +150,10 @@ export class Reconnect {
 
   private async registerDisconnect(client: Client, room: Room) {
     const key = this.clientKeyProvider.getClientKey(client);
+    const oldDisconnectInfo = this.disconnectList.get(key);
+    if (oldDisconnectInfo) {
+      this.clearDisconnectInfo(oldDisconnectInfo);
+    }
 
     // 通知房间
     await room.sendChat(
@@ -160,36 +169,38 @@ export class Reconnect {
     this.disconnectList.set(key, {
       key,
       roomName: room.name,
-      clientPos: client.pos,
-      playerName: client.name,
+      roomPos: client.pos,
       disconnectTime: new Date(),
-      oldClient: client,
       timeout,
     });
+
+    let keySet = this.disconnectListByRoomName.get(room.name);
+    if (!keySet) {
+      keySet = new Set<string>();
+      this.disconnectListByRoomName.set(room.name, keySet);
+    }
+    keySet.add(key);
   }
 
-  private async tryPreReconnect(
-    newClient: Client,
-    msg: YGOProCtosJoinGame,
-  ): Promise<boolean> {
+  private async tryPreReconnect(newClient: Client): Promise<boolean> {
     let room: Room | undefined;
-    let oldClient: Client | undefined;
+    let roomPos: number | undefined;
     let reconnectType: ReconnectType | undefined;
     let disconnectInfo: DisconnectInfo | undefined;
 
     // 1. 尝试正常断线重连
-    disconnectInfo = this.findDisconnectInfo(newClient, msg.pass);
+    disconnectInfo = this.findDisconnectInfo(newClient);
     if (disconnectInfo) {
-      // 获取房间
-      const roomManager = this.ctx.get(() => RoomManager);
-      room = roomManager.findByName(disconnectInfo.roomName);
+      room = this.ctx
+        .get(() => RoomManager)
+        .findByName(disconnectInfo.roomName);
       if (!room) {
         // 房间已不存在，清理断线记录
         this.clearDisconnectInfo(disconnectInfo);
         return false;
       }
 
-      oldClient = disconnectInfo.oldClient;
+      roomPos = disconnectInfo.roomPos;
       reconnectType = 'normal';
     }
 
@@ -198,12 +209,17 @@ export class Reconnect {
       const kickTarget = await this.findKickReconnectTarget(newClient);
       if (kickTarget) {
         room = this.getClientRoom(kickTarget)!;
-        oldClient = kickTarget;
+        roomPos = kickTarget.pos;
         reconnectType = 'kick';
       }
     }
 
-    if (!room || !oldClient || !reconnectType) {
+    if (
+      !room ||
+      roomPos === undefined ||
+      !this.getRoomPlayer(room, roomPos) ||
+      !reconnectType
+    ) {
       return false; // 两种模式都不匹配
     }
 
@@ -211,7 +227,7 @@ export class Reconnect {
     await this.sendPreReconnectInfo(
       newClient,
       room,
-      oldClient,
+      roomPos,
       reconnectType,
       disconnectInfo?.key,
     );
@@ -227,8 +243,15 @@ export class Reconnect {
     }
 
     // 验证卡组
-    const isValid = await this.verifyReconnectDeck(client, msg, reconnectType);
+    const isValid = await this.verifyReconnectDeck(client, msg);
     if (!isValid) {
+      const preReconnectRoomPos = client.preReconnectRoomPos;
+
+      if (preReconnectRoomPos === undefined) {
+        await client.sendChat('#{reconnect_failed}', ChatColor.RED);
+        return client.disconnect();
+      }
+
       // 卡组不匹配
       await client.sendChat('#{deck_incorrect_reconnect}', ChatColor.RED);
 
@@ -236,8 +259,8 @@ export class Reconnect {
       // 0xa = NOTREADY with deck error flag
       await client.send(
         new YGOProStocHsPlayerChange().fromPartial({
-          playerPosition: client.pos,
-          playerState: (client.pos << 4) | 0xa,
+          playerPosition: preReconnectRoomPos,
+          playerState: (preReconnectRoomPos << 4) | 0xa,
         }),
       );
 
@@ -263,6 +286,7 @@ export class Reconnect {
       client.preReconnecting = false;
       client.reconnectType = undefined;
       client.preReconnectRoomName = undefined;
+      client.preReconnectRoomPos = undefined;
       client.preReconnectDisconnectKey = undefined;
       return client.disconnect();
     }
@@ -270,82 +294,79 @@ export class Reconnect {
     client.preReconnecting = false;
     client.reconnectType = undefined;
     client.preReconnectRoomName = undefined;
+    const preReconnectRoomPos = client.preReconnectRoomPos;
+    client.preReconnectRoomPos = undefined;
     const preReconnectDisconnectKey = client.preReconnectDisconnectKey;
     client.preReconnectDisconnectKey = undefined;
 
-    if (reconnectType === 'normal') {
-      const disconnectInfo = preReconnectDisconnectKey
-        ? this.disconnectList.get(preReconnectDisconnectKey)
-        : undefined;
-      if (!disconnectInfo) {
-        await client.sendChat('#{reconnect_failed}', ChatColor.RED);
-        return client.disconnect();
-      }
-
-      await this.performReconnect(client, disconnectInfo.oldClient, room);
-
-      // 通知房间
-      await room.sendChat(
-        [PlayerName(client), ' #{reconnect_to_game}'],
-        ChatColor.LIGHTBLUE,
-      );
-
-      // 清理旧客户端
-      disconnectInfo.oldClient.roomName = undefined;
-      disconnectInfo.oldClient.pos = -1;
-      disconnectInfo.oldClient.disconnect();
-
-      // 清理断线记录
-      this.clearDisconnectInfo(disconnectInfo);
-    } else {
-      // kick reconnect
-      const oldClient = room.players[client.pos];
-      if (!oldClient) {
-        await client.sendChat('#{reconnect_failed}', ChatColor.RED);
-        return client.disconnect();
-      }
-
-      await this.performReconnect(client, oldClient, room);
-
-      // 通知房间
-      await room.sendChat(
-        [PlayerName(client), ' #{reconnect_to_game}'],
-        ChatColor.LIGHTBLUE,
-      );
-
-      // 清理旧客户端
-      oldClient.roomName = undefined;
-      oldClient.pos = -1;
-
-      // kick reconnect 的区别：通知旧客户端被踢（不 await）
-      oldClient
-        .sendChat('#{reconnect_kicked}', ChatColor.RED)
-        .then(() => oldClient.disconnect());
+    if (preReconnectRoomPos === undefined) {
+      await client.sendChat('#{reconnect_failed}', ChatColor.RED);
+      return client.disconnect();
     }
+
+    const roomPlayer = this.getRoomPlayer(room, preReconnectRoomPos);
+    if (!roomPlayer) {
+      await client.sendChat('#{reconnect_failed}', ChatColor.RED);
+      return client.disconnect();
+    }
+
+    if (!(await this.performReconnect(client, room, preReconnectRoomPos))) {
+      await client.sendChat('#{reconnect_failed}', ChatColor.RED);
+      return client.disconnect();
+    }
+
+    // 通知房间
+    await room.sendChat(
+      [PlayerName(client), ' #{reconnect_to_game}'],
+      ChatColor.LIGHTBLUE,
+    );
+
+    // 清理旧客户端
+    roomPlayer.roomName = undefined;
+    roomPlayer.pos = -1;
+
+    if (preReconnectDisconnectKey) {
+      const disconnectInfo = this.disconnectList.get(preReconnectDisconnectKey);
+      if (disconnectInfo) {
+        this.clearDisconnectInfo(disconnectInfo);
+      }
+    }
+
+    if (reconnectType === 'kick') {
+      roomPlayer
+        .sendChat('#{reconnect_kicked}', ChatColor.RED)
+        .then(() => roomPlayer.disconnect());
+      return;
+    }
+
+    roomPlayer.disconnect();
   }
 
   private async sendPreReconnectInfo(
     client: Client,
     room: Room,
-    oldClient: Client,
+    roomPos: number,
     reconnectType: ReconnectType,
     disconnectKey?: string,
   ) {
+    const roomPlayer = this.getRoomPlayer(room, roomPos);
+    if (!roomPlayer) {
+      return;
+    }
+
     // 设置 pre_reconnecting 状态
     client.preReconnecting = true;
     client.reconnectType = reconnectType;
     client.preReconnectRoomName = room.name; // 保存目标房间名
+    client.preReconnectRoomPos = roomPos;
     client.preReconnectDisconnectKey = disconnectKey;
-    client.pos = oldClient.pos;
 
     // 发送房间信息
     await client.sendChat('#{pre_reconnecting_to_room}', ChatColor.BABYBLUE);
     await client.send(room.joinGameMessage);
 
     // 发送 TYPE_CHANGE
-    const typeChangePos = oldClient.isHost
-      ? oldClient.pos | 0x10
-      : oldClient.pos;
+    const typeChangePos = roomPlayer.isHost ? roomPos | 0x10 : roomPos;
     await client.send(
       new YGOProStocTypeChange().fromPartial({
         type: typeChangePos,
@@ -358,7 +379,10 @@ export class Reconnect {
     for (const player of room.players) {
       if (player) {
         const packet = player.prepareEnterPacket();
-        packet.name = hidePlayerNameService.getHidPlayerName(player, oldClient);
+        packet.name = hidePlayerNameService.getHidPlayerName(
+          player,
+          roomPlayer,
+        );
         await client.send(packet);
       }
     }
@@ -367,62 +391,49 @@ export class Reconnect {
   private async verifyReconnectDeck(
     client: Client,
     msg: YGOProCtosUpdateDeck,
-    reconnectType: ReconnectType,
   ): Promise<boolean> {
-    if (reconnectType === 'normal') {
-      // 正常重连：验证 disconnectInfo 中的 startDeck
-      const key = client.preReconnectDisconnectKey;
-      const disconnectInfo = key ? this.disconnectList.get(key) : undefined;
-      if (!disconnectInfo) {
-        this.logger.warn(
-          `verifyReconnectDeck(normal): disconnectInfo not found for client ip=${client.ip} name_vpass=${client.name_vpass} key=${key}`,
-        );
-        return false;
-      }
-
-      const oldStartDeck = disconnectInfo.oldClient.startDeck;
-      if (!oldStartDeck) {
-        this.logger.warn(
-          `verifyReconnectDeck(normal): oldClient has no startDeck, client ip=${client.ip} name_vpass=${client.name_vpass} oldClient ip=${disconnectInfo.oldClient.ip} name_vpass=${disconnectInfo.oldClient.name_vpass}`,
-        );
-        return false;
-      }
-
-      // 比较卡组
-      return isUpdateDeckPayloadEqual(msg.deck, oldStartDeck);
-    } else {
-      // 踢人重连：验证房间内玩家的 startDeck
-      const roomManager = this.ctx.get(() => RoomManager);
-      const room = client.preReconnectRoomName
-        ? roomManager.findByName(client.preReconnectRoomName)
-        : undefined;
-      if (!room) {
-        this.logger.warn(
-          `verifyReconnectDeck(kick): room not found for client ip=${client.ip} name_vpass=${client.name_vpass} roomName=${client.preReconnectRoomName}`,
-        );
-        return false;
-      }
-
-      const oldClient = room.players[client.pos];
-      if (!oldClient?.startDeck) {
-        this.logger.warn(
-          `verifyReconnectDeck(kick): oldClient has no startDeck, client ip=${client.ip} name_vpass=${client.name_vpass} pos=${client.pos} roomName=${room.name} oldClient ip=${oldClient?.ip} name_vpass=${oldClient?.name_vpass}`,
-        );
-        return false;
-      }
-
-      // 比较卡组
-      return isUpdateDeckPayloadEqual(msg.deck, oldClient.startDeck);
+    const roomManager = this.ctx.get(() => RoomManager);
+    const room = client.preReconnectRoomName
+      ? roomManager.findByName(client.preReconnectRoomName)
+      : undefined;
+    const roomPos = client.preReconnectRoomPos;
+    if (!room) {
+      this.logger.warn(
+        `verifyReconnectDeck: room not found for client ip=${client.ip} name_vpass=${client.name_vpass} roomName=${client.preReconnectRoomName}`,
+      );
+      return false;
     }
+
+    if (roomPos === undefined) {
+      this.logger.warn(
+        `verifyReconnectDeck: roomPos not found for client ip=${client.ip} name_vpass=${client.name_vpass} roomName=${room.name}`,
+      );
+      return false;
+    }
+
+    const roomPlayer = this.getRoomPlayer(room, roomPos);
+    if (!roomPlayer?.startDeck) {
+      this.logger.warn(
+        `verifyReconnectDeck: room player has no startDeck, client ip=${client.ip} name_vpass=${client.name_vpass} pos=${roomPos} roomName=${room.name}`,
+      );
+      return false;
+    }
+
+    return isUpdateDeckPayloadEqual(msg.deck, roomPlayer.startDeck);
   }
 
   private async performReconnect(
     newClient: Client,
-    oldClient: Client,
     room: Room,
-  ) {
+    roomPos: number,
+  ): Promise<boolean> {
+    const roomPlayer = this.getRoomPlayer(room, roomPos);
+    if (!roomPlayer) {
+      return false;
+    }
+
     // 1. 数据迁移（@ClientRoomField）
-    this.importClientData(newClient, oldClient, room);
+    this.importClientData(newClient, roomPlayer, room, roomPos);
 
     // 2. 通知客户端正在重连
     await newClient.sendChat('#{reconnecting_to_room}', ChatColor.BABYBLUE);
@@ -445,6 +456,8 @@ export class Reconnect {
         // Begin 或 End 阶段不应该重连
         break;
     }
+
+    return true;
   }
 
   private async performReconnectFinger(newClient: Client, room: Room) {
@@ -505,35 +518,30 @@ export class Reconnect {
     );
   }
 
-  private importClientData(newClient: Client, oldClient: Client, room: Room) {
+  private importClientData(
+    newClient: Client,
+    roomPlayer: Client,
+    room: Room,
+    roomPos: number,
+  ) {
     // 获取所有 @ClientRoomField 装饰的字段
-    const fields = getSpecificFields('clientRoomField', oldClient);
+    const fields = getSpecificFields('clientRoomField', roomPlayer);
 
     // 迁移数据
     for (const { key } of fields) {
-      (newClient as any)[key] = (oldClient as any)[key];
+      (newClient as any)[key] = (roomPlayer as any)[key];
     }
 
     // 替换 room 中的引用
-    this.replaceClientReferences(room, oldClient, newClient);
+    this.replaceClientReferences(room, roomPos, newClient);
   }
 
   private replaceClientReferences(
     room: Room,
-    oldClient: Client,
+    roomPos: number,
     newClient: Client,
   ) {
-    // 替换 players 数组中的引用
-    const playerIndex = room.players.indexOf(oldClient);
-    if (playerIndex !== -1) {
-      room.players[playerIndex] = newClient;
-    }
-
-    // 替换 watchers Set 中的引用（虽然重连只针对玩家，但以防万一）
-    if (room.watchers.has(oldClient)) {
-      room.watchers.delete(oldClient);
-      room.watchers.add(newClient);
-    }
+    room.players[roomPos] = newClient;
   }
 
   private getClientRoom(client: Client): Room | undefined {
@@ -550,18 +558,51 @@ export class Reconnect {
       return;
     }
 
-    // 先清理断线记录，避免重复处理
-    this.disconnectList.delete(key);
+    this.clearDisconnectInfo(disconnectInfo);
 
     // 然后重新 dispatch 带 bySystem 的 Disconnect 事件
     const msg = new YGOProCtosDisconnect();
     msg.bySystem = true; // 标记为系统断线，防止再次进入重连逻辑
-    this.ctx.dispatch(msg, disconnectInfo.oldClient);
+    const room = this.ctx
+      .get(() => RoomManager)
+      .findByName(disconnectInfo.roomName);
+    const roomPlayer = room
+      ? this.getRoomPlayer(room, disconnectInfo.roomPos)
+      : undefined;
+    if (roomPlayer) {
+      this.ctx.dispatch(msg, roomPlayer);
+    }
   }
 
   private clearDisconnectInfo(disconnectInfo: DisconnectInfo) {
     clearTimeout(disconnectInfo.timeout);
     this.disconnectList.delete(disconnectInfo.key);
+
+    const keySet = this.disconnectListByRoomName.get(disconnectInfo.roomName);
+    keySet?.delete(disconnectInfo.key);
+    if (keySet?.size === 0) {
+      this.disconnectListByRoomName.delete(disconnectInfo.roomName);
+    }
+  }
+
+  private clearDisconnectInfoByRoomName(roomName: string) {
+    const keySet = this.disconnectListByRoomName.get(roomName);
+    if (!keySet) {
+      return;
+    }
+
+    for (const key of [...keySet]) {
+      const disconnectInfo = this.disconnectList.get(key);
+      if (!disconnectInfo) {
+        keySet.delete(key);
+        continue;
+      }
+      this.clearDisconnectInfo(disconnectInfo);
+    }
+
+    if (keySet.size === 0) {
+      this.disconnectListByRoomName.delete(roomName);
+    }
   }
 
   private async findKickReconnectTarget(
@@ -604,27 +645,26 @@ export class Reconnect {
     return undefined;
   }
 
-  private findDisconnectInfo(
-    newClient: Client,
-    roomName: string,
-  ): DisconnectInfo | undefined {
-    const roomManager = this.ctx.get(() => RoomManager);
-    for (const disconnectInfo of this.disconnectList.values()) {
-      if (disconnectInfo.roomName !== roomName) {
-        continue;
-      }
-      const room = roomManager.findByName(disconnectInfo.roomName);
-      if (!room) {
-        this.clearDisconnectInfo(disconnectInfo);
-        continue;
-      }
-      const key = this.clientKeyProvider.getClientKey(newClient);
-      if (key !== disconnectInfo.key) {
-        continue;
-      }
-      return disconnectInfo;
+  private findDisconnectInfo(newClient: Client): DisconnectInfo | undefined {
+    const key = this.clientKeyProvider.getClientKey(newClient);
+    const disconnectInfo = this.disconnectList.get(key);
+    if (!disconnectInfo) {
+      return undefined;
     }
-    return undefined;
+
+    const room = this.ctx
+      .get(() => RoomManager)
+      .findByName(disconnectInfo.roomName);
+    if (!room || !this.getRoomPlayer(room, disconnectInfo.roomPos)) {
+      this.clearDisconnectInfo(disconnectInfo);
+      return undefined;
+    }
+
+    return disconnectInfo;
+  }
+
+  private getRoomPlayer(room: Room, roomPos: number): Client | undefined {
+    return room.players[roomPos];
   }
 }
 
