@@ -243,16 +243,35 @@ export class Reconnect {
       return client.disconnect();
     }
 
-    // 验证卡组
-    const isValid = await this.verifyReconnectDeck(client, msg);
-    if (!isValid) {
-      const preReconnectRoomPos = client.preReconnectRoomPos;
+    const failReconnect = async () => {
+      client.preReconnecting = false;
+      client.reconnectType = undefined;
+      client.preReconnectRoomName = undefined;
+      client.preReconnectRoomPos = undefined;
+      client.preReconnectDisconnectKey = undefined;
+      await client.sendChat('#{reconnect_failed}', ChatColor.RED);
+      return client.disconnect();
+    };
 
-      if (preReconnectRoomPos === undefined) {
-        await client.sendChat('#{reconnect_failed}', ChatColor.RED);
-        return client.disconnect();
-      }
+    const roomManager = this.ctx.get(() => RoomManager);
+    const room = client.preReconnectRoomName
+      ? roomManager.findByName(client.preReconnectRoomName)
+      : undefined;
+    const preReconnectRoomPos = client.preReconnectRoomPos;
+    if (!room || preReconnectRoomPos === undefined) {
+      return failReconnect();
+    }
 
+    const roomPlayer = this.getRoomPlayer(room, preReconnectRoomPos);
+    if (!roomPlayer) {
+      return failReconnect();
+    }
+
+    if (!roomPlayer.startDeck) {
+      return failReconnect();
+    }
+
+    if (!isUpdateDeckPayloadEqual(msg.deck, roomPlayer.startDeck)) {
       // 卡组不匹配
       await client.sendChat('#{deck_incorrect_reconnect}', ChatColor.RED);
 
@@ -275,41 +294,12 @@ export class Reconnect {
     }
 
     // 卡组验证通过，执行真正的重连
-    // 获取房间（可能房间已不存在）
-    const roomManager = this.ctx.get(() => RoomManager);
-    const room = client.preReconnectRoomName
-      ? roomManager.findByName(client.preReconnectRoomName)
-      : undefined;
-
-    if (!room) {
-      // 房间已不存在
-      await client.sendChat('#{reconnect_failed}', ChatColor.RED);
-      client.preReconnecting = false;
-      client.reconnectType = undefined;
-      client.preReconnectRoomName = undefined;
-      client.preReconnectRoomPos = undefined;
-      client.preReconnectDisconnectKey = undefined;
-      return client.disconnect();
-    }
-
     client.preReconnecting = false;
     client.reconnectType = undefined;
     client.preReconnectRoomName = undefined;
-    const preReconnectRoomPos = client.preReconnectRoomPos;
     client.preReconnectRoomPos = undefined;
     const preReconnectDisconnectKey = client.preReconnectDisconnectKey;
     client.preReconnectDisconnectKey = undefined;
-
-    if (preReconnectRoomPos === undefined) {
-      await client.sendChat('#{reconnect_failed}', ChatColor.RED);
-      return client.disconnect();
-    }
-
-    const roomPlayer = this.getRoomPlayer(room, preReconnectRoomPos);
-    if (!roomPlayer) {
-      await client.sendChat('#{reconnect_failed}', ChatColor.RED);
-      return client.disconnect();
-    }
 
     if (!(await this.performReconnect(client, room, preReconnectRoomPos))) {
       await client.sendChat('#{reconnect_failed}', ChatColor.RED);
@@ -387,40 +377,6 @@ export class Reconnect {
         await client.send(packet);
       }
     }
-  }
-
-  private async verifyReconnectDeck(
-    client: Client,
-    msg: YGOProCtosUpdateDeck,
-  ): Promise<boolean> {
-    const roomManager = this.ctx.get(() => RoomManager);
-    const room = client.preReconnectRoomName
-      ? roomManager.findByName(client.preReconnectRoomName)
-      : undefined;
-    const roomPos = client.preReconnectRoomPos;
-    if (!room) {
-      this.logger.warn(
-        `verifyReconnectDeck: room not found for client ip=${client.ip} name_vpass=${client.name_vpass} roomName=${client.preReconnectRoomName}`,
-      );
-      return false;
-    }
-
-    if (roomPos === undefined) {
-      this.logger.warn(
-        `verifyReconnectDeck: roomPos not found for client ip=${client.ip} name_vpass=${client.name_vpass} roomName=${room.name}`,
-      );
-      return false;
-    }
-
-    const roomPlayer = this.getRoomPlayer(room, roomPos);
-    if (!roomPlayer?.startDeck) {
-      this.logger.warn(
-        `verifyReconnectDeck: room player has no startDeck, client ip=${client.ip} name_vpass=${client.name_vpass} pos=${roomPos} roomName=${room.name}`,
-      );
-      return false;
-    }
-
-    return isUpdateDeckPayloadEqual(msg.deck, roomPlayer.startDeck);
   }
 
   private async performReconnect(
