@@ -108,7 +108,11 @@ import { OnRoomSelectTp } from './room-event/on-room-select-tp';
 import { RoomCheckDeck } from './room-event/room-check-deck';
 import cryptoRandomString from 'crypto-random-string';
 import { RoomCurrentFieldInfo, RoomInfo } from './room-info';
-import { KoishiFragment, readCardWithReader } from '../utility';
+import {
+  calculateOcgcoreDeck,
+  KoishiFragment,
+  readCardWithReader,
+} from '../utility';
 
 declare module 'ygopro-msg-encode' {
   export interface HostInfo {
@@ -1350,6 +1354,7 @@ export class Room {
     );
 
     const cardStorage = await this.resourceLoader.getCardStorage();
+    const cardReader = await this.getCardReader();
     const ocgcoreWasmBinary = await this.resourceLoader.getOcgcoreWasmBinary();
 
     try {
@@ -1361,7 +1366,9 @@ export class Room {
         cardStorage,
         ocgcoreWasmBinary,
         registry,
-        decks: duelRecord.toSwappedPlayers().map((p) => p.deck),
+        decks: duelRecord
+          .toSwappedPlayers()
+          .map((p) => calculateOcgcoreDeck(p.deck, this.hostinfo, cardReader)),
       });
       ocgcore.message$.subscribe((msg) => {
         this.logger.info(

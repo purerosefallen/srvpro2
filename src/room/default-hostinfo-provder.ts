@@ -249,6 +249,9 @@ export class DefaultHostInfoProvider {
       .registerRoomMode('(NOSHUFFLE|NS)', {
         no_shuffle_deck: 1,
       })
+      .registerRoomMode('(30EX|SIDEINS)', {
+        sideins: 1,
+      })
       .registerRoomMode('(IGPRIORITY|PR)', {
         duel_rule: 4,
       })
