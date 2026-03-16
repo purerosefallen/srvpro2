@@ -4,7 +4,12 @@ import { searchYGOProResource } from 'koishipro-core.js';
 import type { CardDataEntry } from 'ygopro-cdb-encode';
 import { YGOProCdb } from 'ygopro-cdb-encode';
 import initSqlJs from 'sql.js';
-import { DefineWorker, TransportType, WorkerMethod, toShared } from 'yuzuthread';
+import {
+  DefineWorker,
+  TransportType,
+  WorkerMethod,
+  toShared,
+} from 'yuzuthread';
 import { CardStorage } from './card-storage';
 
 const isFileNotFoundError = (error: unknown): error is NodeJS.ErrnoException =>
@@ -51,18 +56,19 @@ export class CardLoadWorker {
     let dbCount = 0;
     const failedFiles: string[] = [];
     const sha512 = createHash('sha512');
+    const openCdbs: YGOProCdb[] = [];
 
-    for await (const file of searchYGOProResource(...this.ygoproPaths)) {
-      if (!file.path.endsWith('.cdb')) {
-        continue;
-      }
+    try {
+      for await (const file of searchYGOProResource(...this.ygoproPaths)) {
+        if (!file.path.endsWith('.cdb')) {
+          continue;
+        }
 
-      try {
-        const cdbBody = await file.read();
-        const currentDb = new SQL.Database(cdbBody);
         try {
-          const currentCdb = new YGOProCdb(currentDb).noTexts();
-          for (const card of currentCdb.step()) {
+          const cdbBody = await file.read();
+          const cdb = new YGOProCdb(new SQL.Database(cdbBody)).noTexts();
+          openCdbs.push(cdb);
+          for (const card of cdb.step()) {
             const cardId = (card.code ?? 0) >>> 0;
             if (cardId === 0 || seen.has(cardId)) {
               continue;
@@ -73,12 +79,21 @@ export class CardLoadWorker {
           ++dbCount;
           hashWithSizePrefixText(sha512, file.path);
           hashWithSizePrefix(sha512, Buffer.from(cdbBody));
-        } finally {
-          currentDb.close();
+        } catch (error) {
+          failedFiles.push(`${file.path}: ${error}`);
         }
-      } catch (error) {
-        failedFiles.push(`${file.path}: ${error}`);
-        continue;
+      }
+
+      for (const cdb of openCdbs) {
+        cdb.resolveRuleCode(cards);
+      }
+    } finally {
+      for (const cdb of openCdbs) {
+        try {
+          cdb.finalize();
+        } catch {
+          // ignore close errors
+        }
       }
     }
 

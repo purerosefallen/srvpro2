@@ -131,8 +131,8 @@ export const checkDeck = (
       }
     }
 
-    // Count cards (use alias if available)
-    const countCode = cardData.alias || code;
+    // Count cards (use ruleCode/alias if available)
+    const countCode = cardData.ruleCode || cardData.alias || code;
     const count = (cardCount.get(countCode) || 0) + 1;
     cardCount.set(countCode, count);
 
