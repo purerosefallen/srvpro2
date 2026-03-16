@@ -68,6 +68,7 @@ export class ClientHandler {
         const [name, vpass] = msg.name.split('$');
         client.name = name;
         client.vpass = vpass || '';
+        client.name_vpass = msg.name;
         return next();
       })
       .middleware(YGOProCtosJoinGame, async (msg, client, next) => {

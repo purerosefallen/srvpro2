@@ -104,6 +104,7 @@ hostinfoLflist: 0
 hostinfoRule: 0
 hostinfoMode: 0
 hostinfoDuelRule: 5
+hostinfoSideins: 0
 hostinfoNoCheckDeck: 0
 hostinfoNoShuffleDeck: 0
 hostinfoStartLp: 8000
