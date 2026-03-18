@@ -88,7 +88,7 @@ import { DuelRecord } from './duel-record';
 import { generateSeed } from '../utility/generate-seed';
 import { OnRoomDuelStart } from './room-event/on-room-duel-start';
 import { OcgcoreWorker } from '../ocgcore-worker/ocgcore-worker';
-import { initWorker } from 'yuzuthread';
+import { initWorker, type WorkerInstance } from 'yuzuthread';
 import {
   getZoneQueryFlag,
   splitRefreshLocations,
@@ -121,6 +121,9 @@ declare module 'ygopro-msg-encode' {
 }
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
+const DISPOSE_OCGCORE_TIMEOUT_MS = 1 * 60 * 1000;
+
+type RoomOcgcoreWorker = WorkerInstance<OcgcoreWorker>;
 
 export type RoomFinalizor = (self: Room) => Awaitable<any>;
 
@@ -247,19 +250,23 @@ export class Room {
       return;
     }
     this.finalizing = true;
-    this.resetResponseState();
-    this.logger.debug(
-      {
-        playerCount: this.playingPlayers.length,
-        watcherCount: this.watchers.size,
-      },
-      'Finalizing room',
-    );
-    await this.ctx.dispatch(new OnRoomFinalize(this), this.allPlayers[0]);
-    await this.cleanPlayers(sendReplays);
-    while (this.finalizors.length) {
-      const finalizor = this.finalizors.pop()!;
-      await finalizor(this);
+    try {
+      this.resetResponseState();
+      this.logger.debug(
+        {
+          playerCount: this.playingPlayers.length,
+          watcherCount: this.watchers.size,
+        },
+        'Finalizing room',
+      );
+      await this.ctx.dispatch(new OnRoomFinalize(this), this.allPlayers[0]);
+      await this.cleanPlayers(sendReplays);
+      while (this.finalizors.length) {
+        const finalizor = this.finalizors.pop()!;
+        await finalizor(this);
+      }
+    } finally {
+      this.cleanupAllOcgcoreRegistrySubscriptions();
     }
   }
 
@@ -519,14 +526,63 @@ export class Room {
     return this.duelRecords[this.duelRecords.length - 1];
   }
 
+  private disposingOcgcores = new WeakSet<RoomOcgcoreWorker>();
+  private ocgcoreRegistrySubscriptionSet = new Set<Subscription>();
+
+  private cleanupOcgcoreRegistrySubscription(ocgcore: RoomOcgcoreWorker) {
+    const subscription = this.ocgcoreRegistrySubscriptions.get(ocgcore);
+    if (!subscription) {
+      return;
+    }
+    this.ocgcoreRegistrySubscriptions.delete(ocgcore);
+    this.ocgcoreRegistrySubscriptionSet.delete(subscription);
+    subscription.unsubscribe();
+  }
+
+  private cleanupAllOcgcoreRegistrySubscriptions() {
+    for (const subscription of this.ocgcoreRegistrySubscriptionSet) {
+      subscription.unsubscribe();
+    }
+    this.ocgcoreRegistrySubscriptionSet.clear();
+  }
+
   private disposeOcgcore(ocgcore = this.ocgcore) {
     try {
-      void ocgcore?.dispose().catch((e) => {
-        this.logger.warn({ error: e }, 'Error disposing ocgcore');
-      });
+      if (!ocgcore) {
+        return;
+      }
       if (ocgcore === this.ocgcore) {
         this.ocgcore = undefined;
       }
+      if (this.disposingOcgcores.has(ocgcore)) {
+        return;
+      }
+      this.disposingOcgcores.add(ocgcore);
+
+      let finished = false;
+      const timeout = setTimeout(() => {
+        if (finished) {
+          return;
+        }
+        this.logger.warn(
+          { timeout: DISPOSE_OCGCORE_TIMEOUT_MS },
+          'OCGCore dispose timed out, forcing finalize',
+        );
+        this.cleanupOcgcoreRegistrySubscription(ocgcore);
+        void ocgcore.finalize().catch((e) => {
+          this.logger.warn({ error: e }, 'Error force finalizing ocgcore');
+        });
+      }, DISPOSE_OCGCORE_TIMEOUT_MS);
+
+      void ocgcore
+        .dispose()
+        .catch((e) => {
+          this.logger.warn({ error: e }, 'Error disposing ocgcore');
+        })
+        .finally(() => {
+          finished = true;
+          clearTimeout(timeout);
+        });
     } catch {}
   }
 
@@ -1176,9 +1232,9 @@ export class Room {
     return true;
   }
 
-  ocgcore?: OcgcoreWorker;
+  ocgcore?: RoomOcgcoreWorker;
   private ocgcoreRegistrySubscriptions = new WeakMap<
-    OcgcoreWorker,
+    RoomOcgcoreWorker,
     Subscription
   >();
   private registry: Record<string, string> = {};
@@ -1391,10 +1447,10 @@ export class Room {
         Object.assign(this.registry, registry);
       });
       this.ocgcoreRegistrySubscriptions.set(ocgcore, registrySubscription);
+      this.ocgcoreRegistrySubscriptionSet.add(registrySubscription);
       this.ocgcore = ocgcore;
       if (oldOcgcore) {
-        this.ocgcoreRegistrySubscriptions.get(oldOcgcore)?.unsubscribe();
-        this.ocgcoreRegistrySubscriptions.delete(oldOcgcore);
+        this.cleanupOcgcoreRegistrySubscription(oldOcgcore);
         this.disposeOcgcore(oldOcgcore);
       }
       return true;
