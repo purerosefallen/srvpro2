@@ -40,6 +40,28 @@ const { OcgcoreScriptConstants } = _OcgcoreConstants;
 const OCGCORE_MESSAGE_REPLAY_BUFFER_SIZE = 128;
 const ADVANCE_PROCESS_TIMEOUT_MS = 1 * 60 * 1000;
 
+export class OcgcoreProcessTimeoutError extends Error {
+  readonly isOcgcoreProcessTimeoutError = true;
+
+  constructor(timeoutMs = ADVANCE_PROCESS_TIMEOUT_MS) {
+    super(`ocgcore process timed out after ${timeoutMs}ms`);
+    this.name = 'OcgcoreProcessTimeoutError';
+  }
+
+  static is(error: unknown): error is OcgcoreProcessTimeoutError {
+    if (error instanceof OcgcoreProcessTimeoutError) {
+      return true;
+    }
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+    return (
+      'isOcgcoreProcessTimeoutError' in error ||
+      (error as { name?: unknown }).name === 'OcgcoreProcessTimeoutError'
+    );
+  }
+}
+
 // Serializable types for transport (noParse mode: only send binary data)
 interface SerializableProcessResult {
   length: number;
@@ -411,11 +433,7 @@ export class OcgcoreWorker {
         this.process(),
         new Promise<OcgcoreProcessResultWithEncodeError>((_, reject) => {
           timeout = setTimeout(() => {
-            reject(
-              new Error(
-                `ocgcore process timed out after ${ADVANCE_PROCESS_TIMEOUT_MS}ms`,
-              ),
-            );
+            reject(new OcgcoreProcessTimeoutError());
           }, ADVANCE_PROCESS_TIMEOUT_MS);
         }),
       ]);

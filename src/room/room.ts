@@ -87,7 +87,10 @@ import { checkDeck, checkChangeSide } from '../utility/check-deck';
 import { DuelRecord } from './duel-record';
 import { generateSeed } from '../utility/generate-seed';
 import { OnRoomDuelStart } from './room-event/on-room-duel-start';
-import { OcgcoreWorker } from '../ocgcore-worker/ocgcore-worker';
+import {
+  OcgcoreProcessTimeoutError,
+  OcgcoreWorker,
+} from '../ocgcore-worker/ocgcore-worker';
 import { initWorker, type WorkerInstance } from 'yuzuthread';
 import {
   getZoneQueryFlag,
@@ -126,6 +129,11 @@ const DISPOSE_OCGCORE_TIMEOUT_MS = 1 * 60 * 1000;
 type RoomOcgcoreWorker = WorkerInstance<OcgcoreWorker>;
 
 export type RoomFinalizor = (self: Room) => Awaitable<any>;
+
+type RoomWinOptions = {
+  forceWinMatch?: number;
+  killOcgcore?: boolean;
+};
 
 export class Room {
   constructor(
@@ -527,6 +535,7 @@ export class Room {
   }
 
   private disposingOcgcores = new WeakSet<RoomOcgcoreWorker>();
+  private killedOcgcores = new WeakSet<RoomOcgcoreWorker>();
   private ocgcoreRegistrySubscriptionSet = new Set<Subscription>();
 
   private cleanupOcgcoreRegistrySubscription(ocgcore: RoomOcgcoreWorker) {
@@ -546,13 +555,25 @@ export class Room {
     this.ocgcoreRegistrySubscriptionSet.clear();
   }
 
-  private disposeOcgcore(ocgcore = this.ocgcore) {
+  private disposeOcgcore(ocgcore = this.ocgcore, kill = false) {
     try {
       if (!ocgcore) {
         return;
       }
       if (ocgcore === this.ocgcore) {
         this.ocgcore = undefined;
+      }
+      if (kill) {
+        if (this.killedOcgcores.has(ocgcore)) {
+          return;
+        }
+        this.disposingOcgcores.add(ocgcore);
+        this.killedOcgcores.add(ocgcore);
+        this.cleanupOcgcoreRegistrySubscription(ocgcore);
+        void ocgcore.finalize().catch((e) => {
+          this.logger.warn({ error: e }, 'Error force finalizing ocgcore');
+        });
+        return;
       }
       if (this.disposingOcgcores.has(ocgcore)) {
         return;
@@ -568,10 +589,7 @@ export class Room {
           { timeout: DISPOSE_OCGCORE_TIMEOUT_MS },
           'OCGCore dispose timed out, forcing finalize',
         );
-        this.cleanupOcgcoreRegistrySubscription(ocgcore);
-        void ocgcore.finalize().catch((e) => {
-          this.logger.warn({ error: e }, 'Error force finalizing ocgcore');
-        });
+        this.disposeOcgcore(ocgcore, true);
       }, DISPOSE_OCGCORE_TIMEOUT_MS);
 
       void ocgcore
@@ -586,10 +604,10 @@ export class Room {
     } catch {}
   }
 
-  async win(winMsg: Partial<YGOProMsgWin>, forceWinMatch?: number) {
+  async win(winMsg: Partial<YGOProMsgWin>, options: RoomWinOptions = {}) {
+    const { forceWinMatch, killOcgcore = false } = options;
     this.resetResponseState();
-    this.disposeOcgcore();
-    this.ocgcore = undefined;
+    this.disposeOcgcore(this.ocgcore, killOcgcore);
     const wasSwapped = this.isPosSwapped;
     if (this.duelStage === DuelStage.Siding) {
       await Promise.all(
@@ -696,7 +714,7 @@ export class Room {
     } else {
       await this.win(
         { player: 1 - this.getIngameDuelPos(client), type: 0x4 },
-        9,
+        { forceWinMatch: 9 },
       );
     }
     if (client.isHost) {
@@ -1450,8 +1468,7 @@ export class Room {
       this.ocgcoreRegistrySubscriptionSet.add(registrySubscription);
       this.ocgcore = ocgcore;
       if (oldOcgcore) {
-        this.cleanupOcgcoreRegistrySubscription(oldOcgcore);
-        this.disposeOcgcore(oldOcgcore);
+        this.disposeOcgcore(oldOcgcore, true);
       }
       return true;
     } catch (e) {
@@ -1952,13 +1969,16 @@ export class Room {
           continue;
         }
         if (handled instanceof YGOProMsgWin) {
-          return this.win(handled, this.matchKilled ? 1 : undefined);
+          return this.win(handled, {
+            forceWinMatch: this.matchKilled ? 1 : undefined,
+          });
         }
         await this.routeGameMsg(handled);
       }
     } catch (e) {
+      const killOcgcore = OcgcoreProcessTimeoutError.is(e);
       this.logger.warn(
-        { error: e, roomName: this.name },
+        { error: e, roomName: this.name, killOcgcore },
         'Error while advancing ocgcore',
       );
       const drawGame = new YGOProMsgWin().fromPartial({
@@ -1966,7 +1986,7 @@ export class Room {
         player: 2,
       });
       await this.sendChat('#{draw_due_to_error}', ChatColor.RED);
-      return this.win(drawGame);
+      return this.win(drawGame, { killOcgcore });
     }
   }
 

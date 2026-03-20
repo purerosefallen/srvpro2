@@ -115,7 +115,7 @@ export class RoomDeathService {
           player: room.getIngameDuelPosByDuelPos(winner),
           type: DEATH_WIN_REASON,
         },
-        -1,
+        { forceWinMatch: -1 },
       );
       return true;
     }
