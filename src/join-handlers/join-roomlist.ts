@@ -2,7 +2,7 @@ import { YGOProCtosJoinGame } from 'ygopro-msg-encode';
 import { Context } from '../app';
 import { Client } from '../client';
 import { MenuEntry, MenuManager } from '../feats';
-import { DuelStage, RoomManager } from '../room';
+import { DuelStage, Room, RoomManager } from '../room';
 
 export class JoinRoomlist {
   private logger = this.ctx.createLogger(this.constructor.name);
@@ -27,27 +27,30 @@ export class JoinRoomlist {
     });
   }
 
+  private isRoomJoinable(room: Room | undefined) {
+    return (
+      room &&
+      (room.native || (room.duelStage !== DuelStage.Begin && !room.windbot)) &&
+      !room.name.includes('$') &&
+      !(room.duelStage !== DuelStage.Begin && room.hostinfo?.no_watch)
+    );
+  }
+
   private async openRoomListMenu(client: Client) {
     await this.menuManager.launchMenu(client, async () => {
       const roomNames = this.roomManager
         .allRooms()
-        .filter(
-          (room) =>
-            (room.native ||
-              (room.duelStage !== DuelStage.Begin && !room.windbot)) &&
-            !room.name.includes('$') &&
-            !(room.duelStage !== DuelStage.Begin && room.hostinfo?.no_watch),
-        )
+        .filter((room) => this.isRoomJoinable(room))
         .map((room) => room.name);
 
       const menu: MenuEntry[] = roomNames.map((roomName) => ({
         title: roomName,
         callback: async (menuClient) => {
           const room = this.roomManager.findByName(roomName);
-          if (!room || !room.native) {
+          if (!this.isRoomJoinable(room)) {
             this.logger.debug(
               { roomName },
-              'Roomlist target room no longer exists',
+              'Roomlist target room no longer exists or is not joinable',
             );
             await this.openRoomListMenu(menuClient);
             return;
