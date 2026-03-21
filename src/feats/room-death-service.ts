@@ -65,7 +65,7 @@ export class RoomDeathService {
             : '#{death_finish_part1}#{death_finish_part2}';
           await room.sendChat(finishMessage, ChatColor.BABYBLUE);
           await room.win({
-            player: room.getIngameDuelPosByDuelPos(winner),
+            player: winner,
             type: DEATH_WIN_REASON,
           });
           return;
@@ -112,7 +112,7 @@ export class RoomDeathService {
       await room.sendChat(finishMessage, ChatColor.BABYBLUE);
       await room.win(
         {
-          player: room.getIngameDuelPosByDuelPos(winner),
+          player: winner,
           type: DEATH_WIN_REASON,
         },
         { forceWinMatch: -1 },
