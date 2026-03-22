@@ -55,6 +55,12 @@ declare module '../../room' {
   }
 }
 
+declare module '../../utility/ygopro-ctos-disconnect' {
+  interface YGOProCtosDisconnect {
+    byReconnectTimeout?: boolean;
+  }
+}
+
 export class Reconnect {
   private disconnectList = new Map<string, DisconnectInfo>();
   private disconnectListByRoomName = new Map<string, Set<string>>();
@@ -92,8 +98,8 @@ export class Reconnect {
 
     // 拦截 DISCONNECT 消息
     this.ctx.middleware(YGOProCtosDisconnect, async (msg, client, next) => {
-      // 如果是系统断线（如被踢），不允许重连
-      if (msg.bySystem) {
+      // 如果是系统断线（如被踢）或重连超时后的补发断线，不允许再次进入重连
+      if (msg.bySystem || msg.byReconnectTimeout) {
         return next(); // 正常断线处理
       }
 
@@ -517,9 +523,9 @@ export class Reconnect {
 
     this.clearDisconnectInfo(disconnectInfo);
 
-    // 然后重新 dispatch 带 bySystem 的 Disconnect 事件
+    // 然后重新 dispatch 一个“非系统断线但不再允许重连”的 Disconnect 事件
     const msg = new YGOProCtosDisconnect();
-    msg.bySystem = true; // 标记为系统断线，防止再次进入重连逻辑
+    msg.byReconnectTimeout = true;
     const room = this.ctx
       .get(() => RoomManager)
       .findByName(disconnectInfo.roomName);
