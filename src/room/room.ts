@@ -1824,7 +1824,7 @@ export class Room {
       if (this.lastDuelRecord.responses.length > 0) {
         this.lastDuelRecord.responses.pop();
       }
-      this.acceptResponse = false;
+      this.acceptResponse = true;
       this.isRetrying = true;
       await this.sendWaitingToNonOperator(
         this.getIngameDuelPosByDuelPos(this.responsePos),
