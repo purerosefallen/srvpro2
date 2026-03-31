@@ -2072,6 +2072,7 @@ export class Room {
     }
     this.lastResponseRequestMsg = undefined;
     this.isRetrying = false;
+    this.responsePos = undefined;
     try {
       await this.ocgcore.setResponse(msg.response);
     } catch (e) {
