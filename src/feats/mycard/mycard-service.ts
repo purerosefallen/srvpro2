@@ -706,7 +706,7 @@ export class MycardService {
   }
 
   private async sendArenaScore(client: Client) {
-    if (!this.arenaGetScoreUrl || client.isInternal) {
+    if (!this.arenaGetScoreUrl || client.isInternal || client.pos > 3) {
       return;
     }
     try {
