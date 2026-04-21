@@ -74,7 +74,11 @@ export class DialoguesProvider extends BaseResourceProvider<DialoguesData> {
     this.ctx.middleware(DialoguesLookup, async (event, _client, next) => {
       const data = this.getResourceData();
       const key = event.cardCode.toString();
-      event.use(data.dialogues[key] || data.dialogues_custom[key] || []);
+      const dialogue = [
+        data.dialogues?.[key],
+        data.dialogues_custom?.[key],
+      ].find((lines): lines is string[] => !!lines?.length);
+      event.use(dialogue ?? []);
       return next();
     });
   }

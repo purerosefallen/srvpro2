@@ -1,6 +1,6 @@
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
-import { cloneJson, isObjectRecord } from './resource-util';
+import { cloneJson, fillMissingJsonFields, isObjectRecord } from './resource-util';
 import { AppContext } from 'nfkit';
 import { Logger } from '../services/logger';
 
@@ -62,8 +62,13 @@ export class FileResourceService {
       if (dataPath) {
         const localData = await this.readJsonFile(dataPath);
         if (isObjectRecord(localData)) {
-          this.dataByName.set(name, localData);
-          return cloneJson(localData as T);
+          const normalizedData = await this.normalizeResourceData(
+            dataPath,
+            localData,
+            emptyData,
+          );
+          this.dataByName.set(name, normalizedData);
+          return cloneJson(normalizedData as T);
         }
       }
     }
@@ -104,7 +109,12 @@ export class FileResourceService {
 
       const localData = await this.readJsonFile(dataPath);
       if (isObjectRecord(localData)) {
-        this.dataByName.set(name, localData);
+        const normalizedData = await this.normalizeResourceData(
+          dataPath,
+          localData,
+          resolvedData,
+        );
+        this.dataByName.set(name, normalizedData);
         continue;
       }
 
@@ -149,5 +159,21 @@ export class FileResourceService {
     } catch {
       return undefined;
     }
+  }
+
+  private async normalizeResourceData<T extends object>(
+    dataPath: string,
+    data: Record<string, unknown>,
+    defaults: T,
+  ) {
+    const normalized = fillMissingJsonFields(data, defaults);
+    if (normalized.changed) {
+      await fs.writeFile(
+        dataPath,
+        JSON.stringify(normalized.value, null, 2),
+        'utf-8',
+      );
+    }
+    return normalized.value as Record<string, unknown>;
   }
 }

@@ -1932,7 +1932,11 @@ export class Room {
   private async handleOcgcoreDuelError(error: unknown, action: string) {
     const killOcgcore = OcgcoreTimeoutError.is(error);
     this.logger.warn(
-      { error: error?.toString?.() || error, roomName: this.name, killOcgcore },
+      {
+        error: (error as Error)?.stack || error?.toString?.() || error,
+        roomName: this.name,
+        killOcgcore,
+      },
       `Error while ${action}`,
     );
     const drawGame = new YGOProMsgWin().fromPartial({

@@ -1,1 +1,5 @@
-export { cloneJson, isObjectRecord } from '../../file-resource/resource-util';
+export {
+  cloneJson,
+  fillMissingJsonFields,
+  isObjectRecord,
+} from '../../file-resource/resource-util';
