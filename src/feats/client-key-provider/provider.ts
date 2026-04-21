@@ -6,7 +6,11 @@ export class ClientKeyProvider {
 
   // Keep this switch for future compatibility with srvpro identity policies.
   get isLooseIdentityRule() {
-    return this.ctx.config.getBoolean('TOURNAMENT_MODE');
+    return (
+      this.ctx.config.getBoolean('MYCARD_ENABLED') ||
+      this.ctx.config.getBoolean('TOURNAMENT_MODE') ||
+      this.ctx.config.getBoolean('CHALLONGE_ENABLED')
+    );
   }
 
   getClientKey(client: Client): string {

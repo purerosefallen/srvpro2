@@ -11,6 +11,7 @@ import { JoinBlankPassMenu } from './join-blank-pass-menu';
 import { JoinRoomlist } from './join-roomlist';
 import { JoinBotlist } from './join-botlist';
 import { ChallongeJoinHandler } from './challonge-join-handler';
+import { MycardJoinHandler } from '../feats/mycard';
 
 export const JoinHandlerModule = createAppContext<ContextState>()
   .provide(JoinRoomIp) // IP
@@ -18,6 +19,7 @@ export const JoinHandlerModule = createAppContext<ContextState>()
   .provide(JoinRoomlist) // L
   .provide(JoinWindbotAi) // AI, AI#
   .provide(JoinBotlist) // B
+  .provide(MycardJoinHandler) // mycard encrypted pass / arena
   .provide(ChallongeJoinHandler) // any
   .provide(RandomDuelJoinHandler) // M, T
   .provide(JoinRoom) // room pass

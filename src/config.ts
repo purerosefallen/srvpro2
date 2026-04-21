@@ -154,6 +154,60 @@ export const defaultConfig = {
   // Enable tournament mode deck lock check hook.
   // Boolean parse rule (default true): only '0'/'false'/'null' => false, otherwise true.
   TOURNAMENT_MODE_CHECK_DECK: '1',
+  // Enable Mycard encrypted-password integration, including arena mode.
+  // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
+  MYCARD_ENABLED: '0',
+  // Mycard account API base URL.
+  MYCARD_AUTH_BASE_URL: 'https://sapi.moecube.com:444/accounts',
+  // Mycard account API key.
+  MYCARD_AUTH_KEY: '233333',
+  // Mycard ban query URL. Empty means disabled.
+  MYCARD_BAN_GET: 'https://sapi.moecube.com:444/ygopro/big-brother/ban',
+  // Mycard arena mode name, e.g. athletic or entertain.
+  MYCARD_ARENA_MODE: 'entertain',
+  // Access key used when posting Mycard arena scores.
+  MYCARD_ARENA_ACCESS_KEY: '233',
+  // Mycard arena ready timeout. Format: integer string in seconds (s). '0' disables.
+  MYCARD_ARENA_READY_TIME: '30',
+  // Mycard arena AFK timeout. Format: integer string in seconds (s). '0' disables.
+  MYCARD_ARENA_HANG_TIMEOUT: '90',
+  // Mycard arena permit-check URL. Empty means disabled.
+  MYCARD_ARENA_CHECK_PERMIT:
+    'https://sapi.moecube.com:444/ygopro/match/permit',
+  // Mycard arena score post URL. Empty means disabled.
+  MYCARD_ARENA_POST_SCORE: 'https://sapi.moecube.com:444/ygopro/arena/score',
+  // Mycard arena score query URL. Empty means disabled.
+  MYCARD_ARENA_GET_SCORE: 'https://sapi.moecube.com:444/ygopro/arena/user',
+  // Mycard arena score query parameter name.
+  MYCARD_ARENA_GET_SCORE_PARAM: 'username',
+  // Punish Mycard arena quit before match start.
+  // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
+  MYCARD_ARENA_PUNISH_QUIT_BEFORE_MATCH: '0',
+  // Enable Mycard arena match API hooks.
+  // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
+  MYCARD_ARENA_MATCH_API_ENABLED: '1',
+  // Mycard arena match API base URL.
+  MYCARD_ARENA_MATCH_API_URL: 'https://sapi.moecube.com:444/ygopro/match',
+  // Mycard arena match API access key.
+  MYCARD_ARENA_MATCH_API_ACCESS_KEY: '',
+  // Enable athletic deck type checker.
+  // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
+  ATHLETIC_CHECK_ENABLED: '0',
+  // Athletic deck ranking URL.
+  ATHLETIC_CHECK_RANK_URL:
+    'https://sapi.moecube.com:444/ygopro/analytics/deck/type',
+  // Athletic deck identifier URL.
+  ATHLETIC_CHECK_IDENTIFIER_URL:
+    'https://sapi.moecube.com:444/ygopro/identifier/production',
+  // Athletic ranking request params. Format: JSON object string.
+  ATHLETIC_CHECK_FETCH_PARAMS:
+    '{"type":"week","source":"mycard-athletic"}',
+  // Athletic ranking count used for matching deck types.
+  ATHLETIC_CHECK_RANK_COUNT: '20',
+  // Ban top N athletic deck types in Mycard arena rooms. '0' disables.
+  ATHLETIC_CHECK_BAN_COUNT: '20',
+  // Athletic ranking cache TTL. Format: integer string in seconds (s).
+  ATHLETIC_CHECK_TTL: '600',
   // Enable Challonge integration.
   // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
   CHALLONGE_ENABLED: '0',

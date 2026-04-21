@@ -29,7 +29,16 @@ export const TRANSLATIONS = {
     windbot_name_too_long:
       'Error occurs, please create a new game and enter /ai to summon an AI.',
     create_room_failed: 'Game creation failed, please try again later.',
+    loading_user_info: 'Loading user info...',
+    load_user_info_fail: 'Failed loading your user info.',
+    invalid_password_length: 'Password invalid (Invalid Length)',
+    invalid_password_payload: 'Password invalid (Invalid Payload Length)',
+    invalid_password_unauthorized: 'Password invalid (Unauthorized)',
+    invalid_password_existed: 'Password invalid (Already Existed)',
     invalid_password_not_found: 'Password invalid (Not Found)',
+    invalid_password_action: 'Password invalid (Invalid Action)',
+    invalid_password_checksum:
+      'Password incorrect (Checksum Failed) (Please re-login and wait for 5 minutes for fix)',
     banned_ip_login: 'You have been banned.',
     banned_user_login: 'You have been banned.',
     add_windbot_failed: 'AI addition failed, enter /ai again.',
@@ -55,6 +64,17 @@ export const TRANSLATIONS = {
     side_overtime_room:
       ' exceeded side changing time and was kicked by system.',
     kicked_by_system: 'was evicted from the game by server.',
+    arena_wait_hint:
+      'If you opponent does not appear within 25 seconds, you may quit without any penalty.',
+    arena_wait_timeout:
+      'Your opponent did not appear, you may quit without any penalty.',
+    rank_arena: ', Your ranking is',
+    rank_blank: ', You are not ranked.',
+    exp_value_part1: ', You have ',
+    exp_value_part2: ' exp',
+    exp_value_part3: ', your score is ',
+    exp_value_part4:
+      '. These points may be reset after the stable release of MyCard.',
     kick_count_down:
       ' seconds later this player will be evicted for not getting ready or starting the game.',
     afk_warn_part1: 'no operation too long, will be disconnected after ',
@@ -96,6 +116,7 @@ export const TRANSLATIONS = {
     unwelcome_tip_part2: ', so you can leave the game without being punished.',
     banned_duel_tip:
       'You are banned from the random duel system for sending inappropriate messages.',
+    banned_chat_tip: 'You are banned from chatting.',
     chat_banned: 'is banned from chat.',
     surrender_denied: "Please don't surrender in the first turn.",
     room_name: 'Room name is',
@@ -182,6 +203,15 @@ export const TRANSLATIONS = {
     auto_death_part1:
       'This room is an auto-extra-duel room. The Extra Duel will begin after ',
     auto_death_part2: ' minutes.',
+    athletic_arena_tip:
+      'During an athletic match, a game quit behavior is regarded as a surrender.',
+    entertain_arena_tip:
+      'Welcome! This mode bans the top 20 most frequent deck used in athletic mode for past 7 days.',
+    banned_athletic_deck_part1:
+      'Entertainment Mode does not allow top ',
+    banned_athletic_deck_part2:
+      ' popular meta decks. Please change your deck.',
+    using_athletic_deck: ' is using a competitive deck.',
     lp_low_opponent: 'もはやお前のライフは風前の灯！',
     lp_low_self: '*Low LP Alert*',
     botlist_menu_single: 'Single',
@@ -217,7 +247,16 @@ export const TRANSLATIONS = {
     windbot_deck_not_found: '未找到该AI角色或卡组',
     windbot_name_too_long: 'AI房间名过长，请在建立房间后输入 /ai 来添加AI',
     create_room_failed: '建立房间失败，请重试',
+    loading_user_info: '正在读取用户信息...',
+    load_user_info_fail: '读取用户信息失败。',
+    invalid_password_length: '主机密码不正确 (Invalid Length)',
+    invalid_password_payload: '主机密码不正确 (Invalid Payload Length)',
+    invalid_password_unauthorized: '主机密码不正确 (Unauthorized)',
+    invalid_password_existed: '主机密码不正确 (Already Existed)',
     invalid_password_not_found: '主机密码不正确 (Not Found)',
+    invalid_password_action: '主机密码不正确 (Invalid Action)',
+    invalid_password_checksum:
+      '主机密码不正确 (Checksum Failed) (请重新登录你的账号，等待5分钟后重进)',
     banned_ip_login:
       '您的账号已被封禁。如果您没有进行违规操作且用的是流量网络，可能过几小时就好。是IP撞了。',
     banned_user_login:
@@ -241,6 +280,15 @@ export const TRANSLATIONS = {
     side_overtime: '你更换副卡组超时，已被系统踢出。',
     side_overtime_room: '更换副卡组超时，已被系统踢出。',
     kicked_by_system: '被系统请出了房间',
+    arena_wait_hint: '若对手在25秒内不进入游戏，您退房时不会进行扣分。',
+    arena_wait_timeout:
+      '由于对手未能在30秒内进入游戏，此时您退出游戏不会扣分。',
+    rank_arena: '，排名第',
+    rank_blank: '，暂无排名',
+    exp_value_part1: '，你有',
+    exp_value_part2: '点经验',
+    exp_value_part3: '，你的战斗力是',
+    exp_value_part4: '。竞技场部分积分按赛季重置。',
     kick_count_down: '秒后若不准备或开始游戏将被请出房间',
     afk_warn_part1: '已经很久没有操作了，若继续挂机，将于',
     afk_warn_part2: '秒后被请出房间',
@@ -278,6 +326,7 @@ export const TRANSLATIONS = {
     unwelcome_tip_part1: '因为您的对手有',
     unwelcome_tip_part2: '行为，现在您可以直接离开游戏或投降，不视为强退。',
     banned_duel_tip: '您的发言存在严重不适当的内容，禁止您使用随机对战功能！',
+    banned_chat_tip: '您已被禁言！',
     chat_banned: '已被禁言！',
     surrender_denied: '为保证双方玩家的游戏体验，随机对战中2回合后才能投降。',
     room_name: '您当前的房间名是',
@@ -358,6 +407,12 @@ export const TRANSLATIONS = {
     death2_finish_part2: ' 获得本次比赛的胜利。',
     auto_death_part1: '本房间为自动加时赛房间。比赛开始',
     auto_death_part2: '分钟后，将自动进入加时赛。',
+    athletic_arena_tip: '在竞技匹配中，比赛开始前退出游戏也会视为投降。',
+    entertain_arena_tip:
+      '欢迎来到娱乐匹配。系统会禁止锁定竞技匹配过去一周使用数 TOP 20 的卡组。',
+    banned_athletic_deck_part1: '娱乐匹配中禁止使用使用数前',
+    banned_athletic_deck_part2: '的竞技卡组。请更换卡组。',
+    using_athletic_deck: ' 正在使用竞技卡组。',
     lp_low_opponent: '你的生命已经如风中残烛了！',
     lp_low_self: '背水一战！',
     botlist_menu_single: '单局',
