@@ -675,6 +675,7 @@ export class MycardService {
       }
     }
     room.mycardArenaScoreHandled = true;
+    room.finalize();
   }
 
   private async tickArenaFreeQuitGrace() {

@@ -67,6 +67,31 @@ enableReconnect: 1
 enableCloudReplay: 1
 tournamentMode: 0
 tournamentModeCheckDeck: 1
+mycardEnabled: 0
+mycardAuthBaseUrl: https://sapi.moecube.com:444/accounts
+mycardAuthKey: 233333
+mycardBanGet: https://sapi.moecube.com:444/ygopro/big-brother/ban
+mycardArenaMode: entertain
+mycardArenaAccessKey: 233
+mycardArenaReadyTime: 30
+mycardArenaHangTimeout: 90
+mycardArenaCheckPermit: https://sapi.moecube.com:444/ygopro/match/permit
+mycardArenaPostScore: https://sapi.moecube.com:444/ygopro/arena/score
+mycardArenaGetScore: https://sapi.moecube.com:444/ygopro/arena/user
+mycardArenaGetScoreParam: username
+mycardArenaPunishQuitBeforeMatch: 0
+mycardArenaMatchApiEnabled: 1
+mycardArenaMatchApiUrl: https://sapi.moecube.com:444/ygopro/match
+mycardArenaMatchApiAccessKey: ""
+athleticCheckEnabled: 0
+athleticCheckRankUrl: https://sapi.moecube.com:444/ygopro/analytics/deck/type
+athleticCheckIdentifierUrl: https://sapi.moecube.com:444/ygopro/identifier/production
+athleticCheckFetchParams:
+  type: week
+  source: mycard-athletic
+athleticCheckRankCount: 20
+athleticCheckBanCount: 20
+athleticCheckTtl: 600
 challongeEnabled: 0
 challongeNoMatchMode: 0
 challongePostDetailedScore: 1
