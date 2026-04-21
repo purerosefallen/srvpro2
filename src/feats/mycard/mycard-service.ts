@@ -132,9 +132,7 @@ export class MycardService {
     });
 
     this.ctx.middleware(OnRoomJoin, async (event, client, next) => {
-      if (event.room.mycardArena) {
-        await this.sendArenaScore(client);
-      }
+      await this.sendArenaScore(client);
       return next();
     });
 
@@ -708,7 +706,7 @@ export class MycardService {
   }
 
   private async sendArenaScore(client: Client) {
-    if (!this.arenaGetScoreUrl || client.isLocal) {
+    if (!this.arenaGetScoreUrl || client.isInternal) {
       return;
     }
     try {

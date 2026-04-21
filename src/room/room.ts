@@ -158,6 +158,10 @@ export class Room {
     return (firstbit | remainingBits) + 1;
   }
 
+  get hostinfoMaxDuelCount() {
+    return this.hostinfoWinMatchCount * 2 - 1;
+  }
+
   get winMatchCount() {
     return this.overrideWinMatchCount ?? this.hostinfoWinMatchCount;
   }
@@ -636,7 +640,9 @@ export class Room {
       `Player ${duelPos} wins the duel. Current score: ${score.join('-')}`,
     );
     const winMatch =
-      forceWinMatch != null || score[duelPos] >= this.winMatchCount;
+      forceWinMatch != null ||
+      score[duelPos] >= this.winMatchCount ||
+      this.duelRecords.length >= this.hostinfoMaxDuelCount;
     if (!winMatch) {
       await this.changeSide();
     }
