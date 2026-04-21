@@ -132,6 +132,10 @@ export class KoaService {
     });
   }
 
+  getHttpServer() {
+    return this.server;
+  }
+
   private initTrustedProxies() {
     const proxies = this.config.getStringArray('TRUSTED_PROXIES');
     for (const trusted of proxies) {

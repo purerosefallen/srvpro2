@@ -129,6 +129,7 @@ describe('MycardService score post', () => {
       duelRecords: [],
       score: [0, 0],
       getDuelPos: (player: any) => player.pos,
+      finalize: jest.fn(),
     };
 
     (service as any).ensureArenaScoreState(room);
