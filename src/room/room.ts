@@ -598,11 +598,39 @@ export class Room {
     } catch {}
   }
 
+  private matchResultDecided = false;
+
   async win(winMsg: Partial<YGOProMsgWin>, options: RoomWinOptions = {}) {
+    if (this.matchResultDecided) {
+      return;
+    }
     const { forceWinMatch, killOcgcore = false } = options;
     this.resetResponseState();
     this.disposeOcgcore(this.ocgcore, killOcgcore);
     const wasSwapped = this.isPosSwapped;
+    const duelPos = this.getIngameDuelPosByDuelPos(winMsg.player!);
+    const lastDuelRecord = this.lastDuelRecord;
+    const hasLastDuelRecord = !!(
+      lastDuelRecord &&
+      this.duelStage === DuelStage.Dueling &&
+      lastDuelRecord.winPosition == null
+    ); // prevent re-recording
+    if (hasLastDuelRecord) {
+      lastDuelRecord.winPosition = duelPos;
+      lastDuelRecord.winReason = winMsg.type;
+      lastDuelRecord.endTime = new Date();
+    }
+    if (typeof forceWinMatch === 'number') {
+      const loseDuelPos = (1 - duelPos) as 0 | 1;
+      this.setOverrideScore(loseDuelPos, -Math.abs(forceWinMatch));
+    }
+    const winMatch =
+      forceWinMatch != null ||
+      this.score[duelPos] >= this.winMatchCount ||
+      this.duelRecords.length >= this.hostinfoMaxDuelCount;
+    if (winMatch) {
+      this.matchResultDecided = true;
+    }
     if (this.duelStage === DuelStage.Siding) {
       await Promise.all(
         this.playingPlayers
@@ -610,7 +638,6 @@ export class Room {
           .map((p) => p.send(new YGOProStocDuelStart())),
       );
     }
-    const duelPos = this.getIngameDuelPosByDuelPos(winMsg.player!);
     this.isPosSwapped = false;
     await Promise.all(
       this.allPlayers.map((p) =>
@@ -625,31 +652,18 @@ export class Room {
       ...winMsg,
       player: duelPos,
     });
-    const lastDuelRecord = this.lastDuelRecord;
-    if (lastDuelRecord && this.duelStage === DuelStage.Dueling) {
-      lastDuelRecord.winPosition = duelPos;
-      lastDuelRecord.winReason = winMsg.type;
-      lastDuelRecord.endTime = new Date();
-    }
-    if (typeof forceWinMatch === 'number') {
-      const loseDuelPos = (1 - duelPos) as 0 | 1;
-      this.setOverrideScore(loseDuelPos, -Math.abs(forceWinMatch));
-    }
-    const score = this.score;
     this.logger.info(
-      `Player ${duelPos} wins the duel. Current score: ${score.join('-')}`,
+      `Player ${duelPos} wins the duel. Current score: ${this.score.join('-')}`,
     );
-    const winMatch =
-      forceWinMatch != null ||
-      score[duelPos] >= this.winMatchCount ||
-      this.duelRecords.length >= this.hostinfoMaxDuelCount;
     if (!winMatch) {
       await this.changeSide();
     }
-    await this.ctx.dispatch(
-      new OnRoomWin(this, exactWinMsg, winMatch, wasSwapped),
-      this.getDuelPosPlayers(duelPos)[0],
-    );
+    if (hasLastDuelRecord) {
+      await this.ctx.dispatch(
+        new OnRoomWin(this, exactWinMsg, winMatch, wasSwapped),
+        this.getDuelPosPlayers(duelPos)[0],
+      );
+    }
     if (winMatch) {
       return this.finalize(true);
     }
@@ -684,7 +698,7 @@ export class Room {
     if (!client) {
       return;
     }
-    if (this.finalizing) {
+    if (this.finalizing || this.matchResultDecided) {
       return;
     }
     const wasObserver = client.pos === NetPlayerType.OBSERVER;
