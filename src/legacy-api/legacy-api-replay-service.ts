@@ -147,8 +147,10 @@ export class LegacyApiReplayService {
       }
 
       const replayId = Number(matched[1]);
-      const payload =
-        await this.cloudReplayService.getReplayYrpPayloadById(replayId);
+      const payload = await this.cloudReplayService.getReplayYrpPayloadById(
+        replayId,
+        { includeDueling: true },
+      );
       if (!payload) {
         koaCtx.status = 404;
         koaCtx.body = `未找到文件 ${filename}`;

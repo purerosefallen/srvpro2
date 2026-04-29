@@ -506,8 +506,13 @@ export class CloudReplayService {
     return this.createReplayPacket(replay.hostInfo, duelRecord).replay.toYrp();
   }
 
-  async getReplayYrpPayloadById(replayId: number) {
-    const replay = await this.findReplayById(replayId);
+  async getReplayYrpPayloadById(
+    replayId: number,
+    options: {
+      includeDueling?: boolean;
+    } = {},
+  ) {
+    const replay = await this.findReplayById(replayId, options);
     if (!replay) {
       return undefined;
     }
@@ -573,6 +578,7 @@ export class CloudReplayService {
       .getQuery();
 
     qb.where(`EXISTS ${subQuery}`, { clientKey });
+    qb.andWhere('replay.winReason IS NOT NULL');
     if (cursor != null) {
       qb.andWhere('replay.id < :cursor', { cursor });
     }
@@ -580,17 +586,28 @@ export class CloudReplayService {
     return qb.orderBy('replay.id', 'DESC').take(take).getMany();
   }
 
-  private async findReplayById(replayId: number) {
+  private async findReplayById(
+    replayId: number,
+    options: {
+      includeDueling?: boolean;
+    } = {},
+  ) {
     const database = this.ctx.database;
     if (!database) {
       return undefined;
     }
-    return database.getRepository(DuelRecordEntity).findOne({
-      where: {
-        id: replayId,
-      },
-      relations: ['players'],
-    });
+    const { includeDueling = false } = options;
+    const qb = database
+      .getRepository(DuelRecordEntity)
+      .createQueryBuilder('replay')
+      .leftJoinAndSelect('replay.players', 'player')
+      .where('replay.id = :replayId', { replayId });
+
+    if (!includeDueling) {
+      qb.andWhere('replay.winReason IS NOT NULL');
+    }
+
+    return qb.getOne();
   }
 
   private async getRandomReplay() {
@@ -604,6 +621,7 @@ export class CloudReplayService {
       .createQueryBuilder('replay')
       .select('MIN(replay.id)', 'minId')
       .addSelect('MAX(replay.id)', 'maxId')
+      .where('replay.winReason IS NOT NULL')
       .getRawOne<{ minId?: string; maxId?: string }>();
 
     const minId = Number(minMax?.minId);
@@ -616,7 +634,8 @@ export class CloudReplayService {
     let replay = await repo
       .createQueryBuilder('replay')
       .leftJoinAndSelect('replay.players', 'player')
-      .where('replay.id >= :targetId', { targetId })
+      .where('replay.winReason IS NOT NULL')
+      .andWhere('replay.id >= :targetId', { targetId })
       .orderBy('replay.id', 'ASC')
       .getOne();
 
@@ -624,7 +643,8 @@ export class CloudReplayService {
       replay = await repo
         .createQueryBuilder('replay')
         .leftJoinAndSelect('replay.players', 'player')
-        .where('replay.id <= :targetId', { targetId })
+        .where('replay.winReason IS NOT NULL')
+        .andWhere('replay.id <= :targetId', { targetId })
         .orderBy('replay.id', 'DESC')
         .getOne();
     }
