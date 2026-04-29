@@ -18,5 +18,6 @@ export class OnClientBadwordViolation {
     public message: string,
     public level: number,
     public replacedMessage?: string,
+    public match?: string,
   ) {}
 }

@@ -1,4 +1,5 @@
 export * from './athletic-checker';
+export * from './big-brother-service';
 export * from './module';
 export * from './mycard-join-handler';
 export * from './mycard-roomlist-service';

@@ -163,6 +163,13 @@ export const defaultConfig = {
   MYCARD_AUTH_KEY: '233333',
   // Mycard ban query URL. Empty means disabled.
   MYCARD_BAN_GET: 'https://sapi.moecube.com:444/ygopro/big-brother/ban',
+  // Enable Mycard Big Brother badword reports.
+  // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
+  BIG_BROTHER_ENABLED: '0',
+  // Mycard Big Brother report access key.
+  BIG_BROTHER_ACCESS_KEY: '233',
+  // Mycard Big Brother report URL. Empty means disabled.
+  BIG_BROTHER_POST: 'https://sapi.moecube.com:444/ygopro/big-brother',
   // Mycard arena mode name, e.g. athletic or entertain.
   MYCARD_ARENA_MODE: 'entertain',
   // Access key used when posting Mycard arena scores.

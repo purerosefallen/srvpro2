@@ -18,6 +18,7 @@ declare module '../../room' {
 export interface BadwordCheckResult {
   level: number;
   message?: string;
+  match?: string;
 }
 
 export class BadwordTextCheck extends ValueContainer<BadwordCheckResult> {
@@ -84,6 +85,7 @@ export class BadwordProvider extends BaseResourceProvider<BadwordsData> {
               filtered.message !== originalMessage
                 ? filtered.message
                 : undefined,
+              filtered.match,
             ),
             client as any,
           );
@@ -171,6 +173,7 @@ export class BadwordProvider extends BaseResourceProvider<BadwordsData> {
         blocked: true,
         level,
         message: text,
+        match: checkResult.match,
       };
     }
 
@@ -179,6 +182,7 @@ export class BadwordProvider extends BaseResourceProvider<BadwordsData> {
         blocked: false,
         level,
         message: checkResult.message,
+        match: checkResult.match,
       };
     }
     if (level === 1) {
@@ -186,6 +190,7 @@ export class BadwordProvider extends BaseResourceProvider<BadwordsData> {
         blocked: false,
         level,
         message: text,
+        match: checkResult.match,
       };
     }
 
@@ -193,6 +198,7 @@ export class BadwordProvider extends BaseResourceProvider<BadwordsData> {
       blocked: false,
       level,
       message: text,
+      match: checkResult.match,
     };
   }
 
@@ -203,13 +209,13 @@ export class BadwordProvider extends BaseResourceProvider<BadwordsData> {
         return next();
       }
       const level = this.resolveBadwordLevel(event.text);
-      if (level === 1 && this.level1GlobalRegex) {
+      if (level.level === 1 && this.level1GlobalRegex) {
         event.use({
-          level,
+          ...level,
           message: event.text.replace(this.level1GlobalRegex, '**'),
         });
       } else {
-        event.use({ level });
+        event.use(level);
       }
       return next();
     });
@@ -223,23 +229,27 @@ export class BadwordProvider extends BaseResourceProvider<BadwordsData> {
     this.level3Regex = this.buildRegex(nextData.level3, 'i');
   }
 
-  private resolveBadwordLevel(text: string) {
+  private resolveBadwordLevel(text: string): BadwordCheckResult {
     if (!text) {
-      return -1;
+      return { level: -1 };
     }
-    if (this.level3Regex?.test(text)) {
-      return 3;
+    const level3Match = this.level3Regex?.exec(text)?.[0];
+    if (level3Match) {
+      return { level: 3, match: level3Match };
     }
-    if (this.level2Regex?.test(text)) {
-      return 2;
+    const level2Match = this.level2Regex?.exec(text)?.[0];
+    if (level2Match) {
+      return { level: 2, match: level2Match };
     }
-    if (this.level1Regex?.test(text)) {
-      return 1;
+    const level1Match = this.level1Regex?.exec(text)?.[0];
+    if (level1Match) {
+      return { level: 1, match: level1Match };
     }
-    if (this.level0Regex?.test(text)) {
-      return 0;
+    const level0Match = this.level0Regex?.exec(text)?.[0];
+    if (level0Match) {
+      return { level: 0, match: level0Match };
     }
-    return -1;
+    return { level: -1 };
   }
 
   private buildRegex(words: string[], flags: string) {

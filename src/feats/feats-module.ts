@@ -1,4 +1,4 @@
-import { createAppContext } from 'nfkit';
+import { AppContext, createAppContext } from 'nfkit';
 import { Welcome } from './welcome';
 import { PlayerStatusNotify } from './player-status-notify';
 import { Reconnect, RefreshFieldService } from './reconnect';
@@ -21,7 +21,7 @@ import { RoomDeathService } from './room-death-service';
 import { RoomAutoDeathService } from './room-auto-death-service';
 import { ChallongeService } from './challonge-service';
 import { TagSurrenderConfirmMiddleware } from './tag-surrender-confirm-middleware';
-import { MycardModule } from './mycard';
+import { BigBrotherService, MycardModule } from './mycard';
 
 export const FeatsModule = createAppContext()
   .provide(ClientKeyProvider)
@@ -40,6 +40,7 @@ export const FeatsModule = createAppContext()
   .provide(RoomAutoDeathService) // auto trigger death mode after duel start
   .provide(ChallongeService) // challonge deck lock + score sync
   .use(MycardModule) // mycard auth, arena mode, athletic deck checks
+  .provide(BigBrotherService) // badword violation reports
   .provide(LockDeckService) // srvpro-style tournament deck lock check
   .provide(RefreshFieldService) // utility for
   .provide(Reconnect) // allow players to reconnect to ongoing duels without leaving the room
@@ -49,4 +50,4 @@ export const FeatsModule = createAppContext()
   .use(ResourceModule) // chat bad words
   .use(RandomDuelModule) // chat random duel block
   .use(WindbotModule)
-  .define();
+  .define() as AppContext;

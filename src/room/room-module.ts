@@ -1,4 +1,4 @@
-import { createAppContext } from 'nfkit';
+import { AppContext, createAppContext } from 'nfkit';
 import { ContextState } from '../app';
 import { YGOProResourceLoader } from '../ygopro';
 import { DefaultHostInfoProvider } from './default-hostinfo-provder';
@@ -14,4 +14,4 @@ export const RoomModule = createAppContext<ContextState>()
   .provide(DefaultDeckChecker)
   .provide(ZombieRoomCleaner)
   .provide(NoWatchToObserverGuard)
-  .define();
+  .define() as AppContext;

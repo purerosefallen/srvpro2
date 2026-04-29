@@ -1,4 +1,4 @@
-import { createAppContext } from 'nfkit';
+import { AppContext, createAppContext } from 'nfkit';
 import { ContextState } from '../app';
 import { TcpServer } from './transport/tcp/server';
 import { WsServer } from './transport/ws/server';
@@ -14,4 +14,4 @@ export const TransportModule = createAppContext<ContextState>()
   .provide(ClientHandler)
   .provide(TcpServer)
   .provide(WsServer)
-  .define();
+  .define() as AppContext;
