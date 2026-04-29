@@ -30,6 +30,7 @@ import {
 } from '../../room';
 import { isUpdateDeckPayloadEqual } from '../../utility/deck-compare';
 import { DuelRecordEntity } from './duel-record.entity';
+import { CloudReplayService } from './cloud-replay-service';
 import {
   decodeDeckBase64,
   decodeResponsesBase64,
@@ -91,6 +92,7 @@ class RecoverDeckBadError extends YGOProLFListError {
 export class ReplayRecoverService {
   private logger = this.ctx.createLogger(this.constructor.name);
   private roomManager = this.ctx.get(() => RoomManager);
+  private cloudReplayService = this.ctx.get(() => CloudReplayService);
   private pendingRecords = new Map<string, DuelRecordEntity>();
 
   constructor(private ctx: Context) {}
@@ -160,11 +162,7 @@ export class ReplayRecoverService {
       }
 
       const record = await this.findRecoverRecord(spec.id);
-      if (
-        !record ||
-        this.isActiveRecord(record) ||
-        !this.isAllowed(record, creator)
-      ) {
+      if (!record || !this.isAllowed(record, creator)) {
         return event.use('#{cloud_replay_no}');
       }
 
@@ -355,22 +353,11 @@ export class ReplayRecoverService {
 
   private async findRecoverRecord(id: number) {
     try {
-      return await this.ctx.database!.getRepository(DuelRecordEntity).findOne({
-        where: { id },
-        relations: {
-          players: true,
-        },
-      });
+      return await this.cloudReplayService.findReplayById(id);
     } catch (error) {
       this.logger.warn({ id, error }, 'Failed loading recover replay');
       return undefined;
     }
-  }
-
-  private isActiveRecord(record: DuelRecordEntity) {
-    return this.roomManager
-      .allRooms()
-      .some((room) => room.identifier === record.roomIdentifier);
   }
 
   private isAllowed(record: DuelRecordEntity, client: Client) {

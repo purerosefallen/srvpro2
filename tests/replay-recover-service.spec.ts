@@ -14,7 +14,10 @@ import {
   RoomUseSeed,
 } from '../src/room';
 import { DefaultHostinfo } from '../src/room/default-hostinfo';
-import { ReplayRecoverService } from '../src/feats/cloud-replay';
+import {
+  CloudReplayService,
+  ReplayRecoverService,
+} from '../src/feats/cloud-replay';
 import { RoomManager } from '../src/room';
 
 function createLogger() {
@@ -55,13 +58,21 @@ function makeRecord(overrides: Partial<any> = {}) {
 
 function makeCtx(record: any, activeRooms: any[] = []) {
   const middlewares = new Map<unknown, any[]>();
+  const activeIdentifiers = new Set(activeRooms.map((room) => room.identifier));
+  const cloudReplayService = {
+    findReplayById: jest.fn(async (id: number) => {
+      if (!record || record.id !== id) {
+        return undefined;
+      }
+      if (activeIdentifiers.has(record.roomIdentifier)) {
+        return undefined;
+      }
+      return record;
+    }),
+  };
   const ctx: any = {
     createLogger,
-    database: {
-      getRepository: () => ({
-        findOne: jest.fn(async () => record),
-      }),
-    },
+    database: {},
     config: {
       getBoolean: (key: string) => key === 'ENABLE_CLOUD_REPLAY',
       getString: (key: string) => (key === 'HOSTINFO_LFLIST' ? '-1' : ''),
@@ -86,9 +97,12 @@ function makeCtx(record: any, activeRooms: any[] = []) {
     if (token === RoomManager) {
       return roomManager;
     }
+    if (token === CloudReplayService) {
+      return cloudReplayService;
+    }
     return undefined;
   });
-  return { ctx, middlewares, hostInfoProvider, roomManager };
+  return { ctx, middlewares, hostInfoProvider, roomManager, cloudReplayService };
 }
 
 async function initRecoverService(ctx: any) {

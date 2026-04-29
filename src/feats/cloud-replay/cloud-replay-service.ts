@@ -798,7 +798,7 @@ export class CloudReplayService {
     return qb.orderBy('replay.id', 'DESC').take(take).getMany();
   }
 
-  private async findReplayById(
+  async findReplayById(
     replayId: number,
     options: {
       includeDueling?: boolean;
