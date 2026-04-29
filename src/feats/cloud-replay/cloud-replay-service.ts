@@ -489,7 +489,7 @@ export class CloudReplayService {
       await client.sendChat(
         [
           `#{cloud_replay_detail_access_hint_part1}R#${replay.id}#{cloud_replay_detail_access_hint_part2}`,
-          `#{recover_replay_hint_part1}RC${replay.id}T<TURN>[PHASE]#{recover_replay_hint_part2}`,
+          `#{recover_replay_hint_part1}RC${replay.id}T[TURN][PHASE]#{recover_replay_hint_part2}`,
         ].join('\n'),
         ChatColor.BABYBLUE,
       );
