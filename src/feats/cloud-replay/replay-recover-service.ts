@@ -20,6 +20,7 @@ import {
   DefaultHostInfoProvider,
   OnRoomCreate,
   OnRoomDuelStart,
+  OnRoomWin,
   Room,
   RoomCheckDeck,
   RoomCreateCheck,
@@ -49,7 +50,6 @@ type ReplayRecoverState = {
   record: DuelRecordEntity;
   spec: ReplayRecoverSpec;
   responses: Buffer[];
-  recovering: boolean;
   firstDuelPos?: number;
 };
 
@@ -175,11 +175,14 @@ export class ReplayRecoverService {
     });
 
     this.ctx.middleware(RoomJoinCheck, async (event, client, next) => {
-      if (event.value || !event.room.hostinfo.recover) {
+      if (event.value) {
         return next();
       }
       const record = event.room.recoverState?.record;
-      if (!record || !this.isAllowed(record, client)) {
+      if (!record) {
+        return next();
+      }
+      if (!this.isAllowed(record, client)) {
         return event.use('#{cloud_replay_no}');
       }
       return next();
@@ -189,7 +192,7 @@ export class ReplayRecoverService {
   private registerRecoverDeckCheck() {
     this.ctx.middleware(RoomCheckDeck, async (event, client, next) => {
       const current = await next();
-      if (event.value || !event.room.recoverState?.recovering) {
+      if (event.value || !event.room.recoverState) {
         return current;
       }
 
@@ -235,7 +238,6 @@ export class ReplayRecoverService {
         record,
         spec,
         responses: decodeResponsesBase64(record.responses),
-        recovering: true,
         firstDuelPos: this.resolveRecordFirstDuelPos(event.room, record),
       };
       event.room.welcome = '#{recover_hint}';
@@ -244,7 +246,7 @@ export class ReplayRecoverService {
 
     this.ctx.middleware(RoomUseSeed, async (event, _client, next) => {
       const state = event.room.recoverState;
-      if (state?.recovering && event.room.duelRecords.length === 0) {
+      if (state && event.room.duelRecords.length === 0) {
         return event.use(decodeSeedBase64(state.record.seed));
       }
       return next();
@@ -253,7 +255,7 @@ export class ReplayRecoverService {
     this.ctx.middleware(RoomDecideFirst, async (event, _client, next) => {
       const state = event.room.recoverState;
       if (
-        state?.recovering &&
+        state &&
         event.room.duelRecords.length === 0 &&
         event.value == null &&
         state.firstDuelPos != null
@@ -264,20 +266,21 @@ export class ReplayRecoverService {
     });
 
     this.ctx.middleware(OnRoomDuelStart, async (event, _client, next) => {
-      if (event.room.recoverState?.recovering) {
+      if (event.room.recoverState) {
         await event.room.sendChat('#{recover_start_hint}', ChatColor.BABYBLUE);
       }
+      return next();
+    });
+
+    this.ctx.middleware(OnRoomWin, async (event, _client, next) => {
+      event.room.recoverState = undefined;
       return next();
     });
 
     this.ctx.middleware(YGOProStocGameMsg, async (msg, client, next) => {
       const room = this.findClientRoom(client);
       const state = room?.recoverState;
-      if (
-        !room ||
-        !state?.recovering ||
-        !(msg.msg instanceof YGOProMsgResponseBase)
-      ) {
+      if (!room || !state || !(msg.msg instanceof YGOProMsgResponseBase)) {
         return next();
       }
 
@@ -295,7 +298,7 @@ export class ReplayRecoverService {
 
     this.ctx.middleware(YGOProMsgNewTurn, async (message, client, next) => {
       const room = this.findClientRoom(client);
-      if (room?.recoverState?.recovering) {
+      if (room?.recoverState) {
         await this.tryFinishRecoverAtNewTurn(room, message);
       }
       return next();
@@ -303,7 +306,7 @@ export class ReplayRecoverService {
 
     this.ctx.middleware(YGOProMsgNewPhase, async (message, client, next) => {
       const room = this.findClientRoom(client);
-      if (room?.recoverState?.recovering) {
+      if (room?.recoverState) {
         await this.tryFinishRecoverAtNewPhase(room, message);
       }
       return next();
@@ -311,7 +314,7 @@ export class ReplayRecoverService {
 
     this.ctx.middleware(YGOProMsgRetry, async (_message, client, _next) => {
       const room = this.findClientRoom(client);
-      if (!room?.recoverState?.recovering) {
+      if (!room?.recoverState) {
         return _next();
       }
       await this.finishRecover(room, true);
@@ -406,7 +409,7 @@ export class ReplayRecoverService {
     client: Client,
     response: Buffer,
   ) {
-    if (!room.recoverState?.recovering) {
+    if (!room.recoverState) {
       return;
     }
     await this.ctx.dispatch(
@@ -425,7 +428,7 @@ export class ReplayRecoverService {
     _message: YGOProMsgNewTurn,
   ) {
     const state = room.recoverState;
-    if (!state?.recovering) {
+    if (!state) {
       return;
     }
     if (state.spec.phase) {
@@ -444,7 +447,7 @@ export class ReplayRecoverService {
     message: YGOProMsgNewPhase,
   ) {
     const state = room.recoverState;
-    if (!state?.recovering) {
+    if (!state) {
       return;
     }
     if (!state.spec.phase) {
@@ -463,10 +466,10 @@ export class ReplayRecoverService {
 
   private async finishRecover(room: Room, fail: boolean) {
     const state = room.recoverState;
-    if (!state?.recovering) {
+    if (!state) {
       return;
     }
-    state.recovering = false;
+    room.recoverState = undefined;
     if (fail) {
       await room.sendChat('#{recover_fail}', ChatColor.RED);
       await room.finalize(true);

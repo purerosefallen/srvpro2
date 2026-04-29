@@ -8,9 +8,11 @@ import {
 } from 'ygopro-msg-encode';
 import {
   DefaultHostInfoProvider,
+  OnRoomWin,
   RoomCreateCheck,
   RoomDecideFirst,
   RoomJoinCheck,
+  RoomManager,
   RoomUseSeed,
 } from '../src/room';
 import { DefaultHostinfo } from '../src/room/default-hostinfo';
@@ -18,7 +20,6 @@ import {
   CloudReplayService,
   ReplayRecoverService,
 } from '../src/feats/cloud-replay';
-import { RoomManager } from '../src/room';
 
 function createLogger() {
   return {
@@ -255,7 +256,6 @@ describe('ReplayRecoverService response playback', () => {
         record,
         spec: { id: 42, turnCount: 1 },
         responses: [],
-        recovering: true,
       },
       sendChat: jest.fn(),
     };
@@ -270,7 +270,7 @@ describe('ReplayRecoverService response playback', () => {
       next,
     );
 
-    expect(room.recoverState.recovering).toBe(false);
+    expect(room.recoverState).toBeUndefined();
     expect(room.sendChat).toHaveBeenCalledWith(
       '#{recover_success}',
       ChatColor.BABYBLUE,
@@ -294,7 +294,6 @@ describe('ReplayRecoverService seed playback', () => {
         record,
         spec: { id: 42, turnCount: 1 },
         responses: [],
-        recovering: true,
       },
     };
     const firstDuelEvent = new RoomUseSeed(room);
@@ -332,7 +331,6 @@ describe('ReplayRecoverService first-player decision', () => {
         record,
         spec: { id: 42, turnCount: 1 },
         responses: [],
-        recovering: true,
         firstDuelPos: 1,
       },
     };
@@ -368,7 +366,6 @@ describe('ReplayRecoverService stop conditions', () => {
         record: makeRecord(),
         spec,
         responses: [],
-        recovering: true,
       },
       sendChat: jest.fn(),
     };
@@ -388,7 +385,7 @@ describe('ReplayRecoverService stop conditions', () => {
       jest.fn(),
     );
 
-    expect(room.recoverState.recovering).toBe(false);
+    expect(room.recoverState).toBeUndefined();
     expect(room.sendChat).toHaveBeenCalledWith(
       '#{recover_success}',
       ChatColor.BABYBLUE,
@@ -411,7 +408,7 @@ describe('ReplayRecoverService stop conditions', () => {
       { roomName: 'room' },
       next,
     );
-    expect(sameTurnRoom.recoverState.recovering).toBe(true);
+    expect(sameTurnRoom.recoverState).toBeDefined();
 
     const laterTurnRoom: any = makeRecoveringRoom(
       { id: 42, turnCount: 2, phase: 'BP' },
@@ -423,7 +420,7 @@ describe('ReplayRecoverService stop conditions', () => {
       { roomName: 'room' },
       next,
     );
-    expect(laterTurnRoom.recoverState.recovering).toBe(false);
+    expect(laterTurnRoom.recoverState).toBeUndefined();
   });
 
   test('with phase, new phase stops once turn and phase are both reached', async () => {
@@ -442,7 +439,7 @@ describe('ReplayRecoverService stop conditions', () => {
       { roomName: 'room' },
       jest.fn(),
     );
-    expect(beforePhaseRoom.recoverState.recovering).toBe(true);
+    expect(beforePhaseRoom.recoverState).toBeDefined();
 
     const targetPhaseRoom: any = makeRecoveringRoom(
       { id: 42, turnCount: 2, phase: 'BP' },
@@ -455,6 +452,31 @@ describe('ReplayRecoverService stop conditions', () => {
       { roomName: 'room' },
       jest.fn(),
     );
-    expect(targetPhaseRoom.recoverState.recovering).toBe(false);
+    expect(targetPhaseRoom.recoverState).toBeUndefined();
+  });
+});
+
+describe('ReplayRecoverService lifecycle', () => {
+  test('clears recover state when the room wins', async () => {
+    const record = makeRecord();
+    const { ctx, middlewares } = makeCtx(record);
+    await initRecoverService(ctx);
+    const room: any = {
+      recoverState: {
+        record,
+        spec: { id: 42, turnCount: 1 },
+        responses: [],
+      },
+    };
+    const next = jest.fn();
+
+    await middlewares.get(OnRoomWin)![0](
+      new OnRoomWin(room, {} as any),
+      undefined,
+      next,
+    );
+
+    expect(room.recoverState).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(1);
   });
 });
