@@ -3,6 +3,7 @@ import { Context } from '../app';
 import { DuelRecordEntity, DuelRecordPlayer } from '../feats/cloud-replay';
 import { LegacyRoomIdService } from './legacy-room-id-service';
 import { CloudReplayService } from '../feats';
+import { RoomManager } from '../room';
 
 type DuelLogQuery = {
   roomName?: string;
@@ -15,6 +16,7 @@ export class LegacyApiReplayService {
   private logger = this.ctx.createLogger('LegacyApiReplayService');
   private roomIdService = this.ctx.get(() => LegacyRoomIdService);
   private cloudReplayService = this.ctx.get(() => CloudReplayService);
+  private roomManager = this.ctx.get(() => RoomManager);
 
   constructor(private ctx: Context) {
     this.registerRoutes();
@@ -43,7 +45,10 @@ export class LegacyApiReplayService {
 
       const query = this.parseQuery(koaCtx.query as Record<string, unknown>);
       const replays = await this.buildReplayQuery(query).getMany();
-      koaCtx.body = replays.map((replay) => this.toDuelLogViewJson(replay));
+      const activeRoomIdentifiers = this.getActiveRoomIdentifierSet();
+      koaCtx.body = replays.map((replay) =>
+        this.toDuelLogViewJson(replay, activeRoomIdentifiers),
+      );
     });
 
     router.get('/api/archive.zip', async (koaCtx) => {
@@ -192,16 +197,20 @@ export class LegacyApiReplayService {
     return parsed;
   }
 
-  private toDuelLogViewJson(replay: DuelRecordEntity) {
+  private toDuelLogViewJson(
+    replay: DuelRecordEntity,
+    activeRoomIdentifiers = this.getActiveRoomIdentifierSet(),
+  ) {
     const mode = replay.hostInfo?.mode || 0;
     const players = [...replay.players].sort((a, b) => a.pos - b.pos);
+    const isDueling = activeRoomIdentifiers.has(replay.roomIdentifier);
     return {
       id: replay.id,
       time: this.formatDate(replay.endTime),
       originalName: replay.name,
       name: `${replay.name} (Duel:${replay.duelCount})`,
       roomid: this.roomIdService.getRoomIdString(replay.roomIdentifier),
-      cloud_replay_id: `R#${replay.id}`,
+      cloud_replay_id: isDueling ? '' : `R#${replay.id}`,
       replay_filename: `${replay.id}.yrp`,
       roommode: mode,
       players: players.map((player) => ({
@@ -213,6 +222,10 @@ export class LegacyApiReplayService {
         score: player.score,
       })),
     };
+  }
+
+  private getActiveRoomIdentifierSet() {
+    return new Set(this.roomManager.allRooms().map((room) => room.identifier));
   }
 
   private formatDate(date: Date) {

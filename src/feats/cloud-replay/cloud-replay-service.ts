@@ -10,6 +10,7 @@ import {
   YGOProStocReplay,
 } from 'ygopro-msg-encode';
 import BetterLock from 'better-lock';
+import type { SelectQueryBuilder } from 'typeorm';
 import { Context } from '../../app';
 import { Client } from '../../client';
 import {
@@ -787,7 +788,7 @@ export class CloudReplayService {
       .getQuery();
 
     qb.where(`EXISTS ${subQuery}`, { clientKey });
-    qb.andWhere('replay.winReason IS NOT NULL');
+    this.filterActiveRoomReplays(qb);
     if (cursor != null) {
       qb.andWhere('replay.id < :cursor', { cursor });
     }
@@ -813,7 +814,7 @@ export class CloudReplayService {
       .where('replay.id = :replayId', { replayId });
 
     if (!includeDueling) {
-      qb.andWhere('replay.winReason IS NOT NULL');
+      this.filterActiveRoomReplays(qb);
     }
 
     return qb.getOne();
@@ -826,12 +827,15 @@ export class CloudReplayService {
     }
 
     const repo = database.getRepository(DuelRecordEntity);
-    const minMax = await repo
+    const minMaxQb = repo
       .createQueryBuilder('replay')
       .select('MIN(replay.id)', 'minId')
-      .addSelect('MAX(replay.id)', 'maxId')
-      .where('replay.winReason IS NOT NULL')
-      .getRawOne<{ minId?: string; maxId?: string }>();
+      .addSelect('MAX(replay.id)', 'maxId');
+    this.filterActiveRoomReplays(minMaxQb);
+    const minMax = await minMaxQb.getRawOne<{
+      minId?: string;
+      maxId?: string;
+    }>();
 
     const minId = Number(minMax?.minId);
     const maxId = Number(minMax?.maxId);
@@ -840,24 +844,44 @@ export class CloudReplayService {
     }
 
     const targetId = Math.floor(Math.random() * (maxId - minId + 1)) + minId;
-    let replay = await repo
+    const afterTargetQb = repo
       .createQueryBuilder('replay')
       .leftJoinAndSelect('replay.players', 'player')
-      .where('replay.winReason IS NOT NULL')
-      .andWhere('replay.id >= :targetId', { targetId })
+      .where('replay.id >= :targetId', { targetId });
+    this.filterActiveRoomReplays(afterTargetQb);
+    let replay = await afterTargetQb
       .orderBy('replay.id', 'ASC')
       .getOne();
 
     if (!replay) {
-      replay = await repo
+      const beforeTargetQb = repo
         .createQueryBuilder('replay')
         .leftJoinAndSelect('replay.players', 'player')
-        .where('replay.winReason IS NOT NULL')
-        .andWhere('replay.id <= :targetId', { targetId })
+        .where('replay.id <= :targetId', { targetId });
+      this.filterActiveRoomReplays(beforeTargetQb);
+      replay = await beforeTargetQb
         .orderBy('replay.id', 'DESC')
         .getOne();
     }
     return replay || undefined;
+  }
+
+  private filterActiveRoomReplays(
+    qb: SelectQueryBuilder<DuelRecordEntity>,
+    alias = 'replay',
+  ) {
+    const activeRoomIdentifiers = this.getActiveRoomIdentifiers();
+    if (!activeRoomIdentifiers.length) {
+      return qb;
+    }
+    return qb.andWhere(
+      `${alias}.roomIdentifier NOT IN (:...activeRoomIdentifiers)`,
+      { activeRoomIdentifiers },
+    );
+  }
+
+  private getActiveRoomIdentifiers() {
+    return this.roomManager.allRooms().map((room) => room.identifier);
   }
 
   private getReplayCursor(client: Client) {

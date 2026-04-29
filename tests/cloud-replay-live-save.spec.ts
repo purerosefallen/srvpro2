@@ -1,6 +1,8 @@
 import { YGOProMsgResponseBase } from 'ygopro-msg-encode';
 import { ClientKeyProvider } from '../src/feats/client-key-provider';
 import { CloudReplayService, resolvePlayerScore } from '../src/feats/cloud-replay';
+import { LegacyApiReplayService } from '../src/legacy-api';
+import { LegacyRoomIdService } from '../src/legacy-api/legacy-room-id-service';
 import {
   OnRoomReceiveResponse,
   OnRoomWin,
@@ -8,7 +10,7 @@ import {
 } from '../src/room';
 import { MenuManager } from '../src/feats/menu-manager';
 
-function makeCtx(tournamentMode = false) {
+function makeCtx(tournamentMode = false, activeRooms: any[] = []) {
   const middleware = jest.fn();
   const clientKeyProvider = {
     getClientKey: jest.fn((client: any) => `key:${client.name}`),
@@ -31,10 +33,44 @@ function makeCtx(tournamentMode = false) {
     const token = factory();
     if (token === ClientKeyProvider) return clientKeyProvider;
     if (token === MenuManager) return {};
-    if (token === RoomManager) return { findByName: jest.fn() };
+    if (token === RoomManager) {
+      return {
+        allRooms: jest.fn(() => activeRooms),
+        findByName: jest.fn(),
+      };
+    }
     return undefined;
   });
   return { ctx, middleware, clientKeyProvider };
+}
+
+function makeLegacyReplayCtx(activeRooms: any[] = []) {
+  const roomIdService = {
+    getRoomIdString: jest.fn((identifier: string) => `room:${identifier}`),
+  };
+  const ctx: any = {
+    createLogger: () => ({
+      warn: jest.fn(),
+      info: jest.fn(),
+      debug: jest.fn(),
+      error: jest.fn(),
+    }),
+    router: {
+      get: jest.fn(),
+    },
+  };
+  ctx.get = jest.fn((factory: () => unknown) => {
+    const token = factory();
+    if (token === LegacyRoomIdService) return roomIdService;
+    if (token === CloudReplayService) return {};
+    if (token === RoomManager) {
+      return {
+        allRooms: jest.fn(() => activeRooms),
+      };
+    }
+    return undefined;
+  });
+  return { ctx, roomIdService };
 }
 
 function makeSnapshotRoom() {
@@ -203,5 +239,47 @@ describe('cloud replay live save hooks', () => {
     expect(next).toHaveBeenCalledTimes(1);
 
     deferred.resolve();
+  });
+});
+
+describe('cloud replay dueling visibility', () => {
+  test('filters active room identifiers instead of winReason', () => {
+    const activeRoom = { identifier: 'active-room' };
+    const { ctx } = makeCtx(false, [activeRoom]);
+    const service = new CloudReplayService(ctx);
+    const qb = {
+      andWhere: jest.fn().mockReturnThis(),
+    };
+
+    (service as any).filterActiveRoomReplays(qb);
+
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'replay.roomIdentifier NOT IN (:...activeRoomIdentifiers)',
+      { activeRoomIdentifiers: ['active-room'] },
+    );
+    expect(qb.andWhere).not.toHaveBeenCalledWith(
+      expect.stringContaining('winReason'),
+      expect.anything(),
+    );
+  });
+
+  test('legacy duel log hides cloud replay id while room is still active', () => {
+    const activeRoom = { identifier: 'active-room' };
+    const { ctx } = makeLegacyReplayCtx([activeRoom]);
+    const service = new LegacyApiReplayService(ctx);
+    const replay: any = {
+      id: 123,
+      endTime: new Date('2026-04-29T00:00:00Z'),
+      name: 'MATCH#live',
+      duelCount: 1,
+      roomIdentifier: 'active-room',
+      hostInfo: { mode: 0 },
+      players: [],
+    };
+
+    const view = (service as any).toDuelLogViewJson(replay);
+
+    expect(view.cloud_replay_id).toBe('');
+    expect(view.replay_filename).toBe('123.yrp');
   });
 });
