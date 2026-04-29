@@ -75,7 +75,7 @@ function makeCtx(record: any, activeRooms: any[] = []) {
     createLogger,
     database: {},
     config: {
-      getBoolean: (key: string) => key === 'ENABLE_CLOUD_REPLAY',
+      getBoolean: (key: string) => key === 'ENABLE_RECOVER',
       getString: (key: string) => (key === 'HOSTINFO_LFLIST' ? '-1' : ''),
       getInt: () => 0,
     },

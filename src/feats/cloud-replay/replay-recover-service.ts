@@ -98,9 +98,7 @@ export class ReplayRecoverService {
   constructor(private ctx: Context) {}
 
   get enabled() {
-    return (
-      this.ctx.config.getBoolean('ENABLE_CLOUD_REPLAY') && !!this.ctx.database
-    );
+    return this.ctx.config.getBoolean('ENABLE_RECOVER') && !!this.ctx.database;
   }
 
   async init() {

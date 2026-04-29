@@ -148,6 +148,9 @@ export const defaultConfig = {
   // Enable cloud replay menu entry (R/W pass handling).
   // Boolean parse rule (default true): only '0'/'false'/'null' => false, otherwise true.
   ENABLE_CLOUD_REPLAY: '1',
+  // Enable replay recovery rooms (RC/RECOVER pass handling).
+  // Boolean parse rule (default true): only '0'/'false'/'null' => false, otherwise true.
+  ENABLE_RECOVER: '1',
   // Enable tournament mode compatibility behavior.
   // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
   TOURNAMENT_MODE: '0',
