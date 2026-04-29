@@ -487,7 +487,10 @@ export class CloudReplayService {
     client.cloudReplaySelectedReplayId = replay.id;
     if (options.showReplayPassHint) {
       await client.sendChat(
-        `#{cloud_replay_detail_access_hint_part1}R#${replay.id}#{cloud_replay_detail_access_hint_part2}`,
+        [
+          `#{cloud_replay_detail_access_hint_part1}R#${replay.id}#{cloud_replay_detail_access_hint_part2}`,
+          `#{recover_replay_hint_part1}RC${replay.id}T<TURN>[PHASE]#{recover_replay_hint_part2}`,
+        ].join('\n'),
         ChatColor.BABYBLUE,
       );
     }
@@ -848,9 +851,7 @@ export class CloudReplayService {
       .leftJoinAndSelect('replay.players', 'player')
       .where('replay.id >= :targetId', { targetId });
     this.filterActiveRoomReplays(afterTargetQb);
-    let replay = await afterTargetQb
-      .orderBy('replay.id', 'ASC')
-      .getOne();
+    let replay = await afterTargetQb.orderBy('replay.id', 'ASC').getOne();
 
     if (!replay) {
       const beforeTargetQb = repo
@@ -858,9 +859,7 @@ export class CloudReplayService {
         .leftJoinAndSelect('replay.players', 'player')
         .where('replay.id <= :targetId', { targetId });
       this.filterActiveRoomReplays(beforeTargetQb);
-      replay = await beforeTargetQb
-        .orderBy('replay.id', 'DESC')
-        .getOne();
+      replay = await beforeTargetQb.orderBy('replay.id', 'DESC').getOne();
     }
     return replay || undefined;
   }

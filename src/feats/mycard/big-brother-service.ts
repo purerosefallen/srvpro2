@@ -20,7 +20,9 @@ export class BigBrotherService {
       return;
     }
     if (!this.postUrl) {
-      this.logger.warn('BIG_BROTHER_ENABLED is set but BIG_BROTHER_POST is empty');
+      this.logger.warn(
+        'BIG_BROTHER_ENABLED is set but BIG_BROTHER_POST is empty',
+      );
       return;
     }
 
@@ -97,7 +99,10 @@ export class BigBrotherService {
 
   private reportNonBlocking(report: BigBrotherReport) {
     void this.report(report).catch((error) => {
-      this.logger.warn({ error, roomname: report.roomname }, 'BIG BROTHER ERROR');
+      this.logger.warn(
+        { error, roomname: report.roomname },
+        'BIG BROTHER ERROR',
+      );
     });
   }
 

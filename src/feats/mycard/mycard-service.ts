@@ -20,6 +20,7 @@ import {
   OnRoomMatchStart,
   OnRoomWin,
   Room,
+  RoomCreateError,
   RoomLeavePlayerReason,
   RoomManager,
 } from '../../room';
@@ -127,7 +128,7 @@ export class MycardService {
       return;
     }
 
-    await this.callMatchApi('POST', 'clear', {
+    this.callMatchApiNonBlocking('POST', 'clear', {
       arena: this.arenaMode,
     });
 
@@ -149,7 +150,7 @@ export class MycardService {
       if (event.room.mycardArena) {
         this.ensureArenaScoreState(event.room);
         event.room.mycardArenaStartTime ||= this.nowString();
-        await this.postArenaRoomStart(event.room);
+        this.postArenaRoomStart(event.room);
       }
       return next();
     });
@@ -291,6 +292,19 @@ export class MycardService {
       this.logger.warn({ method, path, params, error }, 'MATCH API CALL ERROR');
       return null;
     }
+  }
+
+  callMatchApiNonBlocking(
+    method: 'GET' | 'POST',
+    path: string,
+    params: Record<string, string | number | null | undefined>,
+  ) {
+    void this.callMatchApi(method, path, params).catch((error) => {
+      this.logger.warn(
+        { method, path, params, error },
+        'MATCH API CALL ERROR',
+      );
+    });
   }
 
   private get arenaMode() {
@@ -468,7 +482,14 @@ export class MycardService {
       payload,
       this.hostInfoProvider.getHostinfo(),
     );
-    const room = await this.roomManager.findOrCreateByName(roomName, hostinfo);
+    const room = await this.roomManager.findOrCreateByName(
+      roomName,
+      client,
+      hostinfo,
+    );
+    if (room instanceof RoomCreateError) {
+      return client.die(room.message, ChatColor.RED);
+    }
     room.mycard = true;
     room.mycardPrivate = payload.action === 2;
     room.mycardTitle = title;
@@ -499,7 +520,10 @@ export class MycardService {
     }
 
     const roomName = `M#${pass.slice(8)}`;
-    const room = await this.roomManager.findOrCreateByName(roomName);
+    const room = await this.roomManager.findOrCreateByName(roomName, client);
+    if (room instanceof RoomCreateError) {
+      return client.die(room.message, ChatColor.RED);
+    }
     if (room.playingPlayers.some((player) => player.name === client.name)) {
       return client.die('#{invalid_password_unauthorized}', ChatColor.RED);
     }
@@ -514,7 +538,7 @@ export class MycardService {
         : '#{entertain_arena_tip}';
     this.ensureArenaScoreState(room);
 
-    await this.callMatchApi('POST', 'player-joined', {
+    this.callMatchApiNonBlocking('POST', 'player-joined', {
       username: client.name,
       arena: room.mycardArena,
       roomname: room.name,
@@ -618,7 +642,7 @@ export class MycardService {
     }
   }
 
-  private async postArenaRoomStart(room: Room) {
+  private postArenaRoomStart(room: Room) {
     if (!room.mycardArena) {
       return;
     }
@@ -626,7 +650,7 @@ export class MycardService {
     if (players.length < 2) {
       return;
     }
-    await this.callMatchApi('POST', 'room-start', {
+    this.callMatchApiNonBlocking('POST', 'room-start', {
       usernameA: players[0].name,
       usernameB: players[1].name,
       roomname: room.name,

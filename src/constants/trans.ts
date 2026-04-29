@@ -173,6 +173,15 @@ export const TRANSLATIONS = {
     cloud_replay_menu_play: 'Play Cloud Replay',
     cloud_replay_menu_download_yrp: 'Download YRP Replay',
     cloud_replay_menu_back: 'Back',
+    recover_replay_hint_part1: 'To recover this duel, enter ',
+    recover_replay_hint_part2:
+      '#<ROOMNAME> in the host password. [PHASE] can be DP/SP/M1/BP/M2/EP.',
+    recover_hint:
+      'You entered a recover room. Please be ready with your deck on that duel.',
+    recover_start_hint: 'Started recovering...',
+    recover_success: 'Recover success. Please wait until current turn.',
+    recover_fail: 'Recover failed.',
+    recover_invalid: 'Invalid recover syntax.',
     challonge_user_not_found: 'You are not a participant of the tournament.',
     challonge_match_load_failed: 'Failed loading tournament info.',
     challonge_match_not_found: 'Your current match was not found.',
@@ -207,10 +216,8 @@ export const TRANSLATIONS = {
       'During an athletic match, a game quit behavior is regarded as a surrender.',
     entertain_arena_tip:
       'Welcome! This mode bans the top 20 most frequent deck used in athletic mode for past 7 days.',
-    banned_athletic_deck_part1:
-      'Entertainment Mode does not allow top ',
-    banned_athletic_deck_part2:
-      ' popular meta decks. Please change your deck.',
+    banned_athletic_deck_part1: 'Entertainment Mode does not allow top ',
+    banned_athletic_deck_part2: ' popular meta decks. Please change your deck.',
     using_athletic_deck: ' is using a competitive deck.',
     lp_low_opponent: 'もはやお前のライフは風前の灯！',
     lp_low_self: '*Low LP Alert*',
@@ -381,6 +388,14 @@ export const TRANSLATIONS = {
     cloud_replay_menu_play: '播放云录像',
     cloud_replay_menu_download_yrp: '下载 YRP 录像',
     cloud_replay_menu_back: '返回',
+    recover_replay_hint_part1: '复盘本局决斗：主机密码输入 ',
+    recover_replay_hint_part2:
+      '#<ROOMNAME> 即可创建复盘房间，[PHASE] 可填 DP/SP/M1/BP/M2/EP。',
+    recover_hint: '你进入了一个复盘房间，请使用复盘局的卡组准备。',
+    recover_start_hint: '开始复盘...',
+    recover_success: '复盘成功。请耐心等待跳到当前回合。',
+    recover_fail: '复盘失败。',
+    recover_invalid: '复盘房间语法错误。',
     challonge_user_not_found: '未找到你的参赛信息。',
     challonge_match_load_failed: '读取比赛信息失败。',
     challonge_match_not_found: '你没有当前轮次的比赛。',

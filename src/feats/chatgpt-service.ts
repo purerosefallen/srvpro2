@@ -378,7 +378,7 @@ export class ChatgptService {
       }
       this.tokenizerByModel.set(model, encoder);
       return encoder;
-    } catch(e) {
+    } catch (e) {
       this.tiktokenUnavailable = true;
       if (!this.tiktokenUnavailableLogged) {
         this.tiktokenUnavailableLogged = true;

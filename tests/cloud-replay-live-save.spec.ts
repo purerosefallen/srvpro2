@@ -1,13 +1,12 @@
 import { YGOProMsgResponseBase } from 'ygopro-msg-encode';
 import { ClientKeyProvider } from '../src/feats/client-key-provider';
-import { CloudReplayService, resolvePlayerScore } from '../src/feats/cloud-replay';
+import {
+  CloudReplayService,
+  resolvePlayerScore,
+} from '../src/feats/cloud-replay';
 import { LegacyApiReplayService } from '../src/legacy-api';
 import { LegacyRoomIdService } from '../src/legacy-api/legacy-room-id-service';
-import {
-  OnRoomReceiveResponse,
-  OnRoomWin,
-  RoomManager,
-} from '../src/room';
+import { OnRoomReceiveResponse, OnRoomWin, RoomManager } from '../src/room';
 import { MenuManager } from '../src/feats/menu-manager';
 
 function makeCtx(tournamentMode = false, activeRooms: any[] = []) {

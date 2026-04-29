@@ -4,14 +4,18 @@ import { YGOProResourceLoader } from '../ygopro';
 import { DefaultHostInfoProvider } from './default-hostinfo-provder';
 import { RoomManager } from './room-manager';
 import { DefaultDeckChecker } from './default-deck-checker';
+import { DefaultFirstgo } from './default-firstgo';
+import { DefaultSeeder } from './default-seeder';
 import { ZombieRoomCleaner } from './zombie-room-cleaner';
-import { NoWatchToObserverGuard } from './no-watch-to-observer-guard';
+import { NoWatchGuard } from './no-watch-guard';
 
 export const RoomModule = createAppContext<ContextState>()
   .provide(DefaultHostInfoProvider)
   .provide(YGOProResourceLoader)
   .provide(RoomManager)
   .provide(DefaultDeckChecker)
+  .provide(DefaultFirstgo)
+  .provide(DefaultSeeder)
   .provide(ZombieRoomCleaner)
-  .provide(NoWatchToObserverGuard)
+  .provide(NoWatchGuard)
   .define() as AppContext;

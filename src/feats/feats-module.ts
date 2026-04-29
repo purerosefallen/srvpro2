@@ -13,7 +13,7 @@ import { HidePlayerNameProvider } from './hide-player-name-provider';
 import { CommandsService, KoishiContextService } from '../koishi';
 import { ChatgptService } from './chatgpt-service';
 import { ChatLengthCheck } from './chat-length-check';
-import { CloudReplayService } from './cloud-replay';
+import { CloudReplayService, ReplayRecoverService } from './cloud-replay';
 import { LpLowHintService } from './lp-low-hint-service';
 import { LockDeckService } from './lock-deck';
 import { BlockReplay } from './block-replay';
@@ -32,6 +32,7 @@ export const FeatsModule = createAppContext()
   .provide(MenuManager)
   .provide(PlayerStatusNotify) // hint meessages when player status changes
   .provide(CloudReplayService) // persist duel records
+  .provide(ReplayRecoverService) // recover rooms from cloud replay records
   .provide(BlockReplay) // block replay packets for in-room players
   .provide(ChatgptService) // AI-room chat replies
   .provide(ChatLengthCheck) // block blank/overlong chat messages

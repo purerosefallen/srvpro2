@@ -1,6 +1,10 @@
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
-import { cloneJson, fillMissingJsonFields, isObjectRecord } from './resource-util';
+import {
+  cloneJson,
+  fillMissingJsonFields,
+  isObjectRecord,
+} from './resource-util';
 import { AppContext } from 'nfkit';
 import { Logger } from '../services/logger';
 

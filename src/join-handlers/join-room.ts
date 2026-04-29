@@ -1,6 +1,6 @@
-import { YGOProCtosJoinGame } from 'ygopro-msg-encode';
+import { ChatColor, YGOProCtosJoinGame } from 'ygopro-msg-encode';
 import { Context } from '../app';
-import { RoomManager } from '../room/room-manager';
+import { RoomCreateError, RoomManager } from '../room';
 
 export class JoinRoom {
   private logger = this.ctx.createLogger(this.constructor.name);
@@ -18,7 +18,10 @@ export class JoinRoom {
       if (existing) {
         return existing.join(client);
       }
-      const room = await roomManager.findOrCreateByName(msg.pass);
+      const room = await roomManager.findOrCreateByName(msg.pass, client);
+      if (room instanceof RoomCreateError) {
+        return client.die(room.message, ChatColor.RED);
+      }
       room.native = true;
       return room.join(client);
     });

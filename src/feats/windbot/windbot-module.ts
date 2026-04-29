@@ -8,4 +8,4 @@ export const WindbotModule = createAppContext<ContextState>()
   .provide(WindBotProvider)
   .provide(RewindService)
   .provide(WindbotSpawner)
-  .define()  as AppContext;
+  .define() as AppContext;

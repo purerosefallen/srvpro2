@@ -4,12 +4,15 @@ import {
 } from '../src/feats/mycard/password-codec';
 import { DefaultHostinfo } from '../src/room/default-hostinfo';
 
-function makePayload(action: number, options: Partial<{
-  opt0: number;
-  opt1: number;
-  opt2: number;
-  opt3: number;
-}> = {}) {
+function makePayload(
+  action: number,
+  options: Partial<{
+    opt0: number;
+    opt1: number;
+    opt2: number;
+    opt3: number;
+  }> = {},
+) {
   const buffer = Buffer.alloc(6);
   buffer.writeUInt8(0, 0);
   buffer.writeUInt8((action << 4) | (options.opt0 ?? 0), 1);
@@ -19,7 +22,7 @@ function makePayload(action: number, options: Partial<{
   const checksum = buffer.reduce((sum, value, index) => {
     return index === 0 ? sum : sum + value;
   }, 0);
-  buffer.writeUInt8((-checksum) & 0xff, 0);
+  buffer.writeUInt8(-checksum & 0xff, 0);
   return buffer;
 }
 
@@ -91,4 +94,3 @@ describe('mycard password codec', () => {
     expect(hostinfo.auto_death).toBe(40);
   });
 });
-

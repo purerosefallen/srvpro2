@@ -85,7 +85,6 @@ import { OnRoomGameStart } from './room-event/on-room-game-start';
 import YGOProDeck from 'ygopro-deck-encode';
 import { checkDeck, checkChangeSide } from '../utility/check-deck';
 import { DuelRecord } from './duel-record';
-import { generateSeed } from '../utility/generate-seed';
 import { OnRoomDuelStart } from './room-event/on-room-duel-start';
 import { OcgcoreWorker } from '../ocgcore-worker/ocgcore-worker';
 import { initWorker, type WorkerInstance } from 'yuzuthread';
@@ -107,6 +106,10 @@ import { OnRoomFinger } from './room-event/on-room-finger';
 import { OnRoomSelectTp } from './room-event/on-room-select-tp';
 import { OnRoomReceiveResponse } from './room-event/on-room-receive-response';
 import { RoomCheckDeck } from './room-event/room-check-deck';
+import { RoomDecideFirst } from './room-event/room-decide-first';
+import { RoomDecideFirstgo } from './room-event/room-decide-firstgo';
+import { RoomJoinCheck } from './room-event/room-join-check';
+import { RoomUseSeed } from './room-event/room-use-seed';
 import cryptoRandomString from 'crypto-random-string';
 import { RoomCurrentFieldInfo, RoomInfo } from './room-info';
 import {
@@ -140,6 +143,7 @@ export class Room {
     private ctx: Context,
     public name: string,
     private partialHostinfo: Partial<HostInfo> = {},
+    private resolvedHostinfo?: HostInfo,
   ) {}
 
   identifier = cryptoRandomString({
@@ -149,9 +153,11 @@ export class Room {
   createTime = new Date();
   private logger = this.ctx.createLogger(`Room:${this.name}`);
 
-  hostinfo = this.ctx
-    .get(() => DefaultHostInfoProvider)
-    .parseHostinfo(this.name, this.partialHostinfo);
+  hostinfo =
+    this.resolvedHostinfo ??
+    this.ctx
+      .get(() => DefaultHostInfoProvider)
+      .parseHostinfo(this.name, this.partialHostinfo);
 
   get hostinfoWinMatchCount() {
     const firstbit = this.hostinfo.mode & 0x1;
@@ -416,13 +422,19 @@ export class Room {
 
     // 记录进房前是否已经有玩家，用于判定首个玩家为房主
     const hasPlayerBeforeJoin = this.allPlayers.length > 0;
+    const toPos = isPlayer ? firstEmptyPlayerSlot : NetPlayerType.OBSERVER;
+
+    const joinCheck = await this.ctx.dispatch(
+      new RoomJoinCheck(this, toPos, hasPlayerBeforeJoin),
+      client,
+    );
+    if (joinCheck?.value) {
+      return client.die(joinCheck.value, ChatColor.RED);
+    }
 
     if (isPlayer) {
       this.players[firstEmptyPlayerSlot] = client;
       client.pos = firstEmptyPlayerSlot;
-    } else if (this.hostinfo.no_watch) {
-      // not allowing watchers
-      return client.die('#{watch_denied}', ChatColor.RED);
     } else {
       this.watchers.add(client);
       client.pos = NetPlayerType.OBSERVER;
@@ -1041,13 +1053,7 @@ export class Room {
       // Check if all players have submitted their decks
       const allReady = this.playingPlayers.every((p) => p.deck);
       if (allReady) {
-        const prevWinPos =
-          this.duelRecords[this.duelRecords.length - 1]?.winPosition;
-        return this.startGame(
-          prevWinPos == null || prevWinPos > 1
-            ? undefined
-            : ((1 - prevWinPos) as 0 | 1),
-        );
+        return this.startGame();
       }
     }
   }
@@ -1235,7 +1241,7 @@ export class Room {
     await this.toFirstGo(winnerPos);
   }
 
-  async startGame(firstgoPos?: number) {
+  async startGame() {
     if (![DuelStage.Begin, DuelStage.Siding].includes(this.duelStage)) {
       return false;
     }
@@ -1250,10 +1256,23 @@ export class Room {
       });
     }
 
-    if (firstgoPos != null && firstgoPos >= 0 && firstgoPos <= 1) {
-      await this.toFirstGo(firstgoPos);
-    } else {
-      await this.toFinger();
+    const first = await this.ctx.dispatch(
+      new RoomDecideFirst(this),
+      this.playingPlayers[0],
+    );
+    const firstPos = this.normalizeDuelPos(first?.value);
+
+    if (firstPos == null) {
+      const firstgo = await this.ctx.dispatch(
+        new RoomDecideFirstgo(this),
+        this.playingPlayers[0],
+      );
+      const firstgoPos = this.normalizeDuelPos(firstgo?.value);
+      if (firstgoPos != null) {
+        await this.toFirstGo(firstgoPos);
+      } else {
+        await this.toFinger();
+      }
     }
 
     // 触发事件
@@ -1268,6 +1287,30 @@ export class Room {
     // 触发游戏开始事件（每局游戏）
     await this.ctx.dispatch(new OnRoomGameStart(this), this.playingPlayers[0]);
 
+    if (firstPos != null) {
+      await this.startDuel(firstPos);
+    }
+
+    return true;
+  }
+
+  private normalizeDuelPos(pos: number | undefined) {
+    return pos === 0 || pos === 1 ? pos : undefined;
+  }
+
+  private async startDuel(firstPos: number) {
+    const firstPlayer = this.getDuelPosPlayers(firstPos)[0];
+    if (!firstPlayer) {
+      return false;
+    }
+    this.firstgoPos = firstPos;
+    this.duelStage = DuelStage.FirstGo;
+    await this.onDuelStart(
+      firstPlayer,
+      new YGOProCtosTpResult().fromPartial({
+        res: TurnPlayerResult.FIRST,
+      }),
+    );
     return true;
   }
 
@@ -1522,8 +1565,9 @@ export class Room {
     }
     this.isPosSwapped =
       (msg.res === TurnPlayerResult.FIRST) !== (this.getDuelPos(client) === 0);
+    const seed = await this.ctx.dispatch(new RoomUseSeed(this), client);
     const duelRecord = new DuelRecord(
-      generateSeed(),
+      seed?.value || [],
       this.playingPlayers.map((p) => ({ name: p.name, deck: p.deck! })),
       this.isPosSwapped,
     );
@@ -2095,7 +2139,7 @@ export class Room {
     this.isRetrying = false;
     await this.ctx.dispatch(new OnRoomReceiveResponse(this, response), client);
     try {
-      await this.ocgcore.setResponse(msg.response);
+      await this.ocgcore.setResponse(response);
     } catch (e) {
       return this.handleOcgcoreDuelError(e, 'setting response in ocgcore');
     }

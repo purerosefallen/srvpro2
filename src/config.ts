@@ -179,8 +179,7 @@ export const defaultConfig = {
   // Mycard arena AFK timeout. Format: integer string in seconds (s). '0' disables.
   MYCARD_ARENA_HANG_TIMEOUT: '90',
   // Mycard arena permit-check URL. Empty means disabled.
-  MYCARD_ARENA_CHECK_PERMIT:
-    'https://sapi.moecube.com:444/ygopro/match/permit',
+  MYCARD_ARENA_CHECK_PERMIT: 'https://sapi.moecube.com:444/ygopro/match/permit',
   // Mycard arena score post URL. Empty means disabled.
   MYCARD_ARENA_POST_SCORE: 'https://sapi.moecube.com:444/ygopro/arena/score',
   // Mycard arena score query URL. Empty means disabled.
@@ -207,8 +206,7 @@ export const defaultConfig = {
   ATHLETIC_CHECK_IDENTIFIER_URL:
     'https://sapi.moecube.com:444/ygopro/identifier/production',
   // Athletic ranking request params. Format: JSON object string.
-  ATHLETIC_CHECK_FETCH_PARAMS:
-    '{"type":"week","source":"mycard-athletic"}',
+  ATHLETIC_CHECK_FETCH_PARAMS: '{"type":"week","source":"mycard-athletic"}',
   // Athletic ranking count used for matching deck types.
   ATHLETIC_CHECK_RANK_COUNT: '20',
   // Ban top N athletic deck types in Mycard arena rooms. '0' disables.
