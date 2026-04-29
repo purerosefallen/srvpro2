@@ -105,6 +105,7 @@ import { OnRoomSidingStart } from './room-event/on-room-siding-start';
 import { OnRoomSidingReady } from './room-event/on-room-siding-ready';
 import { OnRoomFinger } from './room-event/on-room-finger';
 import { OnRoomSelectTp } from './room-event/on-room-select-tp';
+import { OnRoomReceiveResponse } from './room-event/on-room-receive-response';
 import { RoomCheckDeck } from './room-event/room-check-deck';
 import cryptoRandomString from 'crypto-random-string';
 import { RoomCurrentFieldInfo, RoomInfo } from './room-info';
@@ -2092,6 +2093,7 @@ export class Room {
     }
     this.lastResponseRequestMsg = undefined;
     this.isRetrying = false;
+    await this.ctx.dispatch(new OnRoomReceiveResponse(this, response), client);
     try {
       await this.ocgcore.setResponse(msg.response);
     } catch (e) {

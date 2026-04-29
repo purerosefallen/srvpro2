@@ -18,6 +18,7 @@ import {
   decodeSeedBase64,
 } from './utility';
 
+@Index(['roomIdentifier', 'duelCount'])
 @Entity('duel_record')
 export class DuelRecordEntity extends BaseTimeEntity {
   @PrimaryColumn({

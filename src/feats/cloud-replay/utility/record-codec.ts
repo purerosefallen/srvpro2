@@ -10,7 +10,7 @@ import { Room } from '../../../room';
 const RESPONSE_LENGTH_BYTES = 1;
 
 export function resolvePlayerScore(room: Room, client: Client) {
-  const duelPos = room.getIngameDuelPos(client);
+  const duelPos = room.getDuelPos(client);
   return room.score[duelPos] || 0;
 }
 

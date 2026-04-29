@@ -1,6 +1,7 @@
 import {
   ChatColor,
   HostInfo,
+  YGOProMsgResponseBase,
   YGOProStocDuelEnd,
   YGOProStocDuelStart,
   YGOProStocGameMsg,
@@ -8,9 +9,16 @@ import {
   YGOProStocJoinGame,
   YGOProStocReplay,
 } from 'ygopro-msg-encode';
+import BetterLock from 'better-lock';
 import { Context } from '../../app';
 import { Client } from '../../client';
-import { DuelRecord, OnRoomWin, Room } from '../../room';
+import {
+  DuelRecord,
+  OnRoomReceiveResponse,
+  OnRoomWin,
+  Room,
+  RoomManager,
+} from '../../room';
 import { ClientKeyProvider } from '../client-key-provider';
 import { MenuEntry, MenuManager } from '../menu-manager';
 import { DuelRecordEntity } from './duel-record.entity';
@@ -48,6 +56,42 @@ type DirectReplayPass = {
   viewMode?: ReplayWatchViewMode;
 };
 
+type SaveDuelRecordOptions = {
+  swapped: boolean;
+  winPlayer?: number;
+};
+
+type DuelRecordPlayerSnapshot = {
+  name: string;
+  pos: number;
+  realName: string;
+  ip: string;
+  clientKey: string;
+  isFirst: boolean;
+  score: number;
+  startDeckBuffer: string;
+  startDeckMainc: number;
+  currentDeckBuffer: string;
+  currentDeckMainc: number;
+  ingameDeckBuffer: string;
+  ingameDeckMainc: number;
+  winner: boolean;
+};
+
+type DuelRecordSnapshot = {
+  startTime: Date;
+  endTime: Date;
+  name: string;
+  roomIdentifier: string;
+  hostInfo: HostInfo;
+  duelCount: number;
+  winReason: number | null;
+  messages: string;
+  responses: string;
+  seed: string;
+  players: DuelRecordPlayerSnapshot[];
+};
+
 declare module '../../client' {
   interface Client {
     cloudReplayPageCursors?: Array<number | null>;
@@ -60,14 +104,24 @@ export class CloudReplayService {
   private logger = this.ctx.createLogger(this.constructor.name);
   private clientKeyProvider = this.ctx.get(() => ClientKeyProvider);
   private menuManager = this.ctx.get(() => MenuManager);
+  private roomManager = this.ctx.get(() => RoomManager);
+  private duelRecordSaveLock = new BetterLock();
 
   constructor(private ctx: Context) {}
 
   async init() {
     this.ctx.middleware(OnRoomWin, async (event, _client, next) => {
-      await this.saveDuelRecord(event);
+      if (event.winMatch) {
+        await this.saveDuelRecordFromWinEvent(event);
+      } else {
+        void this.saveDuelRecordFromWinEvent(event);
+      }
       return next();
     });
+
+    if (this.ctx.config.getBoolean('TOURNAMENT_MODE')) {
+      this.registerTournamentDuelRecordHooks();
+    }
   }
 
   async tryHandleJoinPass(pass: string, client: Client) {
@@ -116,53 +170,184 @@ export class CloudReplayService {
     return true;
   }
 
-  private async saveDuelRecord(event: OnRoomWin) {
-    const database = this.ctx.database;
-    if (!database) {
-      return;
-    }
+  private registerTournamentDuelRecordHooks() {
+    this.ctx.middleware(OnRoomReceiveResponse, async (event, _client, next) => {
+      this.saveDuelRecordNonBlocking(
+        event.room,
+        {
+          swapped: event.room.isPosSwapped,
+        },
+        'OnRoomReceiveResponse',
+      );
+      return next();
+    });
 
-    const room = event.room;
-    const duelRecord = room.lastDuelRecord;
-    if (!duelRecord) {
-      return;
-    }
+    this.ctx.middleware(
+      YGOProMsgResponseBase,
+      async (_message, client, next) => {
+        try {
+          return await next();
+        } finally {
+          const room = this.getClientRoom(client);
+          if (room) {
+            this.saveDuelRecordNonBlocking(
+              room,
+              {
+                swapped: room.isPosSwapped,
+              },
+              'YGOProMsgResponseBase',
+            );
+          }
+        }
+      },
+      true,
+    );
+  }
 
-    const duelRecordRepo = database.getRepository(DuelRecordEntity);
+  private saveDuelRecordFromWinEvent(event: OnRoomWin) {
+    return this.saveDuelRecordWithLogging(
+      event.room,
+      {
+        swapped: event.wasSwapped,
+        winPlayer: event.winMsg.player,
+      },
+      'OnRoomWin',
+    );
+  }
 
+  private saveDuelRecordNonBlocking(
+    room: Room,
+    options: SaveDuelRecordOptions,
+    source: string,
+  ) {
+    void this.saveDuelRecordWithLogging(room, options, source);
+  }
+
+  private async saveDuelRecordWithLogging(
+    room: Room,
+    options: SaveDuelRecordOptions,
+    source: string,
+  ) {
     try {
-      const record = duelRecordRepo.create({
-        startTime: duelRecord.startTime,
-        endTime: duelRecord.endTime || new Date(),
-        name: room.name,
-        roomIdentifier: this.getRoomIdentifier(room),
-        hostInfo: room.hostinfo,
-        duelCount: room.duelRecords.length,
-        winReason: event.winMsg.type,
-        messages: encodeMessagesBase64(duelRecord.messages),
-        responses: encodeResponsesBase64(duelRecord.responses),
-        seed: encodeSeedBase64(duelRecord.seed),
-        players: room.playingPlayers.map((client) =>
-          this.buildPlayerRecord(
-            room,
-            client,
-            event.winMsg.player,
-            event.wasSwapped,
-          ),
-        ),
-      });
-
-      await duelRecordRepo.save(record);
-      await this.trySendTournamentReplayHint(room, record.id);
-    } catch (error) {
+      await this.saveDuelRecord(room, options);
+    } catch (error: unknown) {
       this.logger.warn(
         {
+          source,
           roomName: room.name,
-          error: (error as Error).toString(),
+          error: (error as Error)?.stack || String(error),
         },
         'Failed saving duel record',
       );
     }
+  }
+
+  private async saveDuelRecord(room: Room, options: SaveDuelRecordOptions) {
+    const database = this.ctx.database;
+    if (!database) {
+      return undefined;
+    }
+
+    const snapshot = this.createDuelRecordSnapshot(room, options);
+    if (!snapshot) {
+      return undefined;
+    }
+    const shouldSendReplayHint = snapshot.winReason != null;
+
+    const record = await this.saveDuelRecordSnapshot(database, snapshot);
+
+    if (shouldSendReplayHint) {
+      await this.trySendTournamentReplayHint(room, record.id);
+    }
+
+    return record;
+  }
+
+  private async saveDuelRecordSnapshot(
+    database: NonNullable<Context['database']>,
+    snapshot: DuelRecordSnapshot,
+  ) {
+    return this.duelRecordSaveLock.acquire(snapshot.roomIdentifier, () =>
+      database.transaction(async (manager) => {
+        const duelRecordRepo = manager.getRepository(DuelRecordEntity);
+        const playerRepo = manager.getRepository(DuelRecordPlayer);
+        let record = await duelRecordRepo
+          .createQueryBuilder('record')
+          .where('record.roomIdentifier = :roomIdentifier', {
+            roomIdentifier: snapshot.roomIdentifier,
+          })
+          .andWhere('record.duelCount = :duelCount', {
+            duelCount: snapshot.duelCount,
+          })
+          .orderBy('record.id', 'DESC')
+          .getOne();
+
+        if (!record) {
+          record = duelRecordRepo.create();
+        }
+        this.applyRecordSnapshot(record, snapshot);
+        record = await duelRecordRepo.save(record);
+
+        const existingPlayers = await playerRepo.find({
+          where: {
+            duelRecordId: record.id,
+          },
+        });
+        const existingPlayerByPos = new Map(
+          existingPlayers.map((player) => [player.pos, player]),
+        );
+        const snapshotPlayerPos = new Set(
+          snapshot.players.map((player) => player.pos),
+        );
+        const savedPlayers: DuelRecordPlayer[] = [];
+
+        for (const playerSnapshot of snapshot.players) {
+          const player =
+            existingPlayerByPos.get(playerSnapshot.pos) || playerRepo.create();
+          Object.assign(player, playerSnapshot, {
+            duelRecordId: record.id,
+          });
+          savedPlayers.push(await playerRepo.save(player));
+        }
+
+        const stalePlayerIds = existingPlayers
+          .filter((player) => !snapshotPlayerPos.has(player.pos))
+          .map((player) => player.id);
+        if (stalePlayerIds.length) {
+          await playerRepo.softDelete(stalePlayerIds);
+        }
+
+        record.players = savedPlayers;
+        return record;
+      }),
+    );
+  }
+
+  private createDuelRecordSnapshot(
+    room: Room,
+    options: SaveDuelRecordOptions,
+  ): DuelRecordSnapshot | undefined {
+    const duelRecord = room.lastDuelRecord;
+    if (!duelRecord) {
+      return undefined;
+    }
+
+    const roomIdentifier = this.getRoomIdentifier(room);
+    return {
+      startTime: new Date(duelRecord.startTime.getTime()),
+      endTime: new Date(),
+      name: room.name,
+      roomIdentifier,
+      hostInfo: { ...room.hostinfo },
+      duelCount: room.duelRecords.length,
+      winReason: duelRecord.winReason ?? null,
+      messages: encodeMessagesBase64(duelRecord.messages),
+      responses: encodeResponsesBase64(duelRecord.responses),
+      seed: encodeSeedBase64(duelRecord.seed),
+      players: room.playingPlayers.map((client) =>
+        this.buildPlayerRecordSnapshot(room, client, options),
+      ),
+    };
   }
 
   private async trySendTournamentReplayHint(room: Room, replayId: number) {
@@ -175,32 +360,56 @@ export class CloudReplayService {
     );
   }
 
-  private buildPlayerRecord(
+  private applyRecordSnapshot(
+    record: DuelRecordEntity,
+    snapshot: DuelRecordSnapshot,
+  ) {
+    record.startTime = snapshot.startTime;
+    record.endTime = snapshot.endTime;
+    record.name = snapshot.name;
+    record.roomIdentifier = snapshot.roomIdentifier;
+    record.hostInfo = snapshot.hostInfo;
+    record.duelCount = snapshot.duelCount;
+    record.winReason = snapshot.winReason;
+    record.messages = snapshot.messages;
+    record.responses = snapshot.responses;
+    record.seed = snapshot.seed;
+  }
+
+  private buildPlayerRecordSnapshot(
     room: Room,
     client: Client,
-    winPlayer: number,
-    wasSwapped: boolean,
+    options: SaveDuelRecordOptions,
   ) {
-    const player = new DuelRecordPlayer();
-    player.name = client.name;
-    player.pos = client.pos;
-    player.realName = client.name_vpass || client.name;
-    player.ip = client.ip || '';
-    player.clientKey = this.clientKeyProvider.getClientKey(client);
-    player.isFirst = resolveIsFirstPlayer(room, client, wasSwapped);
-    player.score = resolvePlayerScore(room, client);
-    player.startDeckBuffer = encodeDeckBase64(client.startDeck);
-    player.startDeckMainc = resolveStartDeckMainc(client);
-    player.currentDeckBuffer = encodeCurrentDeckBase64(room, client);
-    player.currentDeckMainc = resolveCurrentDeckMainc(room, client);
-    player.ingameDeckBuffer = encodeIngameDeckBase64(room, client);
-    player.ingameDeckMainc = resolveIngameDeckMainc(room, client);
-    player.winner = room.getDuelPos(client) === winPlayer;
-    return player;
+    return {
+      name: client.name,
+      pos: client.pos,
+      realName: client.name_vpass || client.name,
+      ip: client.ip || '',
+      clientKey: this.clientKeyProvider.getClientKey(client),
+      isFirst: resolveIsFirstPlayer(room, client, options.swapped),
+      score: resolvePlayerScore(room, client),
+      startDeckBuffer: encodeDeckBase64(client.startDeck),
+      startDeckMainc: resolveStartDeckMainc(client),
+      currentDeckBuffer: encodeCurrentDeckBase64(room, client),
+      currentDeckMainc: resolveCurrentDeckMainc(room, client),
+      ingameDeckBuffer: encodeIngameDeckBase64(room, client),
+      ingameDeckMainc: resolveIngameDeckMainc(room, client),
+      winner:
+        options.winPlayer != null &&
+        room.getDuelPos(client) === options.winPlayer,
+    };
   }
 
   private getRoomIdentifier(room: Room) {
     return room.identifier;
+  }
+
+  private getClientRoom(client: Client) {
+    if (!client.roomName) {
+      return undefined;
+    }
+    return this.roomManager.findByName(client.roomName);
   }
 
   private async playRandomReplay(client: Client) {
