@@ -26,6 +26,7 @@ export * from './room-event/room-create-check';
 export * from './room-event/room-decide-first';
 export * from './room-event/room-decide-firstgo';
 export * from './room-event/room-join-check';
+export * from './room-event/room-side-check';
 export * from './room-event/room-use-seed';
 export * from './default-hostinfo-provder';
 export * from './default-hostinfo';

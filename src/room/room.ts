@@ -83,7 +83,6 @@ import {
 import { OnRoomMatchStart } from './room-event/on-room-match-start';
 import { OnRoomGameStart } from './room-event/on-room-game-start';
 import YGOProDeck from 'ygopro-deck-encode';
-import { checkDeck, checkChangeSide } from '../utility/check-deck';
 import { DuelRecord } from './duel-record';
 import { OnRoomDuelStart } from './room-event/on-room-duel-start';
 import { OcgcoreWorker } from '../ocgcore-worker/ocgcore-worker';
@@ -108,6 +107,7 @@ import { OnRoomReceiveResponse } from './room-event/on-room-receive-response';
 import { OnRoomPlayerReady } from './room-event/on-room-player-ready';
 import { OnRoomPlayerUnready } from './room-event/on-room-player-unready';
 import { RoomCheckDeck } from './room-event/room-check-deck';
+import { RoomSideCheck } from './room-event/room-side-check';
 import { RoomDecideFirst } from './room-event/room-decide-first';
 import { RoomDecideFirstgo } from './room-event/room-decide-firstgo';
 import { RoomJoinCheck } from './room-event/room-join-check';
@@ -1058,7 +1058,11 @@ export class Room {
         return;
       }
 
-      if (!checkChangeSide(client.startDeck, deck)) {
+      const sideErrorContainer = await this.ctx.dispatch(
+        new RoomSideCheck(this, client, deck, client.startDeck, cardReader),
+        client,
+      );
+      if (sideErrorContainer && !sideErrorContainer.isValid) {
         await client.send(
           new YGOProStocErrorMsg().fromPartial({
             msg: ErrorMessageType.SIDEERROR,
