@@ -2,6 +2,7 @@ import YGOProDeck from 'ygopro-deck-encode';
 import {
   ChatColor,
   HostInfo,
+  NetPlayerType,
   OcgcoreCommonConstants,
   YGOProCtosResponse,
   YGOProMsgNewPhase,
@@ -18,6 +19,7 @@ import { Context } from '../../app';
 import { Client } from '../../client';
 import {
   DefaultHostInfoProvider,
+  DuelStage,
   OnRoomCreate,
   OnRoomDuelStart,
   OnRoomPlayerReady,
@@ -178,7 +180,11 @@ export class ReplayRecoverService {
     });
 
     this.ctx.middleware(RoomJoinCheck, async (event, client, next) => {
-      if (typeof event.value === 'string') {
+      if (
+        typeof event.value === 'string' ||
+        event.room.duelStage !== DuelStage.Begin ||
+        event.value === NetPlayerType.OBSERVER
+      ) {
         return next();
       }
       const record = event.room.recoverState?.record;
@@ -461,8 +467,7 @@ export class ReplayRecoverService {
 
     const seatReversed = this.resolveSeatReversed(room, recordPos, currentPos);
     return (
-      state.seatReversed === undefined ||
-      state.seatReversed === seatReversed
+      state.seatReversed === undefined || state.seatReversed === seatReversed
     );
   }
 
@@ -478,7 +483,11 @@ export class ReplayRecoverService {
     state.seatReversed = this.resolveSeatReversed(room, recordPos, currentPos);
   }
 
-  private resolveSeatReversed(room: Room, recordPos: number, currentPos: number) {
+  private resolveSeatReversed(
+    room: Room,
+    recordPos: number,
+    currentPos: number,
+  ) {
     return room.getDuelPos(recordPos) !== room.getDuelPos(currentPos);
   }
 
