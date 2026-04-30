@@ -19,6 +19,8 @@ export * from './room-event/on-room-siding-start';
 export * from './room-event/on-room-win';
 export * from './room-event/on-room-match-start';
 export * from './room-event/on-room-receive-response';
+export * from './room-event/on-room-player-ready';
+export * from './room-event/on-room-player-unready';
 export * from './room-event/room-check-deck';
 export * from './room-event/room-create-check';
 export * from './room-event/room-decide-first';

@@ -13,7 +13,7 @@ export class NoWatchGuard {
   async init() {
     this.ctx.middleware(RoomJoinCheck, async (event, _client, next) => {
       if (
-        event.toPos === NetPlayerType.OBSERVER &&
+        event.value === NetPlayerType.OBSERVER &&
         event.room.hostinfo.no_watch
       ) {
         return event.use('#{watch_denied}');

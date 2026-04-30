@@ -1,12 +1,12 @@
 import { ValueContainer } from '../../utility/value-container';
 import { Room } from '../room';
 
-export class RoomJoinCheck extends ValueContainer<string> {
+export class RoomJoinCheck extends ValueContainer<number | string> {
   constructor(
     public room: Room,
-    public toPos: number,
+    value: number,
     public hasPlayerBeforeJoin: boolean,
   ) {
-    super('');
+    super(value);
   }
 }

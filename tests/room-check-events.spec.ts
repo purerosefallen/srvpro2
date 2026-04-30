@@ -88,7 +88,9 @@ describe('RoomCreateCheck', () => {
 });
 
 describe('RoomJoinCheck', () => {
-  function makeJoinRoom(rejectMessage = '') {
+  function makeJoinRoom(
+    handleJoinCheck: string | ((event: RoomJoinCheck) => unknown) = '',
+  ) {
     const ctx: any = {
       createLogger,
       config: {
@@ -97,8 +99,13 @@ describe('RoomJoinCheck', () => {
         getInt: () => 0,
       },
       dispatch: jest.fn(async (event: any) => {
-        if (event instanceof RoomJoinCheck && rejectMessage) {
-          return event.use(rejectMessage);
+        if (event instanceof RoomJoinCheck) {
+          if (typeof handleJoinCheck === 'function') {
+            return handleJoinCheck(event) || event;
+          }
+          if (handleJoinCheck) {
+            return event.use(handleJoinCheck);
+          }
         }
         return event;
       }),
@@ -114,31 +121,83 @@ describe('RoomJoinCheck', () => {
     return new Room(ctx, 'room', { lflist: -1 });
   }
 
-  test('passes player slot as toPos and blocks before mutating room', async () => {
-    const room = makeJoinRoom('no');
+  function makeJoinClient(overrides: Partial<any> = {}) {
+    return {
+      die: jest.fn(),
+      send: jest.fn(),
+      sendTypeChange: jest.fn(),
+      prepareEnterPacket: jest.fn(() => ({})),
+      prepareChangePacket: jest.fn(() => ({})),
+      ...overrides,
+    };
+  }
+
+  test('passes player slot as value and blocks before mutating room', async () => {
+    const seenValues: Array<number | string> = [];
+    const room = makeJoinRoom((event) => {
+      seenValues.push(event.value);
+      return event.use('no');
+    });
     const client: any = { die: jest.fn() };
 
     await room.join(client);
 
     const event = (room as any).ctx.dispatch.mock.calls[0][0] as RoomJoinCheck;
-    expect(event.toPos).toBe(0);
+    expect(seenValues).toEqual([0]);
     expect(event.hasPlayerBeforeJoin).toBe(false);
     expect(room.playingPlayers).toHaveLength(0);
     expect(client.die).toHaveBeenCalledWith('no', ChatColor.RED);
   });
 
-  test('passes observer as toPos when joining as watcher', async () => {
-    const room = makeJoinRoom('no');
+  test('passes observer as value when joining as watcher', async () => {
+    const seenValues: Array<number | string> = [];
+    const room = makeJoinRoom((event) => {
+      seenValues.push(event.value);
+      return event.use('no');
+    });
     room.players[0] = { pos: 0 } as any;
     const client: any = { die: jest.fn() };
 
-    await room.join(client, true);
+    await room.join(client, NetPlayerType.OBSERVER);
 
     const event = (room as any).ctx.dispatch.mock.calls[0][0] as RoomJoinCheck;
-    expect(event.toPos).toBe(NetPlayerType.OBSERVER);
+    expect(seenValues).toEqual([NetPlayerType.OBSERVER]);
     expect(event.hasPlayerBeforeJoin).toBe(true);
     expect(room.watchers.size).toBe(0);
     expect(client.die).toHaveBeenCalledWith('no', ChatColor.RED);
+  });
+
+  test('joins the requested empty player slot from RoomJoinCheck value', async () => {
+    const room = makeJoinRoom((event) => event.use(1));
+    const client: any = makeJoinClient();
+
+    await room.join(client);
+
+    expect(client.pos).toBe(1);
+    expect(room.players[1]).toBe(client);
+    expect(room.watchers.has(client)).toBe(false);
+  });
+
+  test('joins as observer when RoomJoinCheck value is observer', async () => {
+    const room = makeJoinRoom((event) => event.use(NetPlayerType.OBSERVER));
+    const client: any = makeJoinClient();
+
+    await room.join(client);
+
+    expect(client.pos).toBe(NetPlayerType.OBSERVER);
+    expect(room.playingPlayers).toHaveLength(0);
+    expect(room.watchers.has(client)).toBe(true);
+  });
+
+  test('falls back to the first open player slot for invalid requested slots', async () => {
+    const room = makeJoinRoom((event) => event.use(99));
+    room.players[1] = makeJoinClient({ pos: 1 }) as any;
+    const client: any = makeJoinClient();
+
+    await room.join(client);
+
+    expect(client.pos).toBe(0);
+    expect(room.players[0]).toBe(client);
   });
 });
 

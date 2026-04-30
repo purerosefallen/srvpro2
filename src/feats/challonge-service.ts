@@ -1,5 +1,9 @@
 import YGOProDeck from 'ygopro-deck-encode';
-import { ChatColor, YGOProCtosHsToObserver } from 'ygopro-msg-encode';
+import {
+  ChatColor,
+  YGOProCtosHsToDuelist,
+  YGOProCtosHsToObserver,
+} from 'ygopro-msg-encode';
 import { Context } from '../app';
 import { DuelStage, OnRoomFinalize, OnRoomSidingStart, Room } from '../room';
 import { deckNameMatch } from '../utility/deck-name-match';
@@ -44,6 +48,7 @@ type ChallongeJoinResolveResult =
       ok: true;
       participant: Participant;
       match: Match;
+      pos: number;
     }
   | {
       ok: false;
@@ -78,7 +83,7 @@ export class ChallongeService {
   async init() {
     this.registerLockDeckCheck();
     this.registerScoreHooks();
-    this.registerToObserverGuard();
+    this.registerPositionChangeGuard();
   }
 
   get enabled() {
@@ -160,11 +165,11 @@ export class ChallongeService {
       };
     }
 
-    const match = this.findPendingMatchByParticipant(
+    const matchInfo = this.findPendingMatchInfoByParticipant(
       tournament,
       participant.id,
     );
-    if (!match) {
+    if (!matchInfo) {
       return {
         ok: false,
         reason: 'match_not_found',
@@ -174,7 +179,8 @@ export class ChallongeService {
     return {
       ok: true,
       participant,
-      match,
+      match: matchInfo.match,
+      pos: matchInfo.pos,
     };
   }
 
@@ -230,14 +236,25 @@ export class ChallongeService {
     });
   }
 
-  private registerToObserverGuard() {
-    this.ctx.middleware(YGOProCtosHsToObserver, async (_msg, client, next) => {
-      if (!client.challongeInfo) {
-        return next();
-      }
-      await client.sendChat('#{cannot_to_observer}', ChatColor.BABYBLUE);
-      return;
-    });
+  private registerPositionChangeGuard() {
+    const guard =
+      (message: string) =>
+      async (_msg: unknown, client: Client, next: () => unknown) => {
+        if (!client.challongeInfo) {
+          return next();
+        }
+        await client.sendChat(message, ChatColor.BABYBLUE);
+        return;
+      };
+
+    this.ctx.middleware(
+      YGOProCtosHsToObserver,
+      guard('#{cannot_to_observer}'),
+    );
+    this.ctx.middleware(
+      YGOProCtosHsToDuelist,
+      guard('#{cannot_to_duelist}'),
+    );
   }
 
   private postScoreByRoomNonBlocking(
@@ -415,27 +432,39 @@ export class ChallongeService {
     };
   }
 
-  private findPendingMatchByParticipant(
+  private findPendingMatchInfoByParticipant(
     tournament: Tournament,
     participantId: number,
   ) {
-    return tournament.matches
-      .map((wrapper) => wrapper.match)
-      .find((match) => {
-        if (
-          !match ||
-          match.winner_id ||
-          match.state === 'complete' ||
-          !match.player1_id ||
-          !match.player2_id
-        ) {
-          return false;
-        }
-        return (
-          match.player1_id === participantId ||
-          match.player2_id === participantId
-        );
-      });
+    for (const { match } of tournament.matches) {
+      const pos = this.findPendingMatchByParticipant(match, participantId);
+      if (pos !== undefined) {
+        return { match, pos };
+      }
+    }
+    return undefined;
+  }
+
+  private findPendingMatchByParticipant(
+    match: Match | undefined,
+    participantId: number,
+  ): 0 | 1 | undefined {
+    if (
+      !match ||
+      match.winner_id ||
+      match.state === 'complete' ||
+      !match.player1_id ||
+      !match.player2_id
+    ) {
+      return undefined;
+    }
+    if (match.player1_id === participantId) {
+      return 0;
+    }
+    if (match.player2_id === participantId) {
+      return 1;
+    }
+    return undefined;
   }
 
   private findParticipantByName(tournament: Tournament, name: string) {

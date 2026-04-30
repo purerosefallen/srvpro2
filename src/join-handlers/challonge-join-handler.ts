@@ -1,7 +1,11 @@
-import { ChatColor, YGOProCtosJoinGame } from 'ygopro-msg-encode';
+import {
+  ChatColor,
+  NetPlayerType,
+  YGOProCtosJoinGame,
+} from 'ygopro-msg-encode';
 import { Context } from '../app';
 import { ChallongeService, ReplayRecoverService } from '../feats';
-import { DuelStage, Room, RoomCreateError, RoomManager } from '../room';
+import { Room, RoomCreateError, RoomManager } from '../room';
 
 export class ChallongeJoinHandler {
   private logger = this.ctx.createLogger(this.constructor.name);
@@ -18,8 +22,8 @@ export class ChallongeJoinHandler {
       }
 
       const preRoom = this.resolvePreRoom(msg.pass);
-      if (preRoom && preRoom.duelStage !== DuelStage.Begin) {
-        return preRoom.join(client, true);
+      if (preRoom) {
+        return preRoom.join(client, NetPlayerType.OBSERVER);
       }
 
       const resolved = await this.challongeService.resolveJoinInfo(client.name);
@@ -55,7 +59,7 @@ export class ChallongeJoinHandler {
       }
 
       client.challongeInfo = resolved.participant;
-      return room.join(client);
+      return room.join(client, resolved.pos);
     });
   }
 

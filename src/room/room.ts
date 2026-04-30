@@ -105,6 +105,8 @@ import { OnRoomSidingReady } from './room-event/on-room-siding-ready';
 import { OnRoomFinger } from './room-event/on-room-finger';
 import { OnRoomSelectTp } from './room-event/on-room-select-tp';
 import { OnRoomReceiveResponse } from './room-event/on-room-receive-response';
+import { OnRoomPlayerReady } from './room-event/on-room-player-ready';
+import { OnRoomPlayerUnready } from './room-event/on-room-player-unready';
 import { RoomCheckDeck } from './room-event/room-check-deck';
 import { RoomDecideFirst } from './room-event/room-decide-first';
 import { RoomDecideFirstgo } from './room-event/room-decide-firstgo';
@@ -334,6 +336,14 @@ export class Room {
     return this.isTag ? 1 : 0;
   }
 
+  getRelativePos(clientOrPos: Client | number) {
+    const pos = this.resolvePos(clientOrPos);
+    if (pos === NetPlayerType.OBSERVER) {
+      return -1;
+    }
+    return this.isTag ? pos & 0x1 : 0;
+  }
+
   getDuelPos(clientOrPos: Client | number) {
     const pos = this.resolvePos(clientOrPos);
     if (pos === NetPlayerType.OBSERVER) {
@@ -413,28 +423,24 @@ export class Room {
     }
   }
 
-  async join(client: Client, toObserver = false) {
-    const firstEmptyPlayerSlot = this.players.findIndex((p) => !p);
-    const isPlayer =
-      !toObserver &&
-      firstEmptyPlayerSlot >= 0 &&
-      this.duelStage === DuelStage.Begin;
-
+  async join(client: Client, pos?: number) {
     // 记录进房前是否已经有玩家，用于判定首个玩家为房主
     const hasPlayerBeforeJoin = this.allPlayers.length > 0;
-    const toPos = isPlayer ? firstEmptyPlayerSlot : NetPlayerType.OBSERVER;
+    const defaultJoinPos = this.resolveDefaultJoinPos(pos);
 
     const joinCheck = await this.ctx.dispatch(
-      new RoomJoinCheck(this, toPos, hasPlayerBeforeJoin),
+      new RoomJoinCheck(this, defaultJoinPos, hasPlayerBeforeJoin),
       client,
     );
-    if (joinCheck?.value) {
+    if (typeof joinCheck?.value === 'string') {
       return client.die(joinCheck.value, ChatColor.RED);
     }
 
+    const joinPos = this.resolveJoinPos(joinCheck?.value ?? defaultJoinPos);
+    const isPlayer = joinPos !== NetPlayerType.OBSERVER;
     if (isPlayer) {
-      this.players[firstEmptyPlayerSlot] = client;
-      client.pos = firstEmptyPlayerSlot;
+      this.players[joinPos] = client;
+      client.pos = joinPos;
     } else {
       this.watchers.add(client);
       client.pos = NetPlayerType.OBSERVER;
@@ -483,6 +489,48 @@ export class Room {
     }
 
     return undefined;
+  }
+
+  private resolveDefaultJoinPos(pos: number | undefined) {
+    if (pos !== undefined) {
+      return pos;
+    }
+
+    const firstEmptyPlayerSlot = this.findFirstEmptyPlayerSlot();
+    if (firstEmptyPlayerSlot >= 0) {
+      return firstEmptyPlayerSlot;
+    }
+    return NetPlayerType.OBSERVER;
+  }
+
+  private resolveJoinPos(value: number) {
+    if (value === NetPlayerType.OBSERVER) {
+      return NetPlayerType.OBSERVER;
+    }
+    if (this.isAvailablePlayerSlot(value)) {
+      return value;
+    }
+    const firstEmptyPlayerSlot = this.findFirstEmptyPlayerSlot();
+    return firstEmptyPlayerSlot >= 0
+      ? firstEmptyPlayerSlot
+      : NetPlayerType.OBSERVER;
+  }
+
+  private findFirstEmptyPlayerSlot() {
+    if (this.duelStage !== DuelStage.Begin) {
+      return -1;
+    }
+    return this.players.findIndex((p) => !p);
+  }
+
+  private isAvailablePlayerSlot(value: number) {
+    return (
+      this.duelStage === DuelStage.Begin &&
+      Number.isInteger(value) &&
+      value >= 0 &&
+      value < this.players.length &&
+      !this.players[value]
+    );
   }
 
   duelStage = DuelStage.Begin;
@@ -1027,6 +1075,7 @@ export class Room {
     // In Begin stage, also save as startDeck for side deck checking
     if (this.duelStage === DuelStage.Begin) {
       client.startDeck = deck;
+      await this.ctx.dispatch(new OnRoomPlayerReady(this), client);
 
       // Auto-ready: send PlayerChange READY to all players (client.deck 已设置，自动为 READY)
       const changeMsg = client.prepareChangePacket();
@@ -1068,6 +1117,7 @@ export class Room {
     // 清除 deck
     client.deck = undefined;
     client.startDeck = undefined;
+    await this.ctx.dispatch(new OnRoomPlayerUnready(this), client);
 
     // 发送 PlayerChange 给所有人 (client.deck 已清除，自动为 NOTREADY)
     const changeMsg = client.prepareChangePacket();

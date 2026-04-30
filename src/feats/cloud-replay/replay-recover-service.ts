@@ -20,6 +20,8 @@ import {
   DefaultHostInfoProvider,
   OnRoomCreate,
   OnRoomDuelStart,
+  OnRoomPlayerReady,
+  OnRoomPlayerUnready,
   OnRoomWin,
   Room,
   RoomCheckDeck,
@@ -31,7 +33,9 @@ import {
 } from '../../room';
 import { isUpdateDeckPayloadEqual } from '../../utility/deck-compare';
 import { DuelRecordEntity } from './duel-record.entity';
+import { DuelRecordPlayer } from './duel-record-player.entity';
 import { CloudReplayService } from './cloud-replay-service';
+import { ClientKeyProvider } from '../client-key-provider';
 import {
   decodeDeckBase64,
   decodeResponsesBase64,
@@ -51,6 +55,7 @@ type ReplayRecoverState = {
   spec: ReplayRecoverSpec;
   responses: Buffer[];
   firstDuelPos?: number;
+  seatReversed?: boolean;
 };
 
 declare module 'ygopro-msg-encode' {
@@ -78,6 +83,7 @@ const PHASE_VALUES: Record<ReplayRecoverPhaseCode, number> = {
   M2: OcgcoreCommonConstants.PHASE_MAIN2,
   EP: OcgcoreCommonConstants.PHASE_END,
 };
+const TAG_MODE_BIT = 0x2;
 
 class RecoverDeckBadError extends YGOProLFListError {
   constructor() {
@@ -93,7 +99,7 @@ export class ReplayRecoverService {
   private logger = this.ctx.createLogger(this.constructor.name);
   private roomManager = this.ctx.get(() => RoomManager);
   private cloudReplayService = this.ctx.get(() => CloudReplayService);
-  private pendingRecords = new Map<string, DuelRecordEntity>();
+  private clientKeyProvider = this.ctx.get(() => ClientKeyProvider);
 
   constructor(private ctx: Context) {}
 
@@ -168,21 +174,22 @@ export class ReplayRecoverService {
         recover: spec,
         recover_parse_error: 0,
       });
-      this.pendingRecords.set(event.roomName, record);
       return next();
     });
 
     this.ctx.middleware(RoomJoinCheck, async (event, client, next) => {
-      if (event.value) {
+      if (typeof event.value === 'string') {
         return next();
       }
       const record = event.room.recoverState?.record;
       if (!record) {
         return next();
       }
-      if (!this.isAllowed(record, client)) {
+      const recordPlayer = this.findRecordPlayerForClient(record, client);
+      if (!recordPlayer) {
         return event.use('#{cloud_replay_no}');
       }
+      event.use(recordPlayer.pos);
       return next();
     });
   }
@@ -195,7 +202,7 @@ export class ReplayRecoverService {
       }
 
       const recordPlayer = this.findRecordPlayerForDeck(
-        event.room.recoverState.record,
+        event.room,
         client,
         event.deck,
       );
@@ -209,9 +216,6 @@ export class ReplayRecoverService {
         recordPlayer.currentDeckMainc,
       );
       this.mutateDeck(event.deck, currentDeck);
-      if (recordPlayer.isFirst) {
-        event.room.recoverState.firstDuelPos = event.room.getDuelPos(client);
-      }
       return current;
     });
   }
@@ -223,15 +227,12 @@ export class ReplayRecoverService {
         return next();
       }
 
-      const record =
-        this.pendingRecords.get(event.room.name) ||
-        (await this.findRecoverRecord(spec.id));
-      this.pendingRecords.delete(event.room.name);
+      const record = await this.findRecoverRecord(spec.id);
       if (!record) {
-        void event.room.finalize(true);
         return next();
       }
 
+      this.restoreRecoverHostInfo(event.room, record.hostInfo);
       event.room.recoverState = {
         record,
         spec,
@@ -258,7 +259,32 @@ export class ReplayRecoverService {
         event.value == null &&
         state.firstDuelPos != null
       ) {
-        return event.use(state.firstDuelPos);
+        return event.use(this.resolveRecoverFirstDuelPos(state));
+      }
+      return next();
+    });
+
+    this.ctx.middleware(OnRoomPlayerReady, async (event, client, next) => {
+      const state = event.room.recoverState;
+      if (state?.seatReversed === undefined && client.startDeck) {
+        const recordPlayer = this.findRecordPlayerForCurrentDeck(
+          event.room,
+          client,
+          client.startDeck,
+        );
+        if (recordPlayer) {
+          this.rememberRecoverSeat(event.room, recordPlayer.pos, client.pos);
+        }
+      }
+      return next();
+    });
+
+    this.ctx.middleware(OnRoomPlayerUnready, async (event, _client, next) => {
+      const state = event.room.recoverState;
+      if (state) {
+        if (!event.room.playingPlayers.some((player) => !!player.deck)) {
+          state.seatReversed = undefined;
+        }
       }
       return next();
     });
@@ -362,26 +388,112 @@ export class ReplayRecoverService {
   }
 
   private isAllowed(record: DuelRecordEntity, client: Client) {
-    return (record.players || []).some(
-      (player) => player.realName === client.name_vpass,
+    return !!this.findRecordPlayerForClient(record, client);
+  }
+
+  private findRecordPlayerForClient(record: DuelRecordEntity, client: Client) {
+    return (record.players || []).find((player) =>
+      this.isSameRecordPlayer(player, client),
     );
   }
 
   private findRecordPlayerForDeck(
-    record: DuelRecordEntity,
+    room: Room,
     client: Client,
     deck: YGOProDeck,
   ) {
-    return (record.players || []).find((player) => {
-      if (player.realName !== client.name_vpass) {
+    return this.findRecordPlayer(room, client, deck, (player) =>
+      decodeDeckBase64(player.startDeckBuffer, player.startDeckMainc),
+    );
+  }
+
+  private findRecordPlayerForCurrentDeck(
+    room: Room,
+    client: Client,
+    deck: YGOProDeck,
+  ) {
+    return this.findRecordPlayer(room, client, deck, (player) =>
+      decodeDeckBase64(player.currentDeckBuffer, player.currentDeckMainc),
+    );
+  }
+
+  private findRecordPlayer(
+    room: Room,
+    client: Client,
+    deck: YGOProDeck,
+    resolveDeck: (player: DuelRecordPlayer) => YGOProDeck,
+  ) {
+    const state = room.recoverState;
+    if (!state) {
+      return undefined;
+    }
+    return (state.record.players || []).find((player) => {
+      if (!this.isSameRecordPlayer(player, client)) {
         return false;
       }
-      const startDeck = decodeDeckBase64(
-        player.startDeckBuffer,
-        player.startDeckMainc,
-      );
-      return isUpdateDeckPayloadEqual(deck, startDeck);
+      if (!this.isRecordSeatCompatible(room, player.pos, client.pos)) {
+        return false;
+      }
+      return isUpdateDeckPayloadEqual(deck, resolveDeck(player));
     });
+  }
+
+  private isSameRecordPlayer(player: DuelRecordPlayer, client: Client) {
+    return player.clientKey === this.getClientKey(client);
+  }
+
+  private getClientKey(client: Client) {
+    return this.clientKeyProvider.getClientKey(client);
+  }
+
+  private isRecordSeatCompatible(
+    room: Room,
+    recordPos: number,
+    currentPos: number,
+  ) {
+    const state = room.recoverState;
+    if (!state) {
+      return false;
+    }
+    if (room.getRelativePos(recordPos) !== room.getRelativePos(currentPos)) {
+      return false;
+    }
+
+    const seatReversed = this.resolveSeatReversed(room, recordPos, currentPos);
+    return (
+      state.seatReversed === undefined ||
+      state.seatReversed === seatReversed
+    );
+  }
+
+  private rememberRecoverSeat(
+    room: Room,
+    recordPos: number,
+    currentPos: number,
+  ) {
+    const state = room.recoverState;
+    if (!state) {
+      return;
+    }
+    state.seatReversed = this.resolveSeatReversed(room, recordPos, currentPos);
+  }
+
+  private resolveSeatReversed(room: Room, recordPos: number, currentPos: number) {
+    return room.getDuelPos(recordPos) !== room.getDuelPos(currentPos);
+  }
+
+  private restoreRecoverHostInfo(room: Room, hostInfo: HostInfo) {
+    room.hostinfo.mode = this.replaceTagModeBit(
+      room.hostinfo.mode,
+      hostInfo.mode,
+    );
+    room.hostinfo.start_lp = hostInfo.start_lp;
+    room.hostinfo.start_hand = hostInfo.start_hand;
+    room.hostinfo.draw_count = hostInfo.draw_count;
+  }
+
+  private replaceTagModeBit(currentMode: number, recordMode: number) {
+    return (currentMode & ~TAG_MODE_BIT) | (recordMode & TAG_MODE_BIT);
   }
 
   private mutateDeck(target: YGOProDeck, source: YGOProDeck) {
@@ -396,6 +508,16 @@ export class ReplayRecoverService {
       return undefined;
     }
     return room.getDuelPos(firstPlayer.pos);
+  }
+
+  private resolveRecoverFirstDuelPos(state: ReplayRecoverState) {
+    if (state.firstDuelPos == null) {
+      return undefined;
+    }
+    if (state.seatReversed === true) {
+      return 1 - state.firstDuelPos;
+    }
+    return state.firstDuelPos;
   }
 
   private findClientRoom(client: Client) {
