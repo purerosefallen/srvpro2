@@ -3,15 +3,19 @@ import {
   NetPlayerType,
   YGOProCtosHsToObserver,
 } from 'ygopro-msg-encode';
+import YGOProDeck from 'ygopro-deck-encode';
 import {
+  DefaultDeckShuffler,
   DefaultHostInfoProvider,
   DefaultFirstgo,
   DefaultSeeder,
+  DuelRecord,
   NoWatchGuard,
   OnRoomGameStart,
   Room,
   RoomDecideFirst,
   RoomDecideFirstgo,
+  RoomShuffleDeck,
   RoomUseSeed,
 } from '../src/room';
 import { RoomCreateCheck } from '../src/room/room-event/room-create-check';
@@ -255,7 +259,8 @@ describe('DefaultSeeder', () => {
   test('provides a default 8 uint32 seed', async () => {
     const middlewares = new Map<unknown, any>();
     const ctx: any = {
-      middleware: (cls: unknown, handler: unknown) => middlewares.set(cls, handler),
+      middleware: (cls: unknown, handler: unknown) =>
+        middlewares.set(cls, handler),
     };
     const seeder = new DefaultSeeder(ctx);
     await seeder.init();
@@ -270,6 +275,78 @@ describe('DefaultSeeder', () => {
       true,
     );
     expect(next).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DefaultDeckShuffler', () => {
+  test('shuffles decks by swapped player order when shuffle is enabled', async () => {
+    const middlewares = new Map<unknown, any>();
+    const ctx: any = {
+      middleware: (cls: unknown, handler: unknown) =>
+        middlewares.set(cls, handler),
+    };
+    const shuffler = new DefaultDeckShuffler(ctx);
+    await shuffler.init();
+    const player0 = {
+      name: 'Alice',
+      deck: new YGOProDeck({ main: [1, 2, 3, 4], extra: [], side: [] }),
+    };
+    const player1 = {
+      name: 'Bob',
+      deck: new YGOProDeck({ main: [5, 6, 7, 8], extra: [], side: [] }),
+    };
+    const duelRecord = new DuelRecord([123, 456], [player0, player1], true);
+    const playersInShuffleOrder = duelRecord.toSwappedPlayers();
+    const event = new RoomShuffleDeck(
+      { hostinfo: { no_shuffle_deck: 0 } } as any,
+      duelRecord,
+      true,
+      playersInShuffleOrder,
+      duelRecord.seed,
+    );
+    const next = jest.fn();
+
+    await middlewares.get(RoomShuffleDeck)(event, undefined, next);
+
+    expect(event.value).toHaveLength(2);
+    expect(event.value[0]).not.toBe(player1.deck);
+    expect(event.value[1]).not.toBe(player0.deck);
+    expect(event.value[0].main).toHaveLength(4);
+    expect(event.value[1].main).toHaveLength(4);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  test('keeps original deck objects when shuffle is disabled', async () => {
+    const middlewares = new Map<unknown, any>();
+    const ctx: any = {
+      middleware: (cls: unknown, handler: unknown) =>
+        middlewares.set(cls, handler),
+    };
+    const shuffler = new DefaultDeckShuffler(ctx);
+    await shuffler.init();
+    const player0 = {
+      name: 'Alice',
+      deck: new YGOProDeck({ main: [1], extra: [], side: [] }),
+    };
+    const player1 = {
+      name: 'Bob',
+      deck: new YGOProDeck({ main: [2], extra: [], side: [] }),
+    };
+    const duelRecord = new DuelRecord([1], [player0, player1], true);
+    const playersInShuffleOrder = duelRecord.toSwappedPlayers();
+    const event = new RoomShuffleDeck(
+      { hostinfo: { no_shuffle_deck: 1 } } as any,
+      duelRecord,
+      true,
+      playersInShuffleOrder,
+      duelRecord.seed,
+    );
+
+    await middlewares.get(RoomShuffleDeck)(event, undefined, jest.fn());
+
+    expect(event.value).toEqual(
+      playersInShuffleOrder.map((player) => player.deck),
+    );
   });
 });
 

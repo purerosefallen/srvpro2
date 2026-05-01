@@ -91,7 +91,6 @@ import {
   getZoneQueryFlag,
   splitRefreshLocations,
 } from '../utility/refresh-query';
-import { shuffleDecksBySeed } from '../utility/shuffle-decks-by-seed';
 import { isUpdateMessage } from '../utility/is-update-message';
 import { getMessageIdentifier } from '../utility/get-message-identifier';
 import { canIncreaseTime } from '../utility/can-increase-time';
@@ -111,6 +110,7 @@ import { RoomSideCheck } from './room-event/room-side-check';
 import { RoomDecideFirst } from './room-event/room-decide-first';
 import { RoomDecideFirstgo } from './room-event/room-decide-firstgo';
 import { RoomJoinCheck } from './room-event/room-join-check';
+import { RoomShuffleDeck } from './room-event/room-shuffle-deck';
 import { RoomUseSeed } from './room-event/room-use-seed';
 import cryptoRandomString from 'crypto-random-string';
 import { RoomCurrentFieldInfo, RoomInfo } from './room-info';
@@ -1625,16 +1625,20 @@ export class Room {
       this.playingPlayers.map((p) => ({ name: p.name, deck: p.deck! })),
       this.isPosSwapped,
     );
-    if (!this.hostinfo.no_shuffle_deck) {
-      const shuffledDecks = shuffleDecksBySeed(
-        duelRecord.players.map((p) => p.deck),
+    const playersInShuffleOrder = duelRecord.toSwappedPlayers();
+    const shuffledDecks = await this.ctx.dispatch(
+      new RoomShuffleDeck(
+        this,
+        duelRecord,
+        this.isPosSwapped,
+        playersInShuffleOrder,
         duelRecord.seed,
-      );
-      duelRecord.players = duelRecord.players.map((player, index) => ({
-        ...player,
-        deck: shuffledDecks[index],
-      }));
-    }
+      ),
+      client,
+    );
+    shuffledDecks?.value.forEach((deck, index) => {
+      playersInShuffleOrder[index].deck = deck;
+    });
 
     if (!(await this.createOcgcore(duelRecord))) {
       this.finalize(true);

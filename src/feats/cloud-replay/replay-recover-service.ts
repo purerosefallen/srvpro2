@@ -31,6 +31,7 @@ import {
   RoomDecideFirst,
   RoomJoinCheck,
   RoomManager,
+  RoomShuffleDeck,
   RoomUseSeed,
 } from '../../room';
 import { isUpdateDeckPayloadEqual } from '../../utility/deck-compare';
@@ -217,11 +218,6 @@ export class ReplayRecoverService {
         return event.use(new RecoverDeckBadError());
       }
 
-      const currentDeck = decodeDeckBase64(
-        recordPlayer.currentDeckBuffer,
-        recordPlayer.currentDeckMainc,
-      );
-      this.mutateDeck(event.deck, currentDeck);
       return current;
     });
   }
@@ -257,6 +253,30 @@ export class ReplayRecoverService {
       return next();
     });
 
+    this.ctx.middleware(RoomShuffleDeck, async (event, _client, next) => {
+      const state = event.room.recoverState;
+      if (!state || (event.room.duelRecords?.length || 0) !== 0) {
+        return next();
+      }
+
+      const ingameDecks = event.duelRecord.players.map((player) => player.deck);
+      for (const recordPlayer of state.record.players || []) {
+        if (recordPlayer.pos < 0 || recordPlayer.pos >= ingameDecks.length) {
+          continue;
+        }
+        ingameDecks[recordPlayer.pos] = decodeDeckBase64(
+          recordPlayer.ingameDeckBuffer || recordPlayer.currentDeckBuffer,
+          recordPlayer.ingameDeckMainc ?? recordPlayer.currentDeckMainc ?? 0,
+        );
+      }
+
+      const shouldSwap = (state.seatReversed === true) !== event.isPosSwapped;
+      if (shouldSwap) {
+        this.swapRecoverDecks(ingameDecks);
+      }
+      return event.use(ingameDecks);
+    });
+
     this.ctx.middleware(RoomDecideFirst, async (event, _client, next) => {
       const state = event.room.recoverState;
       if (
@@ -273,7 +293,7 @@ export class ReplayRecoverService {
     this.ctx.middleware(OnRoomPlayerReady, async (event, client, next) => {
       const state = event.room.recoverState;
       if (state?.seatReversed === undefined && client.startDeck) {
-        const recordPlayer = this.findRecordPlayerForCurrentDeck(
+        const recordPlayer = this.findRecordPlayerForDeck(
           event.room,
           client,
           client.startDeck,
@@ -413,16 +433,6 @@ export class ReplayRecoverService {
     );
   }
 
-  private findRecordPlayerForCurrentDeck(
-    room: Room,
-    client: Client,
-    deck: YGOProDeck,
-  ) {
-    return this.findRecordPlayer(room, client, deck, (player) =>
-      decodeDeckBase64(player.currentDeckBuffer, player.currentDeckMainc),
-    );
-  }
-
   private findRecordPlayer(
     room: Room,
     client: Client,
@@ -505,12 +515,6 @@ export class ReplayRecoverService {
     return (currentMode & ~TAG_MODE_BIT) | (recordMode & TAG_MODE_BIT);
   }
 
-  private mutateDeck(target: YGOProDeck, source: YGOProDeck) {
-    target.main.splice(0, target.main.length, ...source.main);
-    target.extra.splice(0, target.extra.length, ...source.extra);
-    target.side.splice(0, target.side.length, ...source.side);
-  }
-
   private resolveRecordFirstDuelPos(room: Room, record: DuelRecordEntity) {
     const firstPlayer = (record.players || []).find((player) => player.isFirst);
     if (!firstPlayer) {
@@ -527,6 +531,20 @@ export class ReplayRecoverService {
       return 1 - state.firstDuelPos;
     }
     return state.firstDuelPos;
+  }
+
+  private swapRecoverDecks(decks: YGOProDeck[]) {
+    const swapElements = (a: number, b: number) => {
+      const temp = decks[a];
+      decks[a] = decks[b];
+      decks[b] = temp;
+    };
+    if (decks.length === 4) {
+      swapElements(0, 2);
+      swapElements(1, 3);
+    } else {
+      swapElements(0, 1);
+    }
   }
 
   private findClientRoom(client: Client) {

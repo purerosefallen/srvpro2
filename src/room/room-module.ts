@@ -4,6 +4,7 @@ import { YGOProResourceLoader } from '../ygopro';
 import { DefaultHostInfoProvider } from './default-hostinfo-provder';
 import { RoomManager } from './room-manager';
 import { DefaultDeckChecker } from './default-deck-checker';
+import { DefaultDeckShuffler } from './default-deck-shuffler';
 import { DefaultFirstgo } from './default-firstgo';
 import { DefaultSeeder } from './default-seeder';
 import { ZombieRoomCleaner } from './zombie-room-cleaner';
@@ -14,6 +15,7 @@ export const RoomModule = createAppContext<ContextState>()
   .provide(YGOProResourceLoader)
   .provide(RoomManager)
   .provide(DefaultDeckChecker)
+  .provide(DefaultDeckShuffler)
   .provide(DefaultFirstgo)
   .provide(DefaultSeeder)
   .provide(ZombieRoomCleaner)

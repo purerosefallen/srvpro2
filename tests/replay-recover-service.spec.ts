@@ -16,9 +16,12 @@ import {
   RoomCheckDeck,
   RoomCreateCheck,
   RoomDecideFirst,
+  DuelStage,
   RoomJoinCheck,
   RoomManager,
+  RoomShuffleDeck,
   RoomUseSeed,
+  DuelRecord,
 } from '../src/room';
 import { DefaultHostinfo } from '../src/room/default-hostinfo';
 import {
@@ -330,6 +333,7 @@ describe('ReplayRecoverService join checks', () => {
     const { ctx, middlewares } = makeCtx(record);
     await initRecoverService(ctx);
     const room: any = {
+      duelStage: DuelStage.Begin,
       hostinfo: {
         recover: { id: 42, turnCount: 1 },
       },
@@ -378,6 +382,8 @@ describe('ReplayRecoverService deck recovery seats', () => {
       startDeckMainc: startDeck.main.length,
       currentDeckBuffer: encodeDeckBase64(currentDeck),
       currentDeckMainc: currentDeck.main.length,
+      ingameDeckBuffer: encodeDeckBase64(currentDeck),
+      ingameDeckMainc: currentDeck.main.length,
       ...overrides,
     };
   }
@@ -427,8 +433,8 @@ describe('ReplayRecoverService deck recovery seats', () => {
 
     expect(event.value).toBeUndefined();
     expect(room.recoverState.seatReversed).toBeUndefined();
-    expect(event.deck.main).toEqual([2]);
-    expect(event.deck.side).toEqual([3]);
+    expect(event.deck.main).toEqual([1]);
+    expect(event.deck.side).toEqual([]);
 
     client.startDeck = event.deck;
     await middlewares.get(OnRoomPlayerReady)![0](
@@ -438,6 +444,82 @@ describe('ReplayRecoverService deck recovery seats', () => {
     );
 
     expect(room.recoverState.seatReversed).toBe(true);
+
+    const duelRecord = new DuelRecord(
+      [1],
+      [
+        { name: 'Bob', deck: new YGOProDeck({ main: [4] }) },
+        { name: 'Alice', deck: new YGOProDeck({ main: [1] }) },
+      ],
+      true,
+    );
+    const playersInShuffleOrder = duelRecord.toSwappedPlayers();
+    const shuffleEvent = new RoomShuffleDeck(
+      room,
+      duelRecord,
+      true,
+      playersInShuffleOrder,
+      duelRecord.seed,
+    );
+    await middlewares.get(RoomShuffleDeck)![0](
+      shuffleEvent,
+      undefined,
+      jest.fn(),
+    );
+
+    expect(shuffleEvent.value.map((deck) => deck.main)).toEqual([[2], [4]]);
+    expect(shuffleEvent.value[0].side).toEqual([3]);
+  });
+
+  test('swaps recovered ingame decks when only physical seats are reversed', async () => {
+    const aliceIngameDeck = new YGOProDeck({ main: [11], extra: [], side: [] });
+    const bobIngameDeck = new YGOProDeck({ main: [22], extra: [], side: [] });
+    const record = makeRecord({
+      players: [
+        makeDeckRecordPlayer(
+          'Alice',
+          0,
+          new YGOProDeck({ main: [1] }),
+          aliceIngameDeck,
+        ),
+        makeDeckRecordPlayer(
+          'Bob',
+          1,
+          new YGOProDeck({ main: [2] }),
+          bobIngameDeck,
+        ),
+      ],
+    });
+    const { ctx, middlewares } = makeCtx(record);
+    await initRecoverService(ctx);
+    const room: any = makeRecoverRoom(record, false, {
+      recoverState: {
+        record,
+        spec: { id: 42, turnCount: 1 },
+        responses: [],
+        firstDuelPos: 0,
+        seatReversed: true,
+      },
+    });
+    const duelRecord = new DuelRecord(
+      [1],
+      [
+        { name: 'Bob', deck: new YGOProDeck({ main: [2] }) },
+        { name: 'Alice', deck: new YGOProDeck({ main: [1] }) },
+      ],
+      false,
+    );
+    const event = new RoomShuffleDeck(
+      room,
+      duelRecord,
+      false,
+      duelRecord.toSwappedPlayers(),
+      duelRecord.seed,
+    );
+
+    await middlewares.get(RoomShuffleDeck)![0](event, undefined, jest.fn());
+
+    expect(event.value.map((deck) => deck.main)).toEqual([[22], [11]]);
   });
 
   test('matches recover players by client key instead of names', async () => {
@@ -466,7 +548,7 @@ describe('ReplayRecoverService deck recovery seats', () => {
     await middlewares.get(RoomCheckDeck)![0](event, client, jest.fn());
 
     expect(event.value).toBeUndefined();
-    expect(event.deck.main).toEqual([9]);
+    expect(event.deck.main).toEqual([8]);
     expect(client.sendChat).not.toHaveBeenCalled();
   });
 
@@ -615,11 +697,7 @@ describe('ReplayRecoverService seed playback', () => {
     room.duelRecords = [{}];
     const laterDuelEvent = new RoomUseSeed(room);
     const next = jest.fn();
-    await middlewares.get(RoomUseSeed)![0](
-      laterDuelEvent,
-      undefined,
-      next,
-    );
+    await middlewares.get(RoomUseSeed)![0](laterDuelEvent, undefined, next);
 
     expect(laterDuelEvent.value).toEqual([]);
     expect(next).toHaveBeenCalledTimes(1);
@@ -653,11 +731,7 @@ describe('ReplayRecoverService first-player decision', () => {
     room.duelRecords = [{}];
     const laterDuelEvent = new RoomDecideFirst(room);
     const next = jest.fn();
-    await middlewares.get(RoomDecideFirst)![0](
-      laterDuelEvent,
-      undefined,
-      next,
-    );
+    await middlewares.get(RoomDecideFirst)![0](laterDuelEvent, undefined, next);
 
     expect(laterDuelEvent.value).toBeUndefined();
     expect(next).toHaveBeenCalledTimes(1);
