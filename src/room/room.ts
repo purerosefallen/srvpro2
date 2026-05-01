@@ -598,7 +598,7 @@ export class Room {
     } catch {}
   }
 
-  private matchResultDecided = false;
+  matchResultDecided = false;
 
   async win(winMsg: Partial<YGOProMsgWin>, options: RoomWinOptions = {}) {
     if (this.matchResultDecided) {
