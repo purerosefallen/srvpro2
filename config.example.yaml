@@ -65,12 +65,16 @@ chatgptTokenLimit: 12000
 chatgptExtraOpts: {}
 enableReconnect: 1
 enableCloudReplay: 1
+enableRecover: 1
 tournamentMode: 0
 tournamentModeCheckDeck: 1
 mycardEnabled: 0
 mycardAuthBaseUrl: https://sapi.moecube.com:444/accounts
 mycardAuthKey: 233333
 mycardBanGet: https://sapi.moecube.com:444/ygopro/big-brother/ban
+bigBrotherEnabled: 0
+bigBrotherAccessKey: 233
+bigBrotherPost: https://sapi.moecube.com:444/ygopro/big-brother
 mycardArenaMode: entertain
 mycardArenaAccessKey: 233
 mycardArenaReadyTime: 30

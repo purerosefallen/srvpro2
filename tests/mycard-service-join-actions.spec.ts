@@ -13,7 +13,7 @@ function makePayload(action: number) {
   const checksum = buffer.reduce((sum, value, index) => {
     return index === 0 ? sum : sum + value;
   }, 0);
-  buffer.writeUInt8((-checksum) & 0xff, 0);
+  buffer.writeUInt8(-checksum & 0xff, 0);
   return buffer;
 }
 
@@ -56,14 +56,16 @@ function makeCtx(options: { permit?: boolean } = {}) {
   const rooms = new Map<string, any>();
   const deps = {
     findByName: (name: string) => rooms.get(name),
-    findOrCreateByName: jest.fn(async (name: string, hostinfo?: any) => {
-      if (!rooms.has(name)) {
-        const room = makeRoom(name);
-        room.hostinfo = hostinfo;
-        rooms.set(name, room);
-      }
-      return rooms.get(name);
-    }),
+    findOrCreateByName: jest.fn(
+      async (name: string, _creator?: any, hostinfo?: any) => {
+        if (!rooms.has(name)) {
+          const room = makeRoom(name);
+          room.hostinfo = hostinfo;
+          rooms.set(name, room);
+        }
+        return rooms.get(name);
+      },
+    ),
     allRooms: () => [...rooms.values()],
     getHostinfo: () => DefaultHostinfo,
     registerTick: jest.fn(),
@@ -120,7 +122,10 @@ describe('MycardService join actions', () => {
       const service = new MycardService(ctx);
       const client = makeClient(`Alice${action}`);
 
-      await service.handleJoinPass(encodePass(action, `Title${action}`), client);
+      await service.handleJoinPass(
+        encodePass(action, `Title${action}`),
+        client,
+      );
 
       const room = [...ctx.rooms.values()][0];
       expect(room.mycard).toBe(true);
@@ -148,7 +153,10 @@ describe('MycardService join actions', () => {
     const rejectedService = new MycardService(rejectedCtx);
     const rejectedClient = makeClient();
 
-    await rejectedService.handleJoinPass(encodePass(4, 'match'), rejectedClient);
+    await rejectedService.handleJoinPass(
+      encodePass(4, 'match'),
+      rejectedClient,
+    );
 
     expect(rejectedClient.die).toHaveBeenCalledWith(
       '#{invalid_password_unauthorized}',

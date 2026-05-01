@@ -6,7 +6,9 @@ type PluginEntityLogger = {
   warn: (...args: unknown[]) => void;
 };
 
-export function collectPluginTypeormEntities(logger?: PluginEntityLogger): Function[] {
+export function collectPluginTypeormEntities(
+  logger?: PluginEntityLogger,
+): Function[] {
   const pluginDir = path.resolve(__dirname, '..', '..', 'plugins');
   const pluginEntityFiles = collectPluginEntityFiles(pluginDir);
   const entities = new Set<Function>();

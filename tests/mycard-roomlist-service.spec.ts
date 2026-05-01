@@ -80,7 +80,8 @@ function makeCtx(options: {
     config: {
       getBoolean: (key: string) =>
         key === 'MYCARD_ENABLED' ? options.enabled !== false : false,
-      getInt: (key: string) => (key === 'API_PORT' ? options.apiPort ?? 7922 : 0),
+      getInt: (key: string) =>
+        key === 'API_PORT' ? (options.apiPort ?? 7922) : 0,
       getString: () => '',
     },
     get: (factory: () => unknown) => {
@@ -500,11 +501,7 @@ describe('MycardRoomlistService', () => {
     room.playingPlayers = [];
     const deletePromise = waitForJsonMessage(waitingSocket);
     await ctx.middlewares.get(OnRoomLeavePlayer)(
-      new OnRoomLeavePlayer(
-        room as any,
-        0,
-        RoomLeavePlayerReason.Disconnect,
-      ),
+      new OnRoomLeavePlayer(room as any, 0, RoomLeavePlayerReason.Disconnect),
       host,
       jest.fn(async () => undefined),
     );

@@ -1,4 +1,4 @@
-import { createAppContext } from 'nfkit';
+import { AppContext, createAppContext } from 'nfkit';
 import { ContextState } from '../app';
 import { ClientVersionCheck } from './client-version-check';
 import { JoinPrechecks } from './join-prechecks';
@@ -10,4 +10,4 @@ export const PreJoinModule = createAppContext<ContextState>()
   .provide(JoinPrechecks)
   .provide(JoinWindbotToken) // AIJOIN#
   .provide(BadwordPlayerInfoChecker)
-  .define();
+  .define() as AppContext;

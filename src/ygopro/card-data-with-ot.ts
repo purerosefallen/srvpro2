@@ -8,5 +8,5 @@ export class CardDataWithOt extends CardDataEntry {
   declare ot: number;
 }
 
-export const CARD_DATA_WITH_OT_PAYLOAD_SIZE =
-  new CardDataWithOt().toPayload().length;
+export const CARD_DATA_WITH_OT_PAYLOAD_SIZE = new CardDataWithOt().toPayload()
+  .length;

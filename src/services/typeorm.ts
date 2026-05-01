@@ -45,7 +45,9 @@ export const TypeormFactory = async (ctx: AppContext) => {
     LegacyDeckEntity,
   ];
   const pluginEntities = collectPluginTypeormEntities(logger);
-  const entities = [...new Set<Function>([...staticEntities, ...pluginEntities])];
+  const entities = [
+    ...new Set<Function>([...staticEntities, ...pluginEntities]),
+  ];
 
   if (pluginEntities.length > 0) {
     logger.info(

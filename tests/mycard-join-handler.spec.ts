@@ -55,4 +55,3 @@ describe('MycardJoinHandler', () => {
     expect(next).not.toHaveBeenCalled();
   });
 });
-

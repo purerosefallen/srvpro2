@@ -16,6 +16,7 @@ import {
   OnRoomLeavePlayer,
   RoomLeavePlayerReason,
   Room,
+  RoomCreateError,
   RoomManager,
 } from '../../room';
 import { fillRandomString } from '../../utility/fill-random-string';
@@ -261,7 +262,10 @@ export class RandomDuelProvider {
     if (!roomName) {
       return {};
     }
-    const room = await this.roomManager.findOrCreateByName(roomName);
+    const room = await this.roomManager.findOrCreateByName(roomName, client);
+    if (room instanceof RoomCreateError) {
+      return { errorMessage: room.message };
+    }
     room.randomType = randomType;
     room.hidePlayerNames = this.hidePlayerName.enabled;
     room.randomDuelDeprecated = joinState.deprecated;

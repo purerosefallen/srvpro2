@@ -18,20 +18,24 @@ function makeCtx(overrides: Record<string, string> = {}) {
         '1',
       getString: (key: string) =>
         overrides[key] ??
-        ({
-          ATHLETIC_CHECK_RANK_URL: 'https://rank.example',
-          ATHLETIC_CHECK_IDENTIFIER_URL: 'https://identify.example',
-          ATHLETIC_CHECK_FETCH_PARAMS: '{}',
-        } as Record<string, string>)[key] ??
+        (
+          {
+            ATHLETIC_CHECK_RANK_URL: 'https://rank.example',
+            ATHLETIC_CHECK_IDENTIFIER_URL: 'https://identify.example',
+            ATHLETIC_CHECK_FETCH_PARAMS: '{}',
+          } as Record<string, string>
+        )[key] ??
         '',
       getInt: (key: string) =>
         Number(
           overrides[key] ??
-            ({
-              ATHLETIC_CHECK_RANK_COUNT: '10',
-              ATHLETIC_CHECK_BAN_COUNT: '1',
-              ATHLETIC_CHECK_TTL: '600',
-            } as Record<string, string>)[key] ??
+            (
+              {
+                ATHLETIC_CHECK_RANK_COUNT: '10',
+                ATHLETIC_CHECK_BAN_COUNT: '1',
+                ATHLETIC_CHECK_TTL: '600',
+              } as Record<string, string>
+            )[key] ??
             '0',
         ),
     },

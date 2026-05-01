@@ -1,4 +1,4 @@
-import { createAppContext } from 'nfkit';
+import { AppContext, createAppContext } from 'nfkit';
 import { LegacyApiService } from './legacy-api-service';
 import { LegacyApiReplayService } from './legacy-api-replay-service';
 import { LegacyApiDeckService } from './legacy-api-deck-service';
@@ -15,4 +15,4 @@ export const LegacyApiModule = createAppContext()
   .provide(LegacyApiService)
   .provide(LegacyApiReplayService)
   .provide(LegacyApiDeckService)
-  .define();
+  .define() as AppContext;

@@ -1,11 +1,16 @@
-import { ChatColor, YGOProCtosJoinGame } from 'ygopro-msg-encode';
+import {
+  ChatColor,
+  NetPlayerType,
+  YGOProCtosJoinGame,
+} from 'ygopro-msg-encode';
 import { Context } from '../app';
-import { ChallongeService } from '../feats';
-import { DuelStage, Room, RoomManager } from '../room';
+import { ChallongeService, ReplayRecoverService } from '../feats';
+import { Room, RoomCreateError, RoomManager } from '../room';
 
 export class ChallongeJoinHandler {
   private logger = this.ctx.createLogger(this.constructor.name);
   private challongeService = this.ctx.get(() => ChallongeService);
+  private replayRecoverService = this.ctx.get(() => ReplayRecoverService);
   private roomManager = this.ctx.get(() => RoomManager);
 
   constructor(private ctx: Context) {}
@@ -17,8 +22,8 @@ export class ChallongeJoinHandler {
       }
 
       const preRoom = this.resolvePreRoom(msg.pass);
-      if (preRoom && preRoom.duelStage !== DuelStage.Begin) {
-        return preRoom.join(client, true);
+      if (preRoom) {
+        return preRoom.join(client, NetPlayerType.OBSERVER);
       }
 
       const resolved = await this.challongeService.resolveJoinInfo(client.name);
@@ -29,8 +34,14 @@ export class ChallongeJoinHandler {
         );
       }
 
-      const roomName = this.resolveRoomName(resolved.match.id);
-      const room = await this.roomManager.findOrCreateByName(roomName);
+      const recoverPrefix = this.replayRecoverService.resolveRecoverRoomPrefix(
+        msg.pass,
+      );
+      const roomName = this.resolveRoomName(resolved.match.id, recoverPrefix);
+      const room = await this.roomManager.findOrCreateByName(roomName, client);
+      if (room instanceof RoomCreateError) {
+        return client.die(room.message, ChatColor.RED);
+      }
       room.noHost = true;
       room.challongeInfo = resolved.match;
       room.welcome = '#{challonge_match_created}';
@@ -48,15 +59,15 @@ export class ChallongeJoinHandler {
       }
 
       client.challongeInfo = resolved.participant;
-      return room.join(client);
+      return room.join(client, resolved.pos);
     });
   }
 
-  private resolveRoomName(matchId: number) {
+  private resolveRoomName(matchId: number, recoverPrefix?: string) {
     if (this.ctx.config.getBoolean('CHALLONGE_NO_MATCH_MODE')) {
-      return `${matchId}`;
+      return recoverPrefix ? `${recoverPrefix}#${matchId}` : `${matchId}`;
     }
-    return `M#${matchId}`;
+    return recoverPrefix ? `${recoverPrefix},M#${matchId}` : `M#${matchId}`;
   }
 
   private resolvePreRoom(pass: string | undefined) {

@@ -2,7 +2,7 @@ import { ChatColor, YGOProCtosJoinGame } from 'ygopro-msg-encode';
 import { Context } from '../../app';
 import { Client } from '../../client';
 import { WindBotProvider } from './windbot-provider';
-import { RoomManager } from '../../room';
+import { RoomCreateError, RoomManager } from '../../room';
 import { MAX_ROOM_NAME_LENGTH } from '../../constants/room';
 import { fillRandomString } from '../../utility/fill-random-string';
 import { parseWindbotOptions } from './utility';
@@ -64,11 +64,15 @@ export class JoinWindbotAi {
       return true;
     }
 
-    const room = await this.roomManager.findOrCreateByName(roomName, {
+    const room = await this.roomManager.findOrCreateByName(roomName, client, {
       rule: 5,
       lflist: -1,
       time_limit: 0,
     });
+    if (room instanceof RoomCreateError) {
+      await client.die(room.message, ChatColor.RED);
+      return true;
+    }
     room.noHost = true;
     room.noReconnect = true;
     room.windbot = {

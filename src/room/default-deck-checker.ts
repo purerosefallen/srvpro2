@@ -1,6 +1,7 @@
 import { Context } from '../app';
-import { checkDeck } from '../utility/check-deck';
+import { checkChangeSide, checkDeck } from '../utility/check-deck';
 import { RoomCheckDeck } from './room-event/room-check-deck';
+import { RoomSideCheck } from './room-event/room-side-check';
 
 export class DefaultDeckChecker {
   constructor(private ctx: Context) {}
@@ -23,6 +24,15 @@ export class DefaultDeckChecker {
 
       if (deckError) {
         return msg.use(deckError);
+      }
+
+      return next();
+    });
+
+    this.ctx.middleware(RoomSideCheck, (msg, client, next) => {
+      const { deck, startDeck } = msg;
+      if (!checkChangeSide(startDeck, deck)) {
+        return msg.no();
       }
 
       return next();

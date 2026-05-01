@@ -148,6 +148,9 @@ export const defaultConfig = {
   // Enable cloud replay menu entry (R/W pass handling).
   // Boolean parse rule (default true): only '0'/'false'/'null' => false, otherwise true.
   ENABLE_CLOUD_REPLAY: '1',
+  // Enable replay recovery rooms (RC/RECOVER pass handling).
+  // Boolean parse rule (default true): only '0'/'false'/'null' => false, otherwise true.
+  ENABLE_RECOVER: '1',
   // Enable tournament mode compatibility behavior.
   // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
   TOURNAMENT_MODE: '0',
@@ -163,6 +166,13 @@ export const defaultConfig = {
   MYCARD_AUTH_KEY: '233333',
   // Mycard ban query URL. Empty means disabled.
   MYCARD_BAN_GET: 'https://sapi.moecube.com:444/ygopro/big-brother/ban',
+  // Enable Mycard Big Brother badword reports.
+  // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
+  BIG_BROTHER_ENABLED: '0',
+  // Mycard Big Brother report access key.
+  BIG_BROTHER_ACCESS_KEY: '233',
+  // Mycard Big Brother report URL. Empty means disabled.
+  BIG_BROTHER_POST: 'https://sapi.moecube.com:444/ygopro/big-brother',
   // Mycard arena mode name, e.g. athletic or entertain.
   MYCARD_ARENA_MODE: 'entertain',
   // Access key used when posting Mycard arena scores.
@@ -172,8 +182,7 @@ export const defaultConfig = {
   // Mycard arena AFK timeout. Format: integer string in seconds (s). '0' disables.
   MYCARD_ARENA_HANG_TIMEOUT: '90',
   // Mycard arena permit-check URL. Empty means disabled.
-  MYCARD_ARENA_CHECK_PERMIT:
-    'https://sapi.moecube.com:444/ygopro/match/permit',
+  MYCARD_ARENA_CHECK_PERMIT: 'https://sapi.moecube.com:444/ygopro/match/permit',
   // Mycard arena score post URL. Empty means disabled.
   MYCARD_ARENA_POST_SCORE: 'https://sapi.moecube.com:444/ygopro/arena/score',
   // Mycard arena score query URL. Empty means disabled.
@@ -200,8 +209,7 @@ export const defaultConfig = {
   ATHLETIC_CHECK_IDENTIFIER_URL:
     'https://sapi.moecube.com:444/ygopro/identifier/production',
   // Athletic ranking request params. Format: JSON object string.
-  ATHLETIC_CHECK_FETCH_PARAMS:
-    '{"type":"week","source":"mycard-athletic"}',
+  ATHLETIC_CHECK_FETCH_PARAMS: '{"type":"week","source":"mycard-athletic"}',
   // Athletic ranking count used for matching deck types.
   ATHLETIC_CHECK_RANK_COUNT: '20',
   // Ban top N athletic deck types in Mycard arena rooms. '0' disables.

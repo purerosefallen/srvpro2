@@ -18,6 +18,7 @@ import {
   decodeSeedBase64,
 } from './utility';
 
+@Index(['roomIdentifier', 'duelCount'])
 @Entity('duel_record')
 export class DuelRecordEntity extends BaseTimeEntity {
   @PrimaryColumn({
@@ -62,8 +63,10 @@ export class DuelRecordEntity extends BaseTimeEntity {
   duelCount!: number; // room.duelRecords.length
 
   @Index()
-  @Column('smallint')
-  winReason!: number; // OnRoomWin.winMsg.type
+  @Column('smallint', {
+    nullable: true,
+  })
+  winReason?: number | null; // OnRoomWin.winMsg.type；null means the duel is not finished yet.
 
   @Column({
     type: 'text',
@@ -117,7 +120,7 @@ export class DuelRecordEntity extends BaseTimeEntity {
     duelRecord.startTime = this.startTime;
     duelRecord.endTime = this.endTime;
     duelRecord.winPosition = this.resolveWinPosition();
-    duelRecord.winReason = this.winReason;
+    duelRecord.winReason = this.winReason ?? undefined;
     duelRecord.messages = decodeMessagesBase64(this.messages).map(
       (packet) => packet.msg!,
     );

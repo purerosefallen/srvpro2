@@ -1,4 +1,4 @@
-import { createAppContext } from 'nfkit';
+import { AppContext, createAppContext } from 'nfkit';
 import { Welcome } from './welcome';
 import { PlayerStatusNotify } from './player-status-notify';
 import { Reconnect, RefreshFieldService } from './reconnect';
@@ -13,7 +13,7 @@ import { HidePlayerNameProvider } from './hide-player-name-provider';
 import { CommandsService, KoishiContextService } from '../koishi';
 import { ChatgptService } from './chatgpt-service';
 import { ChatLengthCheck } from './chat-length-check';
-import { CloudReplayService } from './cloud-replay';
+import { CloudReplayService, ReplayRecoverService } from './cloud-replay';
 import { LpLowHintService } from './lp-low-hint-service';
 import { LockDeckService } from './lock-deck';
 import { BlockReplay } from './block-replay';
@@ -21,7 +21,7 @@ import { RoomDeathService } from './room-death-service';
 import { RoomAutoDeathService } from './room-auto-death-service';
 import { ChallongeService } from './challonge-service';
 import { TagSurrenderConfirmMiddleware } from './tag-surrender-confirm-middleware';
-import { MycardModule } from './mycard';
+import { BigBrotherService, MycardModule } from './mycard';
 
 export const FeatsModule = createAppContext()
   .provide(ClientKeyProvider)
@@ -32,6 +32,7 @@ export const FeatsModule = createAppContext()
   .provide(MenuManager)
   .provide(PlayerStatusNotify) // hint meessages when player status changes
   .provide(CloudReplayService) // persist duel records
+  .provide(ReplayRecoverService) // recover rooms from cloud replay records
   .provide(BlockReplay) // block replay packets for in-room players
   .provide(ChatgptService) // AI-room chat replies
   .provide(ChatLengthCheck) // block blank/overlong chat messages
@@ -40,6 +41,7 @@ export const FeatsModule = createAppContext()
   .provide(RoomAutoDeathService) // auto trigger death mode after duel start
   .provide(ChallongeService) // challonge deck lock + score sync
   .use(MycardModule) // mycard auth, arena mode, athletic deck checks
+  .provide(BigBrotherService) // badword violation reports
   .provide(LockDeckService) // srvpro-style tournament deck lock check
   .provide(RefreshFieldService) // utility for
   .provide(Reconnect) // allow players to reconnect to ongoing duels without leaving the room
@@ -49,4 +51,4 @@ export const FeatsModule = createAppContext()
   .use(ResourceModule) // chat bad words
   .use(RandomDuelModule) // chat random duel block
   .use(WindbotModule)
-  .define();
+  .define() as AppContext;

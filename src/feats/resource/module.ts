@@ -1,4 +1,4 @@
-import { createAppContext } from 'nfkit';
+import { AppContext, createAppContext } from 'nfkit';
 import { ContextState } from '../../app';
 import { BadwordProvider } from './badword-provider';
 import { DialoguesProvider } from './dialogues-provider';
@@ -10,4 +10,4 @@ export const ResourceModule = createAppContext<ContextState>()
   .provide(WordsProvider)
   .provide(DialoguesProvider)
   .provide(BadwordProvider)
-  .define();
+  .define() as AppContext;

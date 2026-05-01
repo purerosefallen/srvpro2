@@ -31,7 +31,11 @@ async function makeCdbFile(
     }
     if (code === 20000) {
       // ruleCode=10000 → toSqljsRow writes it as alias=10000 in the DB
-      return new CardDataEntry().fromPartial({ code, type: TYPE, ruleCode: 10000 });
+      return new CardDataEntry().fromPartial({
+        code,
+        type: TYPE,
+        ruleCode: 10000,
+      });
     }
     // 20001: alt-art of 20000, alias within 20 range → stays as alias
     return new CardDataEntry().fromPartial({ code, type: TYPE, alias: 20000 });

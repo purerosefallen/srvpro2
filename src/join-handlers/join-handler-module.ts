@@ -1,4 +1,4 @@
-import { createAppContext } from 'nfkit';
+import { AppContext, createAppContext } from 'nfkit';
 import { ContextState } from '../app';
 import { JoinWindbotAi } from '../feats/windbot';
 import { JoinRoom } from './join-room';
@@ -26,4 +26,4 @@ export const JoinHandlerModule = createAppContext<ContextState>()
   .provide(JoinBlankPassMenu) // blank pass below
   .provide(JoinBlankPassRandomDuel)
   .provide(JoinBlankPassWindbotAi)
-  .define();
+  .define() as AppContext;
