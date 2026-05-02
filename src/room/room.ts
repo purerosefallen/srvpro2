@@ -2232,7 +2232,13 @@ export class Room {
   }
 
   async getInfo(): Promise<RoomInfo> {
-    const fieldInfo = await this.getCurrentFieldInfo();
+    let fieldInfo: RoomCurrentFieldInfo;
+    try {
+      fieldInfo = await this.getCurrentFieldInfo();
+    } catch (error) {
+      this.logger.warn({ error }, 'Failed to get current field info');
+      fieldInfo = undefined;
+    }
     return {
       identifier: this.identifier,
       name: this.name,
