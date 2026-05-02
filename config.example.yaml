@@ -65,6 +65,7 @@ chatgptTokenLimit: 12000
 chatgptExtraOpts: {}
 enableReconnect: 1
 enableCloudReplay: 1
+cloudReplayInstantWrite: 0
 enableRecover: 1
 tournamentMode: 0
 tournamentModeCheckDeck: 1

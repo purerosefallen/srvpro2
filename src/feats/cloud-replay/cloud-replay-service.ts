@@ -119,7 +119,7 @@ export class CloudReplayService {
       return next();
     });
 
-    if (this.ctx.config.getBoolean('TOURNAMENT_MODE')) {
+    if (this.ctx.config.getBoolean('CLOUD_REPLAY_INSTANT_WRITE')) {
       this.registerTournamentDuelRecordHooks();
     }
   }
