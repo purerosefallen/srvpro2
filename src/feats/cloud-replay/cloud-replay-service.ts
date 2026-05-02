@@ -1,6 +1,9 @@
 import {
   ChatColor,
   HostInfo,
+  YGOProMsgBase,
+  YGOProMsgNewPhase,
+  YGOProMsgNewTurn,
   YGOProMsgResponseBase,
   YGOProStocDuelEnd,
   YGOProStocDuelStart,
@@ -120,7 +123,7 @@ export class CloudReplayService {
     });
 
     if (this.ctx.config.getBoolean('CLOUD_REPLAY_INSTANT_WRITE')) {
-      this.registerTournamentDuelRecordHooks();
+      this.registerInstantDuelRecordHooks();
     }
   }
 
@@ -170,38 +173,34 @@ export class CloudReplayService {
     return true;
   }
 
-  private registerTournamentDuelRecordHooks() {
-    this.ctx.middleware(OnRoomReceiveResponse, async (event, _client, next) => {
+  private registerInstantDuelRecordHooks() {
+    const handle = (room: Room | undefined, ctx: string) => {
+      if (!room) return;
       this.saveDuelRecordNonBlocking(
-        event.room,
+        room,
         {
-          swapped: event.room.isPosSwapped,
+          swapped: room.isPosSwapped,
         },
-        'OnRoomReceiveResponse',
+        ctx,
       );
-      return next();
-    });
+    };
 
-    this.ctx.middleware(
-      YGOProMsgResponseBase,
-      async (_message, client, next) => {
-        try {
-          return await next();
-        } finally {
-          const room = this.getClientRoom(client);
-          if (room) {
-            this.saveDuelRecordNonBlocking(
-              room,
-              {
-                swapped: room.isPosSwapped,
-              },
-              'YGOProMsgResponseBase',
-            );
-          }
-        }
-      },
-      true,
-    );
+    // this.ctx.middleware(OnRoomReceiveResponse, async (event, _client, next) => {
+    //   handle(event.room, 'OnRoomReceiveResponse');
+    //   return next();
+    // });
+
+    for (const eventClass of [
+      YGOProMsgNewTurn,
+      YGOProMsgNewPhase,
+    ] as (typeof YGOProMsgBase)[]) {
+      const className = eventClass.name;
+      this.ctx.middleware(eventClass, async (event, client, next) => {
+        const room = this.getClientRoom(client);
+        handle(room, className);
+        return next();
+      });
+    }
   }
 
   private saveDuelRecordFromWinEvent(event: OnRoomWin) {
