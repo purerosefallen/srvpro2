@@ -1,4 +1,4 @@
-import { YGOProMsgResponseBase } from 'ygopro-msg-encode';
+import { YGOProMsgNewPhase, YGOProMsgNewTurn } from 'ygopro-msg-encode';
 import { ClientKeyProvider } from '../src/feats/client-key-provider';
 import {
   CloudReplayService,
@@ -6,10 +6,21 @@ import {
 } from '../src/feats/cloud-replay';
 import { LegacyApiReplayService } from '../src/legacy-api';
 import { LegacyRoomIdService } from '../src/legacy-api/legacy-room-id-service';
-import { OnRoomReceiveResponse, OnRoomWin, RoomManager } from '../src/room';
+import { OnRoomWin, RoomManager } from '../src/room';
 import { MenuManager } from '../src/feats/menu-manager';
 
-function makeCtx(tournamentMode = false, activeRooms: any[] = []) {
+function makeCtx(
+  options: {
+    tournamentMode?: boolean;
+    instantWrite?: boolean;
+    activeRooms?: any[];
+  } = {},
+) {
+  const {
+    tournamentMode = false,
+    instantWrite = false,
+    activeRooms = [],
+  } = options;
   const middleware = jest.fn();
   const clientKeyProvider = {
     getClientKey: jest.fn((client: any) => `key:${client.name}`),
@@ -22,9 +33,11 @@ function makeCtx(tournamentMode = false, activeRooms: any[] = []) {
       error: jest.fn(),
     }),
     config: {
-      getBoolean: jest.fn((key: string) =>
-        key === 'TOURNAMENT_MODE' ? tournamentMode : false,
-      ),
+      getBoolean: jest.fn((key: string) => {
+        if (key === 'TOURNAMENT_MODE') return tournamentMode;
+        if (key === 'CLOUD_REPLAY_INSTANT_WRITE') return instantWrite;
+        return false;
+      }),
     },
     middleware,
   };
@@ -130,7 +143,7 @@ describe('cloud replay live save snapshots', () => {
   });
 
   test('mid-duel snapshot has null winReason and no winners', () => {
-    const { ctx } = makeCtx(true);
+    const { ctx } = makeCtx({ tournamentMode: true });
     const service = new CloudReplayService(ctx);
     const { room } = makeSnapshotRoom();
 
@@ -147,7 +160,7 @@ describe('cloud replay live save snapshots', () => {
   });
 
   test('finished snapshot marks the winning duel position', () => {
-    const { ctx } = makeCtx(true);
+    const { ctx } = makeCtx({ tournamentMode: true });
     const service = new CloudReplayService(ctx);
     const { duelRecord, room } = makeSnapshotRoom();
     duelRecord.winReason = 1;
@@ -166,8 +179,8 @@ describe('cloud replay live save snapshots', () => {
 });
 
 describe('cloud replay live save hooks', () => {
-  test('does not register mid-duel hooks when tournament mode is disabled', async () => {
-    const { ctx, middleware } = makeCtx(false);
+  test('does not register instant hooks when instant write is disabled', async () => {
+    const { ctx, middleware } = makeCtx();
     const service = new CloudReplayService(ctx);
 
     await service.init();
@@ -176,26 +189,25 @@ describe('cloud replay live save hooks', () => {
     expect(middleware).toHaveBeenCalledWith(OnRoomWin, expect.any(Function));
   });
 
-  test('registers mid-duel hooks only in tournament mode', async () => {
-    const { ctx, middleware } = makeCtx(true);
+  test('registers instant hooks when instant write is enabled', async () => {
+    const { ctx, middleware } = makeCtx({ instantWrite: true });
     const service = new CloudReplayService(ctx);
 
     await service.init();
 
     expect(middleware).toHaveBeenCalledWith(OnRoomWin, expect.any(Function));
     expect(middleware).toHaveBeenCalledWith(
-      OnRoomReceiveResponse,
+      YGOProMsgNewTurn,
       expect.any(Function),
     );
     expect(middleware).toHaveBeenCalledWith(
-      YGOProMsgResponseBase,
+      YGOProMsgNewPhase,
       expect.any(Function),
-      true,
     );
   });
 
   test('waits for win-match saves before continuing room win flow', async () => {
-    const { ctx, middleware } = makeCtx(false);
+    const { ctx, middleware } = makeCtx();
     const service = new CloudReplayService(ctx);
     const deferred = createDeferred();
     const saveFromWin = jest
@@ -220,7 +232,7 @@ describe('cloud replay live save hooks', () => {
   });
 
   test('does not wait for non-match win saves before continuing room win flow', async () => {
-    const { ctx, middleware } = makeCtx(false);
+    const { ctx, middleware } = makeCtx();
     const service = new CloudReplayService(ctx);
     const deferred = createDeferred();
     const saveFromWin = jest
@@ -244,7 +256,7 @@ describe('cloud replay live save hooks', () => {
 describe('cloud replay dueling visibility', () => {
   test('filters active room identifiers instead of winReason', () => {
     const activeRoom = { identifier: 'active-room' };
-    const { ctx } = makeCtx(false, [activeRoom]);
+    const { ctx } = makeCtx({ activeRooms: [activeRoom] });
     const service = new CloudReplayService(ctx);
     const qb = {
       andWhere: jest.fn().mockReturnThis(),
