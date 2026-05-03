@@ -134,7 +134,7 @@ export class Client {
       },
       'Sending message to client',
     );
-    return this.sendQueue.add(async () => {
+    this.sendQueue.add(async () => {
       if (this.disconnected) {
         return;
       }

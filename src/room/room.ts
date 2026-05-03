@@ -581,13 +581,15 @@ export class Room {
       return;
     }
     this.duelStage = DuelStage.Siding;
-    for (const p of this.playingPlayers) {
-      p.deck = undefined;
-      p.send(new YGOProStocChangeSide());
-    }
-    for (const p of this.watchers) {
-      p.send(new YGOProStocWaitingSide());
-    }
+    await Promise.all(
+      this.playingPlayers.map((p) => {
+        p.deck = undefined;
+        return p.send(new YGOProStocChangeSide());
+      }),
+    );
+    await Promise.all(
+      [...this.watchers].map((p) => p.send(new YGOProStocWaitingSide())),
+    );
     await this.ctx.dispatch(
       new OnRoomSidingStart(this),
       this.playingPlayers[0],
@@ -775,14 +777,16 @@ export class Room {
 
     if (wasObserver) {
       this.watchers.delete(client);
-      for (const p of this.allPlayers) {
-        p.send(this.watcherSizeMessage);
-      }
+      await Promise.all(
+        this.allPlayers.map((p) => p.send(this.watcherSizeMessage)),
+      );
     } else if (this.duelStage === DuelStage.Begin) {
       this.players[client.pos] = undefined;
-      this.allPlayers.forEach((p) => {
-        p.send(client.prepareChangePacket(PlayerChangeState.LEAVE));
-      });
+      await Promise.all(
+        this.allPlayers.map((p) =>
+          p.send(client.prepareChangePacket(PlayerChangeState.LEAVE)),
+        ),
+      );
     } else {
       await this.win(
         { player: 1 - this.getIngameDuelPos(client), type: 0x4 },
@@ -860,7 +864,7 @@ export class Room {
       playerPosition: oldPos,
       playerState: PlayerChangeState.OBSERVE,
     });
-    this.allPlayers.forEach((p) => p.send(changeMsg));
+    await Promise.all(this.allPlayers.map((p) => p.send(changeMsg)));
 
     // 从 players 移除
     this.players[client.pos] = undefined;
@@ -873,7 +877,9 @@ export class Room {
     await client.sendTypeChange();
 
     // 发送观战者数量更新
-    this.allPlayers.forEach((p) => p.send(this.watcherSizeMessage));
+    await Promise.all(
+      this.allPlayers.map((p) => p.send(this.watcherSizeMessage)),
+    );
 
     // 触发事件
     await this.ctx.dispatch(
@@ -910,13 +916,15 @@ export class Room {
 
       // 发送 PlayerEnter 给所有人
       const enterMsg = client.prepareEnterPacket();
-      this.allPlayers.forEach((p) => p.send(enterMsg));
+      await Promise.all(this.allPlayers.map((p) => p.send(enterMsg)));
 
       // 发送 TypeChange 给客户端
       await client.sendTypeChange();
 
       // 发送观战者数量更新
-      this.allPlayers.forEach((p) => p.send(this.watcherSizeMessage));
+      await Promise.all(
+        this.allPlayers.map((p) => p.send(this.watcherSizeMessage)),
+      );
 
       // 触发事件
       await this.ctx.dispatch(
@@ -954,7 +962,7 @@ export class Room {
         playerPosition: oldPos,
         playerState: nextPos,
       });
-      this.allPlayers.forEach((p) => p.send(changeMsg));
+      await Promise.all(this.allPlayers.map((p) => p.send(changeMsg)));
 
       // 发送 TypeChange 给客户端
       await client.sendTypeChange();
@@ -1083,7 +1091,7 @@ export class Room {
 
       // Auto-ready: send PlayerChange READY to all players (client.deck 已设置，自动为 READY)
       const changeMsg = client.prepareChangePacket();
-      this.allPlayers.forEach((p) => p.send(changeMsg));
+      await Promise.all(this.allPlayers.map((p) => p.send(changeMsg)));
       if (this.noHost) {
         let allReadyAndFull = true;
         for (let i = 0; i < this.players.length; i++) {
@@ -1100,7 +1108,7 @@ export class Room {
     } else if (this.duelStage === DuelStage.Siding) {
       // In Siding stage, send DUEL_START to the player who submitted deck
       // Siding 阶段不发 DeckCount
-      client.send(new YGOProStocDuelStart());
+      await client.send(new YGOProStocDuelStart());
       await this.ctx.dispatch(new OnRoomSidingReady(this), client);
 
       // Check if all players have submitted their decks
@@ -1125,7 +1133,7 @@ export class Room {
 
     // 发送 PlayerChange 给所有人 (client.deck 已清除，自动为 NOTREADY)
     const changeMsg = client.prepareChangePacket();
-    this.allPlayers.forEach((p) => p.send(changeMsg));
+    await Promise.all(this.allPlayers.map((p) => p.send(changeMsg)));
   }
 
   @RoomMethod({ allowInDuelStages: DuelStage.Begin })
@@ -1207,7 +1215,7 @@ export class Room {
     if (!firstgoPlayer) {
       return;
     }
-    firstgoPlayer.send(new YGOProStocSelectTp());
+    await firstgoPlayer.send(new YGOProStocSelectTp());
     await this.ctx.dispatch(
       new OnRoomSelectTp(this, firstgoPlayer),
       firstgoPlayer,
@@ -1222,8 +1230,8 @@ export class Room {
     if (!duelPos0 || !duelPos1) {
       return;
     }
-    duelPos0.send(new YGOProStocSelectHand());
-    duelPos1.send(new YGOProStocSelectHand());
+    await duelPos0.send(new YGOProStocSelectHand());
+    await duelPos1.send(new YGOProStocSelectHand());
     await this.ctx.dispatch(
       new OnRoomFinger(this, [duelPos0, duelPos1]),
       duelPos0,
@@ -1256,16 +1264,16 @@ export class Room {
       res1: this.handResult[0],
       res2: this.handResult[1],
     });
-    this.getDuelPosPlayers(0).forEach((p) => p.send(result0));
+    await Promise.all(this.getDuelPosPlayers(0).map((p) => p.send(result0)));
     // 也发送给观众（观众看到的是玩家0的视角）
-    this.watchers.forEach((w) => w.send(result0));
+    await Promise.all([...this.watchers].map((w) => w.send(result0)));
 
     // 发送猜拳结果给玩家 1 及其队友（自己的结果在前）
     const result1 = new YGOProStocHandResult().fromPartial({
       res1: this.handResult[1],
       res2: this.handResult[0],
     });
-    this.getDuelPosPlayers(1).forEach((p) => p.send(result1));
+    await Promise.all(this.getDuelPosPlayers(1).map((p) => p.send(result1)));
 
     // 如果平局，重新猜拳
     if (this.handResult[0] === this.handResult[1]) {
@@ -1304,10 +1312,12 @@ export class Room {
     }
 
     if (this.duelRecords.length === 0) {
-      this.allPlayers.forEach((p) => {
-        p.send(new YGOProStocDuelStart());
-        p.send(this.prepareStocDeckCount(p.pos));
-      });
+      await Promise.all(
+        this.allPlayers.flatMap((p) => [
+          p.send(new YGOProStocDuelStart()),
+          p.send(this.prepareStocDeckCount(p.pos)),
+        ]),
+      );
     }
 
     const first = await this.ctx.dispatch(
