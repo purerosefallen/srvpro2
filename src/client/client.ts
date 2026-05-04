@@ -21,6 +21,7 @@ import { I18nService } from './i18n';
 import { Chnroute } from './chnroute';
 import YGOProDeck from 'ygopro-deck-encode';
 import PQueue from 'p-queue';
+import pTimeout from 'p-timeout';
 import { ClientRoomField } from '../utility/decorators';
 import {
   collectKoishiTextTokens,
@@ -31,6 +32,8 @@ import {
   splitColoredMessagesByLine,
 } from '../utility';
 import { RoomManager } from '../room';
+
+const SEND_TIMEOUT_MS = 5000;
 
 export class Client {
   protected async _send(data: Buffer): Promise<void> {
@@ -100,6 +103,7 @@ export class Client {
   }
 
   disconnected?: Date;
+  private sendFailedAfterDisconnected = false;
 
   disconnect(): undefined {
     this.disconnected ??= new Date();
@@ -111,7 +115,7 @@ export class Client {
     }
     this.disconnectSubject.next();
     this.disconnectSubject.complete();
-    this._disconnect().then();
+    this.sendQueue.onIdle().then(() => this._disconnect()).then();
     return undefined;
   }
 
@@ -134,13 +138,23 @@ export class Client {
       },
       'Sending message to client',
     );
+    if (this.disconnected) {
+      return;
+    }
     this.sendQueue.add(async () => {
-      if (this.disconnected) {
+      if (this.disconnected && this.sendFailedAfterDisconnected) {
         return;
       }
       try {
-        await this._send(Buffer.from(data.toFullPayload()));
+        await pTimeout(
+          this._send(Buffer.from(data.toFullPayload())),
+          SEND_TIMEOUT_MS,
+          new Error(`Send message timed out after ${SEND_TIMEOUT_MS}ms`),
+        );
       } catch (e) {
+        if (this.disconnected) {
+          this.sendFailedAfterDisconnected = true;
+        }
         this.logger.warn(
           { ip: this.loggingIp(), error: (e as Error).stack },
           `Failed to send message: ${(e as Error).message}`,
