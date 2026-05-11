@@ -3,6 +3,7 @@ import { Context } from '../app';
 import { Client } from '../client';
 import { MenuEntry, MenuManager } from '../feats';
 import { DuelStage, Room, RoomManager } from '../room';
+import { buildRoomlistMenuTitle } from './roomlist-menu-title';
 
 export class JoinRoomlist {
   private logger = this.ctx.createLogger(this.constructor.name);
@@ -38,18 +39,26 @@ export class JoinRoomlist {
 
   private async openRoomListMenu(client: Client) {
     await this.menuManager.launchMenu(client, async () => {
-      const roomNames = this.roomManager
+      const roomEntries = this.roomManager
         .allRooms()
         .filter((room) => this.isRoomJoinable(room))
-        .map((room) => room.name);
+        .map((room) => ({
+          name: room.name,
+          title: buildRoomlistMenuTitle({
+            duelCount: room.duelRecords.length,
+            duelStage: room.duelStage,
+            name: room.name,
+            turnCount: room.turnCount,
+          }),
+        }));
 
-      const menu: MenuEntry[] = roomNames.map((roomName) => ({
-        title: roomName,
+      const menu: MenuEntry[] = roomEntries.map((roomEntry) => ({
+        title: roomEntry.title,
         callback: async (menuClient) => {
-          const room = this.roomManager.findByName(roomName);
+          const room = this.roomManager.findByName(roomEntry.name);
           if (!this.isRoomJoinable(room)) {
             this.logger.debug(
-              { roomName },
+              { roomName: roomEntry.name },
               'Roomlist target room no longer exists or is not joinable',
             );
             await this.openRoomListMenu(menuClient);
