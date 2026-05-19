@@ -47,6 +47,34 @@ function makeCtx(overrides: Record<string, string> = {}) {
   } as any;
 }
 
+function makeDuelRecord(winPosition?: number) {
+  return {
+    winPosition,
+    isSwapped: false,
+    players: [{ name: 'Alice' }, { name: 'Bob' }],
+    toYrp: () => ({
+      toYrp: () => Buffer.from([]),
+    }),
+  };
+}
+
+function makeArenaRoom(duelRecords: any[] = []) {
+  return {
+    name: 'M#room',
+    mycardArena: 'athletic',
+    mycardArenaStartTime: 'start',
+    playingPlayers: [
+      { pos: 0, name: 'Alice', name_vpass: 'Alice$vp' },
+      { pos: 1, name: 'Bob', name_vpass: 'Bob$vp' },
+    ],
+    duelRecords,
+    score: [0, 0],
+    getDuelPos: (player: any) => player.pos,
+    isTag: false,
+    hostinfo: {},
+  };
+}
+
 describe('MycardService score post', () => {
   test('uses YGOProDeck.toYdkString for score deck fields', async () => {
     const ctx = makeCtx();
@@ -146,5 +174,72 @@ describe('MycardService score post', () => {
 
     expect(ctx.posted[0].get('userscoreA')).toBe('-9');
     expect(ctx.posted[0].get('userscoreB')).toBe('0');
+  });
+
+  test('posts wins with names matching username fields and draw entries', async () => {
+    const ctx = makeCtx();
+    const service = new MycardService(ctx);
+    const room = makeArenaRoom([
+      makeDuelRecord(0),
+      makeDuelRecord(2),
+      makeDuelRecord(1),
+    ]);
+
+    const snapshot = (service as any).createArenaScoreSnapshot(room);
+    await (service as any).postScoreSnapshot(snapshot);
+
+    const form = ctx.posted[0];
+    expect(form.get('usernameA')).toBe('Alice');
+    expect(form.get('usernameB')).toBe('Bob');
+    expect(JSON.parse(form.get('wins') || '[]')).toEqual([
+      form.get('usernameA'),
+      '',
+      form.get('usernameB'),
+    ]);
+  });
+
+  test('keeps invalid middle wins as blanks and trims trailing invalid wins', async () => {
+    const ctx = makeCtx();
+    const service = new MycardService(ctx);
+    const room = makeArenaRoom([
+      makeDuelRecord(0),
+      makeDuelRecord(9),
+      makeDuelRecord(1),
+      makeDuelRecord(undefined),
+    ]);
+
+    const snapshot = (service as any).createArenaScoreSnapshot(room);
+    await (service as any).postScoreSnapshot(snapshot);
+
+    expect(JSON.parse(ctx.posted[0].get('wins') || '[]')).toEqual([
+      'Alice',
+      '',
+      'Bob',
+    ]);
+  });
+
+  test('does not trim trailing draw wins', async () => {
+    const ctx = makeCtx();
+    const service = new MycardService(ctx);
+    const room = makeArenaRoom([makeDuelRecord(0), makeDuelRecord(2)]);
+
+    const snapshot = (service as any).createArenaScoreSnapshot(room);
+    await (service as any).postScoreSnapshot(snapshot);
+
+    expect(JSON.parse(ctx.posted[0].get('wins') || '[]')).toEqual([
+      'Alice',
+      '',
+    ]);
+  });
+
+  test('omits wins when no duel record produces a submitted entry', async () => {
+    const ctx = makeCtx();
+    const service = new MycardService(ctx);
+    const room = makeArenaRoom([makeDuelRecord(undefined), makeDuelRecord(9)]);
+
+    const snapshot = (service as any).createArenaScoreSnapshot(room);
+    await (service as any).postScoreSnapshot(snapshot);
+
+    expect(ctx.posted[0].has('wins')).toBe(false);
   });
 });

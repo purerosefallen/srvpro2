@@ -65,6 +65,7 @@ type ArenaScoreSnapshot = {
   start: string;
   end: string;
   firstList: string[];
+  wins: string[];
   replays: string[];
   players: [ArenaScorePlayer, ArenaScorePlayer];
 };
@@ -770,6 +771,14 @@ export class MycardService {
       .slice(0, 2)
       .map((snapshot) => this.createScorePlayer(room, snapshot));
 
+    const scorePlayers =
+      players.length === 2
+        ? ([players[0], players[1]] as [ArenaScorePlayer, ArenaScorePlayer])
+        : ([
+            this.createFallbackScorePlayer(players[0]),
+            this.createFallbackScorePlayer(players[1]),
+          ] as [ArenaScorePlayer, ArenaScorePlayer]);
+
     if (players.length !== 2) {
       return {
         roomName: room.name,
@@ -777,11 +786,9 @@ export class MycardService {
         start: room.mycardArenaStartTime || this.nowString(),
         end: this.nowString(),
         firstList: this.resolveFirstList(room),
+        wins: this.resolveWins(room, scorePlayers),
         replays: this.resolveReplays(room),
-        players: [
-          this.createFallbackScorePlayer(players[0]),
-          this.createFallbackScorePlayer(players[1]),
-        ],
+        players: scorePlayers,
       };
     }
 
@@ -791,8 +798,9 @@ export class MycardService {
       start: room.mycardArenaStartTime || this.nowString(),
       end: this.nowString(),
       firstList: this.resolveFirstList(room),
+      wins: this.resolveWins(room, scorePlayers),
       replays: this.resolveReplays(room),
-      players: [players[0], players[1]],
+      players: scorePlayers,
     };
   }
 
@@ -834,6 +842,31 @@ export class MycardService {
         return duelRecord.players[firstPos]?.name;
       })
       .filter((name): name is string => !!name);
+  }
+
+  private resolveWins(
+    room: Room,
+    players: [ArenaScorePlayer, ArenaScorePlayer],
+  ) {
+    const wins = room.duelRecords.map((duelRecord) => {
+      const winPosition = duelRecord.winPosition;
+      if (winPosition === 2) {
+        return { value: '', valid: true };
+      }
+      if (winPosition === 0 || winPosition === 1) {
+        const name = players[winPosition].name;
+        if (name) {
+          return { value: name, valid: true };
+        }
+      }
+      return { value: '', valid: false };
+    });
+
+    while (wins.length > 0 && !wins[wins.length - 1].valid) {
+      wins.pop();
+    }
+
+    return wins.map((win) => win.value);
   }
 
   private resolveReplays(room: Room) {
@@ -878,6 +911,9 @@ export class MycardService {
     form.append('userdeckAHistory', playerA.deckHistory.join(','));
     form.append('userdeckBHistory', playerB.deckHistory.join(','));
     form.append('first', JSON.stringify(snapshot.firstList));
+    if (snapshot.wins.length > 0) {
+      form.append('wins', JSON.stringify(snapshot.wins));
+    }
     form.append('replays', JSON.stringify(snapshot.replays));
     form.append('start', snapshot.start);
     form.append('end', snapshot.end);
