@@ -121,11 +121,15 @@ export class YGOProResourceLoader {
     const ocgcoreWasmPath = ocgcoreWasmPathConfig
       ? path.resolve(process.cwd(), ocgcoreWasmPathConfig)
       : undefined;
+    const defaultOcgcoreWasmPath = process.env.DEFAULT_OCGCORE_WASM_PATH
+      ? path.resolve(process.cwd(), process.env.DEFAULT_OCGCORE_WASM_PATH)
+      : undefined;
     const { cardStorage, dbCount, failedFiles, sha512 } = await runInWorker(
       CardLoadWorker,
       (worker) => worker.load(),
       this.ygoproPaths,
       ocgcoreWasmPath,
+      defaultOcgcoreWasmPath,
     );
 
     for (const failedFile of failedFiles) {

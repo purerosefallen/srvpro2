@@ -44,4 +44,5 @@ Dockerfile
 /ssl
 /ygopro
 /windbot
+/libocgcore.wasm
 /researches

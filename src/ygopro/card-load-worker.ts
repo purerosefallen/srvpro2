@@ -45,6 +45,7 @@ export class CardLoadWorker {
   constructor(
     private ygoproPaths: string[],
     private ocgcoreWasmPath?: string,
+    private defaultOcgcoreWasmPath?: string,
   ) {}
 
   @WorkerMethod()
@@ -97,21 +98,7 @@ export class CardLoadWorker {
       }
     }
 
-    let ocgcoreWasmBinary: Buffer | undefined;
-    if (this.ocgcoreWasmPath) {
-      try {
-        const wasmBinary = Buffer.from(
-          await fs.promises.readFile(this.ocgcoreWasmPath),
-        );
-        hashWithSizePrefixText(sha512, this.ocgcoreWasmPath);
-        hashWithSizePrefix(sha512, wasmBinary);
-        ocgcoreWasmBinary = toShared(wasmBinary);
-      } catch (error) {
-        if (!isFileNotFoundError(error)) {
-          throw error;
-        }
-      }
-    }
+    const ocgcoreWasmBinary = await this.loadOcgcoreWasmBinary(sha512);
 
     const result = new CardLoadWorkerResult();
     result.cardStorage = toShared(
@@ -121,5 +108,26 @@ export class CardLoadWorker {
     result.failedFiles = failedFiles;
     result.sha512 = toShared(sha512.digest());
     return result;
+  }
+
+  private async loadOcgcoreWasmBinary(sha512: Hash) {
+    const paths = [
+      this.ocgcoreWasmPath,
+      this.defaultOcgcoreWasmPath,
+    ].filter((path): path is string => !!path);
+
+    for (const wasmPath of paths) {
+      try {
+        const wasmBinary = Buffer.from(await fs.promises.readFile(wasmPath));
+        hashWithSizePrefixText(sha512, wasmPath);
+        hashWithSizePrefix(sha512, wasmBinary);
+        return toShared(wasmBinary);
+      } catch (error) {
+        if (!isFileNotFoundError(error)) {
+          throw error;
+        }
+      }
+    }
+    return undefined;
   }
 }

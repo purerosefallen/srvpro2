@@ -40,5 +40,6 @@ lerna-debug.log*
 /ssl
 /ygopro
 /windbot
+/libocgcore.wasm
 /plugins
 /researches

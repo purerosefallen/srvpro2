@@ -3,6 +3,7 @@ stages:
   - deploy
 variables:
   GIT_DEPTH: "1"
+  USE_MAT_CACHER: "0"
 
 before_script:
   - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
@@ -10,7 +11,7 @@ before_script:
 .build-image:
   stage: build
   script:
-    - docker build --no-cache --pull -t $TARGET_IMAGE .
+    - docker build --build-arg USE_MAT_CACHER=$USE_MAT_CACHER --no-cache --pull -t $TARGET_IMAGE .
     - docker push $TARGET_IMAGE
 
 build-x86:
@@ -19,6 +20,7 @@ build-x86:
     - docker
   variables:
     TARGET_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG-x86
+    USE_MAT_CACHER: "1"
 
 build-arm:
   extends: .build-image
