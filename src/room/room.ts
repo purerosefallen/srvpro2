@@ -1311,6 +1311,8 @@ export class Room {
       return false;
     }
 
+    this.duelStage = DuelStage.Finger;
+
     if (this.duelRecords.length === 0) {
       await Promise.all(
         this.allPlayers.flatMap((p) => [
