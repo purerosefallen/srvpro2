@@ -76,7 +76,7 @@
     "ygopro-deck-encode": "^1.0.15",
     "ygopro-lflist-encode": "^1.0.3",
     "ygopro-msg-encode": "^1.2.2",
-    "ygopro-yrp-encode": "^1.0.1",
+    "ygopro-yrp-encode": "^1.0.3",
     "yuzuthread": "^1.0.10"
   },
   "devDependencies": {
