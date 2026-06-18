@@ -109,7 +109,7 @@ describe('MycardService score post', () => {
     expect(ctx.posted[0].get('userdeckA')).toBe(deckA.toYdkString());
     expect(ctx.posted[0].get('userdeckB')).toBe(deckB.toYdkString());
     expect(ctx.posted[0].get('userdeckAHistory')).toBe(
-      [deckA.toYdkString(), deckA2.toYdkString()].join(','),
+      JSON.stringify([deckA.toYdkString(), deckA2.toYdkString()]),
     );
   });
 

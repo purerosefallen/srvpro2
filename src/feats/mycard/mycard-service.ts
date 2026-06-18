@@ -908,8 +908,8 @@ export class MycardService {
     form.append('userscoreB', String(playerB.score));
     form.append('userdeckA', playerA.deck);
     form.append('userdeckB', playerB.deck);
-    form.append('userdeckAHistory', playerA.deckHistory.join(','));
-    form.append('userdeckBHistory', playerB.deckHistory.join(','));
+    form.append('userdeckAHistory', JSON.stringify(playerA.deckHistory));
+    form.append('userdeckBHistory', JSON.stringify(playerB.deckHistory));
     form.append('first', JSON.stringify(snapshot.firstList));
     if (snapshot.wins.length > 0) {
       form.append('wins', JSON.stringify(snapshot.wins));
