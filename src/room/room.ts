@@ -130,6 +130,7 @@ declare module 'ygopro-msg-encode' {
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 const DISPOSE_OCGCORE_TIMEOUT_MS = 1 * 60 * 1000;
+const MAX_RESPONSE_LENGTH = 512;
 
 type RoomOcgcoreWorker = WorkerInstance<OcgcoreWorker>;
 
@@ -2191,10 +2192,17 @@ export class Room {
     ) {
       return;
     }
-    this.acceptResponse = false;
     const responsePos = this.responsePos;
     const responseRequestMsg = this.lastResponseRequestMsg;
-    const response = Buffer.from(msg.response);
+    const rawResponse = Buffer.from(msg.response);
+    if (rawResponse.length === 0) {
+      return;
+    }
+    const response =
+      rawResponse.length > MAX_RESPONSE_LENGTH
+        ? rawResponse.subarray(0, MAX_RESPONSE_LENGTH)
+        : rawResponse;
+    this.acceptResponse = false;
     this.lastDuelRecord.responses.push(response);
     if (this.hasTimeLimit) {
       this.clearResponseTimer(true);
