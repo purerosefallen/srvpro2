@@ -238,7 +238,10 @@ export class ReplayRecoverService {
       event.room.recoverState = {
         record,
         spec,
-        responses: decodeResponsesBase64(record.responses),
+        responses: decodeResponsesBase64(
+          record.responses,
+          record.schemaVersion,
+        ),
         firstDuelPos: this.resolveRecordFirstDuelPos(event.room, record),
       };
       event.room.welcome = '#{recover_hint}';

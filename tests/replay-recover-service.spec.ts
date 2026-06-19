@@ -27,6 +27,7 @@ import { DefaultHostinfo } from '../src/room/default-hostinfo';
 import {
   CloudReplayService,
   encodeDeckBase64,
+  getReplayRecordCodecDriver,
   ReplayRecoverService,
 } from '../src/feats/cloud-replay';
 import { ClientKeyProvider } from '../src/feats/client-key-provider';
@@ -50,6 +51,7 @@ function makeRecord(overrides: Partial<any> = {}) {
       mode: 1,
     },
     seed: Buffer.alloc(32).toString('base64'),
+    schemaVersion: 0,
     responses: '',
     players: [
       {
@@ -239,6 +241,7 @@ describe('ReplayRecoverService create checks', () => {
   });
 
   test('loads recover record again when the room is created', async () => {
+    const response = Buffer.alloc(260, 0xab);
     const checkRecord = makeRecord({
       hostInfo: { ...DefaultHostinfo, lflist: -1, mode: 0x5, start_lp: 8000 },
     });
@@ -251,6 +254,8 @@ describe('ReplayRecoverService create checks', () => {
         start_hand: 6,
         draw_count: 2,
       },
+      schemaVersion: 1,
+      responses: getReplayRecordCodecDriver(1).encodeResponses([response]),
     });
     const { ctx, middlewares, hostInfoProvider, cloudReplayService } =
       makeCtx(checkRecord);
@@ -287,7 +292,34 @@ describe('ReplayRecoverService create checks', () => {
     expect(room.hostinfo.start_hand).toBe(6);
     expect(room.hostinfo.draw_count).toBe(2);
     expect(room.recoverState.record).toBe(createRecord);
+    expect(room.recoverState.responses).toEqual([response]);
     expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  test('loads legacy v0 recover responses when the room is created', async () => {
+    const response = Buffer.from([9, 8]);
+    const record = makeRecord({
+      responses: Buffer.concat([Buffer.from([response.length]), response])
+        .toString('base64'),
+    });
+    const { ctx, middlewares } = makeCtx(record);
+    await initRecoverService(ctx);
+    const room: any = {
+      name: 'RC42T1#room',
+      hostinfo: {
+        ...DefaultHostinfo,
+        recover: { id: 42, turnCount: 1 },
+      },
+      getDuelPos: (pos: number) => pos,
+    };
+
+    await middlewares.get(OnRoomCreate)![0](
+      new OnRoomCreate(room),
+      undefined,
+      jest.fn(),
+    );
+
+    expect(room.recoverState.responses).toEqual([response]);
   });
 
   test('leaves room as normal when record disappears before room create', async () => {

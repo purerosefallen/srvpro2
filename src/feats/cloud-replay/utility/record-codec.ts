@@ -1,13 +1,8 @@
 import YGOProDeck from 'ygopro-deck-encode';
-import {
-  YGOProMsgBase,
-  YGOProStoc,
-  YGOProStocGameMsg,
-} from 'ygopro-msg-encode';
 import { Client } from '../../../client';
 import { Room } from '../../../room';
 
-const RESPONSE_LENGTH_BYTES = 1;
+export * from './record-codec/index';
 
 export function resolvePlayerScore(room: Room, client: Client) {
   const duelPos = room.getDuelPos(client);
@@ -21,35 +16,6 @@ export function resolveIsFirstPlayer(
 ) {
   const firstgoDuelPos = wasSwapped ? 1 : 0;
   return room.getDuelPos(client) === firstgoDuelPos;
-}
-
-export function encodeMessagesBase64(messages: YGOProMsgBase[]) {
-  if (!messages.length) {
-    return '';
-  }
-  const payloads = messages.map((msg) =>
-    Buffer.from(
-      new YGOProStocGameMsg()
-        .fromPartial({
-          msg,
-        })
-        .toFullPayload(),
-    ),
-  );
-  return Buffer.concat(payloads).toString('base64');
-}
-
-export function encodeResponsesBase64(responses: Buffer[]) {
-  if (!responses.length) {
-    return '';
-  }
-  const payloads = responses.flatMap((response) => {
-    const length = response.length & 0xff;
-    const lengthBuffer = Buffer.alloc(RESPONSE_LENGTH_BYTES, 0);
-    lengthBuffer.writeUInt8(length, 0);
-    return [lengthBuffer, response];
-  });
-  return Buffer.concat(payloads).toString('base64');
 }
 
 export function encodeSeedBase64(seed: number[]) {
@@ -97,50 +63,6 @@ export function encodeIngameDeckBase64(room: Room, client: Client) {
 
 export function resolveIngameDeckMainc(room: Room, client: Client) {
   return resolveRecordDeck(room, client)?.main?.length || 0;
-}
-
-export function decodeMessagesBase64(messagesBase64: string) {
-  if (!messagesBase64) {
-    return [];
-  }
-  const payload = Buffer.from(messagesBase64, 'base64');
-  if (!payload.length) {
-    return [];
-  }
-  const stocPackets = YGOProStoc.getInstancesFromPayload(payload);
-  return stocPackets.filter(
-    (packet): packet is YGOProStocGameMsg =>
-      packet instanceof YGOProStocGameMsg && !!packet.msg,
-  );
-}
-
-export function decodeResponsesBase64(responsesBase64: string) {
-  if (!responsesBase64) {
-    return [];
-  }
-  const payload = Buffer.from(responsesBase64, 'base64');
-  if (!payload.length) {
-    return [];
-  }
-  return decodeLengthPrefixedResponses(payload) || [];
-}
-
-function decodeLengthPrefixedResponses(payload: Buffer) {
-  const responses: Buffer[] = [];
-  let offset = 0;
-  while (offset < payload.length) {
-    if (offset + RESPONSE_LENGTH_BYTES > payload.length) {
-      return undefined;
-    }
-    const length = payload.readUInt8(offset);
-    offset += RESPONSE_LENGTH_BYTES;
-    if (offset + length > payload.length) {
-      return undefined;
-    }
-    responses.push(payload.subarray(offset, offset + length));
-    offset += length;
-  }
-  return responses;
 }
 
 export function decodeSeedBase64(seedBase64: string) {

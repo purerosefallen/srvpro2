@@ -27,12 +27,12 @@ import { MenuEntry, MenuManager } from '../menu-manager';
 import { DuelRecordEntity } from './duel-record.entity';
 import { DuelRecordPlayer } from './duel-record-player.entity';
 import {
+  CURRENT_REPLAY_RECORD_SCHEMA_VERSION,
   encodeCurrentDeckBase64,
   encodeDeckBase64,
   encodeIngameDeckBase64,
-  encodeMessagesBase64,
-  encodeResponsesBase64,
   encodeSeedBase64,
+  getCurrentReplayRecordCodecDriver,
   resolveCurrentDeckMainc,
   resolveIngameDeckMainc,
   resolveIsFirstPlayer,
@@ -90,6 +90,7 @@ type DuelRecordSnapshot = {
   duelCount: number;
   winReason: number | null;
   messages: string;
+  schemaVersion: number;
   responses: string;
   seed: string;
   players: DuelRecordPlayerSnapshot[];
@@ -332,6 +333,7 @@ export class CloudReplayService {
     }
 
     const roomIdentifier = this.getRoomIdentifier(room);
+    const codec = getCurrentReplayRecordCodecDriver();
     return {
       startTime: new Date(duelRecord.startTime.getTime()),
       endTime: new Date(),
@@ -340,8 +342,9 @@ export class CloudReplayService {
       hostInfo: { ...room.hostinfo },
       duelCount: room.duelRecords.length,
       winReason: duelRecord.winReason ?? null,
-      messages: encodeMessagesBase64(duelRecord.messages),
-      responses: encodeResponsesBase64(duelRecord.responses),
+      messages: codec.encodeMessages(duelRecord.messages),
+      schemaVersion: CURRENT_REPLAY_RECORD_SCHEMA_VERSION,
+      responses: codec.encodeResponses(duelRecord.responses),
       seed: encodeSeedBase64(duelRecord.seed),
       players: room.playingPlayers.map((client) =>
         this.buildPlayerRecordSnapshot(room, client, options),
@@ -371,6 +374,7 @@ export class CloudReplayService {
     record.duelCount = snapshot.duelCount;
     record.winReason = snapshot.winReason;
     record.messages = snapshot.messages;
+    record.schemaVersion = snapshot.schemaVersion;
     record.responses = snapshot.responses;
     record.seed = snapshot.seed;
   }

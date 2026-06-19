@@ -2,6 +2,8 @@ import { YGOProMsgNewPhase, YGOProMsgNewTurn } from 'ygopro-msg-encode';
 import { ClientKeyProvider } from '../src/feats/client-key-provider';
 import {
   CloudReplayService,
+  CURRENT_REPLAY_RECORD_SCHEMA_VERSION,
+  getReplayRecordCodecDriver,
   resolvePlayerScore,
 } from '../src/feats/cloud-replay';
 import { LegacyApiReplayService } from '../src/legacy-api';
@@ -175,6 +177,25 @@ describe('cloud replay live save snapshots', () => {
       true,
       false,
     ]);
+  });
+
+  test('new snapshots use current replay record codec', () => {
+    const { ctx } = makeCtx();
+    const service = new CloudReplayService(ctx);
+    const { duelRecord, room } = makeSnapshotRoom();
+    const response = Buffer.alloc(260, 0xab);
+    duelRecord.responses = [response];
+
+    const snapshot = (service as any).createDuelRecordSnapshot(room, {
+      swapped: false,
+    });
+
+    expect(snapshot.schemaVersion).toBe(CURRENT_REPLAY_RECORD_SCHEMA_VERSION);
+    expect(
+      getReplayRecordCodecDriver(snapshot.schemaVersion).decodeResponses(
+        snapshot.responses,
+      ),
+    ).toEqual([response]);
   });
 });
 

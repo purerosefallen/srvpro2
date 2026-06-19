@@ -13,9 +13,8 @@ import { DuelRecord } from '../../room';
 import { DuelRecordPlayer } from './duel-record-player.entity';
 import {
   decodeDeckBase64,
-  decodeMessagesBase64,
-  decodeResponsesBase64,
   decodeSeedBase64,
+  getReplayRecordCodecDriver,
 } from './utility';
 
 @Index(['roomIdentifier', 'duelCount'])
@@ -73,10 +72,15 @@ export class DuelRecordEntity extends BaseTimeEntity {
   })
   messages!: string; // duelRecord.messages 全部 map 成 YGOProStocGameMsg 然后全部 toFullPayload 拼接在一起然后 base64
 
+  @Column('smallint', {
+    default: 0,
+  })
+  schemaVersion!: number; // replay record codec version
+
   @Column({
     type: 'text',
   })
-  responses!: string; // duelRecord.responses 按 [uint8 len][payload]... 拼接再 base64
+  responses!: string; // duelRecord.responses 按 schemaVersion 对应 driver 编码后 base64
 
   // 32 bytes binary seed => 44 chars base64.
   @Column({
@@ -121,10 +125,9 @@ export class DuelRecordEntity extends BaseTimeEntity {
     duelRecord.endTime = this.endTime;
     duelRecord.winPosition = this.resolveWinPosition();
     duelRecord.winReason = this.winReason ?? undefined;
-    duelRecord.messages = decodeMessagesBase64(this.messages).map(
-      (packet) => packet.msg!,
-    );
-    duelRecord.responses = decodeResponsesBase64(this.responses);
+    const codec = getReplayRecordCodecDriver(this.schemaVersion);
+    duelRecord.messages = codec.decodeMessages(this.messages);
+    duelRecord.responses = codec.decodeResponses(this.responses);
     return duelRecord;
   }
 
