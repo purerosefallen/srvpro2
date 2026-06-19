@@ -1251,6 +1251,12 @@ export class Room {
     if (duelPos < 0 || duelPos > 1) {
       return;
     }
+    if (client !== this.getDuelPosPlayers(duelPos)[0]) {
+      return;
+    }
+    if (this.handResult[duelPos]) {
+      return;
+    }
 
     // 保存猜拳结果
     this.handResult[duelPos] = msg.res;
