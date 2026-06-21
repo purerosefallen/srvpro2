@@ -130,7 +130,7 @@ declare module 'ygopro-msg-encode' {
 
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 const DISPOSE_OCGCORE_TIMEOUT_MS = 1 * 60 * 1000;
-const MAX_RESPONSE_LENGTH = 512;
+const MAX_RESPONSE_LENGTH = 255;
 
 type RoomOcgcoreWorker = WorkerInstance<OcgcoreWorker>;
 
