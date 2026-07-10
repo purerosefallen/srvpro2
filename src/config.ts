@@ -60,6 +60,8 @@ export const defaultConfig = {
   USE_PROXY: '',
   // YGOPro resource directory (scripts, DB, etc.). Format: filesystem path string.
   YGOPRO_PATH: './ygopro',
+  // YGOPro resource refresh interval. Format: integer string in minutes.
+  YGOPRO_RESOURCE_REFRESH_MINUTES: '10',
   // Extra script directory. Format: filesystem path string. Empty means disabled.
   EXTRA_SCRIPT_PATH: '',
   // Main deck minimum size. Format: integer string.

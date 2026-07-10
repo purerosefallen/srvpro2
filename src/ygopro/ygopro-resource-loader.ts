@@ -8,7 +8,8 @@ import BetterLock from 'better-lock';
 import { CardStorage } from './card-storage';
 import { CardLoadWorker } from './card-load-worker';
 
-const CARD_STORAGE_RELOAD_INTERVAL_MS = 10 * 60 * 1000;
+const DEFAULT_CARD_STORAGE_RELOAD_INTERVAL_MINUTES = 10;
+const MINUTE_MS = 60 * 1000;
 
 export class YGOProResourceLoader {
   constructor(private ctx: Context) {
@@ -28,6 +29,7 @@ export class YGOProResourceLoader {
   private currentCardStorage?: CardStorage;
   private currentCardStorageSha512?: Buffer;
   private reloadTimerRegistered = false;
+  private cardStorageReloadIntervalMs = this.getCardStorageReloadIntervalMs();
 
   async getCardStorage() {
     if (this.currentCardStorage) {
@@ -82,7 +84,18 @@ export class YGOProResourceLoader {
           'Failed reloading card storage by periodic refresh',
         );
       });
-    }, CARD_STORAGE_RELOAD_INTERVAL_MS);
+    }, this.cardStorageReloadIntervalMs);
+  }
+
+  private getCardStorageReloadIntervalMs() {
+    const configuredMinutes = this.ctx.config.getInt(
+      'YGOPRO_RESOURCE_REFRESH_MINUTES',
+    );
+    const minutes =
+      Number.isFinite(configuredMinutes) && configuredMinutes > 0
+        ? configuredMinutes
+        : DEFAULT_CARD_STORAGE_RELOAD_INTERVAL_MINUTES;
+    return minutes * MINUTE_MS;
   }
 
   private async reloadYGOProCdbsIfChanged() {

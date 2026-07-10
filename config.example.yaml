@@ -26,6 +26,7 @@ altVersions:
   - 2331
 useProxy: ""
 ygoproPath: ./ygopro
+ygoproResourceRefreshMinutes: 10
 extraScriptPath: ""
 deckMainMin: 40
 deckMainMax: 60
