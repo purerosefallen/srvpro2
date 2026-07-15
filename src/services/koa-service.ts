@@ -7,8 +7,7 @@ import { SSLFinder } from './ssl-finder';
 import { AppContext } from 'nfkit';
 import { ConfigService } from './config';
 import { Logger } from './logger';
-
-type ProxyRange = [ipaddr.IPv4 | ipaddr.IPv6, number];
+import { IpRange, isIpInRanges } from '../utility';
 
 export class KoaService {
   koa = new Koa();
@@ -17,7 +16,7 @@ export class KoaService {
   private config = this.ctx.get(() => ConfigService).config;
   private logger = this.ctx.get(() => Logger).createLogger('KoaService');
   private server?: HttpServer;
-  private trustedProxies: ProxyRange[] = [];
+  private trustedProxies: IpRange[] = [];
 
   constructor(private ctx: AppContext) {
     this.initTrustedProxies();
@@ -151,15 +150,8 @@ export class KoaService {
   }
 
   private isTrustedProxy(ip: string): boolean {
-    try {
-      const normalized = ip.startsWith('::ffff:') ? ip.slice(7) : ip;
-      const addr = ipaddr.parse(normalized);
-      return this.trustedProxies.some(([range, mask]) =>
-        addr.match(range, mask),
-      );
-    } catch {
-      return false;
-    }
+    const normalized = ip.startsWith('::ffff:') ? ip.slice(7) : ip;
+    return isIpInRanges(normalized, this.trustedProxies);
   }
 
   private toIpv6(ip: string): string {

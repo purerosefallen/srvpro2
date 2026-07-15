@@ -3,6 +3,7 @@ import { Context } from '../app';
 import { Client } from './client';
 import * as ipaddr from 'ipaddr.js';
 import { YGOProCtosDisconnect } from '../utility/ygopro-ctos-disconnect';
+import { IpRange, isIpInRanges } from '../utility';
 
 const IP_RESOLVER_TTL = 24 * 60 * 60 * 1000;
 
@@ -22,7 +23,7 @@ class BadIpCountCache {
 
 export class IpResolver {
   private logger = this.ctx.createLogger('IpResolver');
-  private trustedProxies: Array<[ipaddr.IPv4 | ipaddr.IPv6, number]> = [];
+  private trustedProxies: IpRange[] = [];
 
   constructor(private ctx: Context) {
     const proxies = this.ctx.config.getStringArray('TRUSTED_PROXIES');
@@ -71,14 +72,7 @@ export class IpResolver {
     if (ip.startsWith('::ffff:')) {
       ip = this.toIpv4(ip);
     }
-    try {
-      const addr = ipaddr.parse(ip);
-      return this.trustedProxies.some(([range, mask]) => {
-        return addr.match(range, mask);
-      });
-    } catch {
-      return false;
-    }
+    return isIpInRanges(ip, this.trustedProxies);
   }
 
   getRealIp(physicalIp: string, xffIp?: string): string {

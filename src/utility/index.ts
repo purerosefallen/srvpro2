@@ -6,3 +6,4 @@ export * from './decorators';
 export * from './koishi-chat';
 export * from './ocgcore-timeout';
 export * from './read-card-with-reader';
+export * from './is-ip-in-ranges';
