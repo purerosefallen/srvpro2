@@ -1,6 +1,8 @@
 ARG GIT_IMAGE=alpine/git:v2.52.0
 ARG NODE_IMAGE=node:24-alpine
 ARG OCGCORE_BUILD_IMAGE=debian:bookworm-slim
+ARG NO_RESOURCE=0
+ARG USE_APK_CHINA_MIRROR=0
 ARG PREMAKE5_REPO=https://github.com/premake/premake-core.git
 ARG PREMAKE5_VERSION=5.0.0-beta8
 ARG SCRIPT_REPO=https://code.moenext.com/nanahira/ygopro-scripts
@@ -15,7 +17,7 @@ ARG USE_MAT_CACHER=0
 ARG LUA_VERSION=5.4.8
 
 FROM ${GIT_IMAGE} AS ygopro-loader
-ARG NO_RESOURCE=0
+ARG NO_RESOURCE
 ARG SCRIPT_REPO
 ARG SCRIPT_BRANCH
 ARG YGOPRO_REPO
@@ -84,9 +86,13 @@ RUN set -eux; \
   cp build/bin/wasm_cjs/Release/libocgcore.wasm /resources/libocgcore.wasm
 
 FROM ${NODE_IMAGE} AS base
+ARG USE_APK_CHINA_MIRROR
 LABEL Author="Nanahira <nanahira@momobako.com>"
 
 WORKDIR /usr/src/app
+RUN if [ "${USE_APK_CHINA_MIRROR}" = "1" ]; then \
+      sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories; \
+    fi
 COPY ./package*.json ./
 
 FROM base AS builder
