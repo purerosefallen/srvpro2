@@ -67,8 +67,11 @@ RUN set -eux; \
     url_prefix=""; \
   fi; \
   fetch() { wget -O - "${url_prefix}$1" | tar zxf -; }; \
-  git clone --branch="${OCGCORE_BRANCH}" --depth=1 "${OCGCORE_REPO}" ocgcore && \
+  git init ocgcore && \
   cd ocgcore && \
+  git remote add origin "${OCGCORE_REPO}" && \
+  git fetch --depth=1 origin "${OCGCORE_BRANCH}" && \
+  git checkout --detach FETCH_HEAD && \
   fetch "https://www.lua.org/ftp/lua-${LUA_VERSION}.tar.gz" && \
   mv "lua-${LUA_VERSION}" lua && \
   cp premake/lua.lua lua/premake5.lua
