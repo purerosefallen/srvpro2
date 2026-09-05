@@ -25,10 +25,16 @@ ARG YGOPRO_BRANCH
 ARG WINDBOT_REPO
 ARG WINDBOT_BRANCH
 RUN mkdir -p /resources/ygopro /resources/windbot && \
+  clone_ref() { \
+    git init "$3" && \
+    git -C "$3" remote add origin "$1" && \
+    git -C "$3" fetch --depth=1 origin "$2" && \
+    git -C "$3" checkout --detach FETCH_HEAD; \
+  } && \
   if [ "$NO_RESOURCE" != "1" ]; then \
-    git clone --branch="${SCRIPT_BRANCH}" --depth=1 "${SCRIPT_REPO}" /resources/ygopro/script && \
-    git clone --branch="${YGOPRO_BRANCH}" --depth=1 "${YGOPRO_REPO}" /tmp/ygopro-resource && \
-    git clone --branch="${WINDBOT_BRANCH}" --depth=1 "${WINDBOT_REPO}" /tmp/windbot-source && \
+    clone_ref "${SCRIPT_REPO}" "${SCRIPT_BRANCH}" /resources/ygopro/script && \
+    clone_ref "${YGOPRO_REPO}" "${YGOPRO_BRANCH}" /tmp/ygopro-resource && \
+    clone_ref "${WINDBOT_REPO}" "${WINDBOT_BRANCH}" /tmp/windbot-source && \
     cp /tmp/ygopro-resource/cards.cdb /resources/ygopro/cards.cdb && \
     cp /tmp/ygopro-resource/lflist.conf /resources/ygopro/lflist.conf && \
     cp /tmp/windbot-source/bots.json /resources/windbot/bots.json && \
