@@ -134,17 +134,17 @@ export class Client {
       }
       data = dispatched!;
     }
-    const logMsg = data instanceof YGOProStocGameMsg ? data.msg : data;
-    const logPayload =
-      data instanceof YGOProStocReplay ? summarizeReplayMessage(data) : logMsg;
-    this.logger.debug(
-      {
-        msgName: logMsg?.constructor.name,
-        client: this.name || this.loggingIp(),
-        payload: JSON.stringify(logPayload),
-      },
-      'Sending message to client',
-    );
+    // const logMsg = data instanceof YGOProStocGameMsg ? data.msg : data;
+    // const logPayload =
+    //   data instanceof YGOProStocReplay ? summarizeReplayMessage(data) : logMsg;
+    // this.logger.debug(
+    //   {
+    //     msgName: logMsg?.constructor.name,
+    //     client: this.name || this.loggingIp(),
+    //     payload: JSON.stringify(logPayload),
+    //   },
+    //   'Sending message to client',
+    // );
     if (this.disconnected) {
       return;
     }

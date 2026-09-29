@@ -165,14 +165,14 @@ export class ClientHandler {
       // disallow processing any messages after disconnection, including those already in the queue
       return;
     }
-    this.logger.debug(
-      {
-        msgName: msg.constructor.name,
-        client: client.name || client.loggingIp(),
-        payload: JSON.stringify(msg),
-      },
-      'Received client message',
-    );
+    // this.logger.debug(
+    //   {
+    //     msgName: msg.constructor.name,
+    //     client: client.name || client.loggingIp(),
+    //     payload: JSON.stringify(msg),
+    //   },
+    //   'Received client message',
+    // );
     try {
       await this.ctx.dispatch(msg, client);
     } catch (e) {
