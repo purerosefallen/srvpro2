@@ -1,4 +1,4 @@
-import { MycardService } from '../src/feats/mycard';
+import { MycardService, OnMycardAuthenticated } from '../src/feats/mycard';
 import { DefaultHostinfo } from '../src/room/default-hostinfo';
 
 const SECRET = 456;
@@ -102,6 +102,9 @@ function makeCtx(options: { permit?: boolean } = {}) {
         return {
           data: {
             user: {
+              id: 1,
+              username: 'Alice',
+              active: true,
               u16Secret: SECRET,
             },
           },
@@ -111,11 +114,50 @@ function makeCtx(options: { permit?: boolean } = {}) {
     },
     get: () => deps,
     middleware: jest.fn(),
+    dispatch: jest.fn(async (event: unknown) => event),
   } as any;
   return ctx;
 }
 
 describe('MycardService join actions', () => {
+  test('publishes the complete account before joining, including inactive users', async () => {
+    const ctx = makeCtx();
+    const user = {
+      id: 7,
+      username: 'Alice',
+      active: false,
+      email: 'a@example.test',
+      u16Secret: SECRET,
+      extra: 'account-extension',
+    };
+    ctx.http.get.mockResolvedValue({ data: { user } });
+    const room = makeRoom('known-room');
+    ctx.rooms.set(room.name, room);
+    ctx.dispatch.mockImplementation(async (event: OnMycardAuthenticated) => {
+      expect(event).toBeInstanceOf(OnMycardAuthenticated);
+      expect(event.user).toBe(user);
+      expect(room.join).not.toHaveBeenCalled();
+      await Promise.resolve();
+      return event;
+    });
+    await new MycardService(ctx).handleJoinPass(
+      encodePass(3, room.name),
+      makeClient(),
+    );
+    expect(ctx.dispatch).toHaveBeenCalledTimes(1);
+    expect(room.join).toHaveBeenCalled();
+  });
+
+  test('does not authenticate an invalid password or a disconnected client', async () => {
+    const ctx = makeCtx();
+    const service = new MycardService(ctx);
+    await service.handleJoinPass('AAAAAAAAunknown', makeClient());
+    expect(ctx.dispatch).not.toHaveBeenCalled();
+    const disconnected = makeClient();
+    disconnected.disconnected = true;
+    await service.handleJoinPass(encodePass(3, 'unknown'), disconnected);
+    expect(ctx.dispatch).not.toHaveBeenCalled();
+  });
   test('actions 1 and 2 create public/private mycard rooms', async () => {
     for (const action of [1, 2]) {
       const ctx = makeCtx();

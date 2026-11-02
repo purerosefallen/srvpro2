@@ -71,6 +71,7 @@ import { OnRoomLeave } from './room-event/on-room-leave';
 import { OnRoomWin } from './room-event/on-room-win';
 import { OnRoomJoinPlayer } from './room-event/on-room-join-player';
 import { OnRoomJoinObserver } from './room-event/on-room-join-observer';
+import { OnRoomObserverChange } from './room-event/on-room-observer-change';
 import {
   OnRoomLeavePlayer,
   RoomLeavePlayerReason,
@@ -113,7 +114,7 @@ import { RoomShuffleDeck } from './room-event/room-shuffle-deck';
 import { RoomUseSeed } from './room-event/room-use-seed';
 import cryptoRandomString from 'crypto-random-string';
 import { RoomCurrentFieldInfo, RoomInfo } from './room-info';
-import { ReplayEncodeService } from '../replay';
+import { ReplayEncodeService, YGOProStocChatReplayHint } from '../replay';
 import {
   calculateOcgcoreDeck,
   KoishiFragment,
@@ -451,6 +452,10 @@ export class Room {
 
     client.isHost = !this.noHost && isPlayer && !hasPlayerBeforeJoin;
 
+    if (!isPlayer) {
+      await this.ctx.dispatch(new OnRoomObserverChange(this, true), client);
+    }
+
     // send to client
     await client.send(this.joinGameMessage);
     await client.sendTypeChange();
@@ -568,6 +573,7 @@ export class Room {
       await client.sendChat(
         `#{replay_hint_part1}${i + 1}#{replay_hint_part2}`,
         ChatColor.BABYBLUE,
+        YGOProStocChatReplayHint,
       );
       const replay = await this.ctx
         .get(() => ReplayEncodeService)
@@ -777,6 +783,7 @@ export class Room {
 
     if (wasObserver) {
       this.watchers.delete(client);
+      await this.ctx.dispatch(new OnRoomObserverChange(this, false), client);
       await Promise.all(
         this.allPlayers.map((p) => p.send(this.watcherSizeMessage)),
       );
@@ -872,6 +879,7 @@ export class Room {
 
     // 添加到观战者
     this.watchers.add(client);
+    await this.ctx.dispatch(new OnRoomObserverChange(this, true), client);
 
     // 发送 TypeChange 给客户端
     await client.sendTypeChange();
@@ -913,6 +921,7 @@ export class Room {
       // 添加到玩家
       this.players[firstEmptyPlayerSlot] = client;
       client.pos = firstEmptyPlayerSlot;
+      await this.ctx.dispatch(new OnRoomObserverChange(this, false), client);
 
       // 发送 PlayerEnter 给所有人
       const enterMsg = client.prepareEnterPacket();

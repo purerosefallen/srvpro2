@@ -32,12 +32,11 @@ import {
   resolveHostInfoFromMycardPayload,
 } from './password-codec';
 import { ReplayEncodeService } from '../../replay';
+import { OnMycardAuthenticated } from './mycard-events';
+import { MycardUser } from './mycard-user';
 
 type MycardUserResponse = {
-  user?: {
-    u16Secret?: number;
-    u16SecretPrevious?: number;
-  };
+  user?: MycardUser;
 };
 
 type MycardBanInfo = {
@@ -252,18 +251,21 @@ export class MycardService {
 
     this.fetchMycardBan(client);
 
-    const secrets = await this.loadUserSecrets(client);
-    if (!secrets) {
+    const account = await this.loadUserAccount(client);
+    if (!account || client.disconnected) {
       return true;
     }
 
-    const decoded = decodeMycardPassword(normalizedPass, secrets);
+    const decoded = decodeMycardPassword(normalizedPass, account.secrets);
     if (decoded.ok === false) {
       await client.die(`#{${decoded.reason}}`, ChatColor.RED);
       return true;
     }
 
-    await this.handleDecodedJoin(normalizedPass, decoded.payload, client);
+    await this.ctx.dispatch(new OnMycardAuthenticated(account.user), client);
+    if (!client.disconnected) {
+      await this.handleDecodedJoin(normalizedPass, decoded.payload, client);
+    }
     return true;
   }
 
@@ -402,7 +404,7 @@ export class MycardService {
     return Number.isFinite(until) && Date.now() < until;
   }
 
-  private async loadUserSecrets(client: Client) {
+  private async loadUserAccount(client: Client) {
     const authBaseUrl = this.ctx.config
       .getString('MYCARD_AUTH_BASE_URL')
       .replace(/\/+$/, '');
@@ -415,15 +417,15 @@ export class MycardService {
           api_key: this.ctx.config.getString('MYCARD_AUTH_KEY'),
         },
       });
-      const secrets = [
-        data?.user?.u16Secret,
-        data?.user?.u16SecretPrevious,
-      ].filter((id) => id != null);
-      if (!secrets.length) {
+      const user = data.user;
+      const secrets = [user?.u16Secret, user?.u16SecretPrevious].filter(
+        (secret) => secret != null,
+      );
+      if (!user || !secrets.length) {
         await client.die('#{invalid_password_unauthorized}', ChatColor.RED);
         return undefined;
       }
-      return secrets;
+      return { user, secrets };
     } catch (error) {
       this.logger.warn({ player: client.name, error }, 'READ USER FAIL');
       if (!client.disconnected) {

@@ -71,6 +71,7 @@ enableRecover: 1
 tournamentMode: 0
 tournamentModeCheckDeck: 1
 mycardEnabled: 0
+mycardRestrictSpectatorReplay: 0
 mycardAuthBaseUrl: https://sapi.moecube.com:444/accounts
 mycardAuthKey: 233333
 mycardBanGet: https://sapi.moecube.com:444/ygopro/big-brother/ban

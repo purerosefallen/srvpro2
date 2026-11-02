@@ -6,6 +6,7 @@ export * from './room-event/on-room-create';
 export * from './room-event/on-room-join';
 export * from './room-event/on-room-finalize';
 export * from './room-event/on-room-join-observer';
+export * from './room-event/on-room-observer-change';
 export * from './room-event/on-room-leave';
 export * from './room-event/on-room-leave-observer';
 export * from './room-event/on-room-finger';

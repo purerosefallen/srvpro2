@@ -91,7 +91,7 @@ describe('YGOProStocReplayCompressed', () => {
     expect(toPayload).not.toHaveBeenCalled();
   });
 
-  test('Client.send logs the summary instead of the replay body', async () => {
+  test('Client.send does not log replay bodies while packet logging is disabled', async () => {
     const debug = jest.fn();
     const ctx: any = {
       createLogger: () => ({
@@ -110,13 +110,7 @@ describe('YGOProStocReplayCompressed', () => {
       true,
     );
 
-    const logged = JSON.parse(debug.mock.calls[0][0].payload);
-    expect(logged.replay).toEqual({
-      compressed: true,
-      responseCount: 2_000,
-      players: ['Alice', 'Bob'],
-    });
-    expect(debug.mock.calls[0][0].payload.length).toBeLessThan(512);
+    expect(debug).not.toHaveBeenCalled();
   });
 
   test('remains compatible with BlockReplay middleware matching', async () => {
