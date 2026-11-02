@@ -165,9 +165,12 @@ export const defaultConfig = {
   // Enable Mycard encrypted-password integration, including arena mode.
   // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
   MYCARD_ENABLED: '0',
-  // Restrict spectator replays for unverified accounts and concurrent rooms.
+  // Restrict spectator replays after watching multiple rooms concurrently.
   // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
-  MYCARD_RESTRICT_SPECTATOR_REPLAY: '0',
+  MYCARD_RESTRICT_MULTI_ROOM_SPECTATOR_REPLAY: '0',
+  // Restrict spectator replays for accounts without a verified email address.
+  // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
+  MYCARD_RESTRICT_UNVERIFIED_SPECTATOR_REPLAY: '0',
   // Mycard account API base URL.
   MYCARD_AUTH_BASE_URL: 'https://sapi.moecube.com:444/accounts',
   // Mycard account API key.

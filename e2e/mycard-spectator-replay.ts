@@ -21,6 +21,7 @@ type AccountCleanup = { deletedIds: number[]; remaining: number };
 const serverHost = process.env.MYCARD_TEST_HOST || 'tiramisu.moenext.com';
 const serverPort = Number(process.env.MYCARD_TEST_PORT || 27911);
 const protocolVersion = Number(process.env.MYCARD_TEST_VERSION || 4962);
+const restrictUnverified = process.env.MYCARD_TEST_RESTRICT_UNVERIFIED === '1';
 const accountBaseUrl =
   process.env.MYCARD_TEST_ACCOUNT_URL ||
   'https://sapi.moecube.com:444/accounts';
@@ -323,16 +324,27 @@ async function singleTable(timing: JoinTiming) {
     verified.replay.packets > 0,
     'verified single-table spectator must receive replays',
   );
-  assert.equal(
-    inactive.replay.packets,
-    0,
-    'inactive spectator must receive no replay',
-  );
-  assert.equal(
-    inactive.replayHints,
-    0,
-    'inactive spectators must receive no replay hint',
-  );
+  if (restrictUnverified) {
+    assert.equal(
+      inactive.replay.packets,
+      0,
+      'unverified spectator must receive no replay when the email policy is enabled',
+    );
+    assert.equal(
+      inactive.replayHints,
+      0,
+      'unverified spectator must receive no replay hint when the email policy is enabled',
+    );
+  } else {
+    assert.ok(
+      inactive.replay.packets > 0,
+      'unverified spectator must receive replays when the email policy is disabled',
+    );
+    assert.ok(
+      inactive.replayHints > 0,
+      'unverified spectator must receive replay hints when the email policy is disabled',
+    );
+  }
   assert.ok(
     verified.replayHints > 0,
     'the positive control must receive replay hints',
@@ -466,6 +478,7 @@ function cleanupRun(): Promise<void> {
           host: serverHost,
           port: serverPort,
           runId,
+          policy: { restrictMultiRoom: true, restrictUnverified },
           results,
           cleanup,
         };

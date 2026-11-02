@@ -22,10 +22,23 @@ import {
   YGOProStocReplayCompressed,
 } from '../src/replay';
 
-async function createFixture(enabled = true) {
+async function createFixture(
+  options: {
+    mycardEnabled?: boolean;
+    restrictMultiRoom?: boolean;
+    restrictUnverified?: boolean;
+  } = {},
+) {
   const emitter = new Emitter({} as any);
+  const settings: Record<string, boolean> = {
+    MYCARD_ENABLED: options.mycardEnabled ?? true,
+    MYCARD_RESTRICT_MULTI_ROOM_SPECTATOR_REPLAY:
+      options.restrictMultiRoom ?? true,
+    MYCARD_RESTRICT_UNVERIFIED_SPECTATOR_REPLAY:
+      options.restrictUnverified ?? true,
+  };
   const ctx: any = {
-    config: { getBoolean: () => enabled },
+    config: { getBoolean: (key: string) => settings[key] ?? false },
     middleware: emitter.middleware.bind(emitter),
     dispatch: emitter.dispatch.bind(emitter),
     createLogger: () => ({
@@ -97,7 +110,10 @@ async function createFixture(enabled = true) {
 
 describe('Mycard spectator replay policy', () => {
   test('default off and unauthenticated clients retain existing behavior', async () => {
-    const fixture = await createFixture(false);
+    const fixture = await createFixture({
+      restrictMultiRoom: false,
+      restrictUnverified: false,
+    });
     const firstConnection = await fixture.client('inactive', false);
     await fixture.observe(firstConnection, 'one');
     expect(await fixture.allowed(firstConnection)).toBe(true);
@@ -105,6 +121,45 @@ describe('Mycard spectator replay policy', () => {
     const guest: any = {};
     await enabled.observe(guest, 'one');
     expect(await enabled.allowed(guest)).toBe(true);
+  });
+
+  test('multi-room policy alone allows an unverified single-table spectator and blocks concurrent tables', async () => {
+    const fixture = await createFixture({ restrictUnverified: false });
+    const firstConnection = await fixture.client('inactive', false);
+    const secondConnection = await fixture.client('inactive', false);
+    await fixture.observe(firstConnection, 'one');
+    expect(await fixture.allowed(firstConnection)).toBe(true);
+    expect(
+      await fixture.ctx.dispatch(
+        new YGOProStocChatReplayHint(),
+        firstConnection,
+      ),
+    ).toBeInstanceOf(YGOProStocChatReplayHint);
+    await fixture.observe(secondConnection, 'two');
+    expect(await fixture.allowed(firstConnection)).toBe(false);
+    expect(await fixture.allowed(secondConnection)).toBe(false);
+    expect(
+      await fixture.ctx.dispatch(
+        new YGOProStocChatReplayHint(),
+        firstConnection,
+      ),
+    ).toBeUndefined();
+  });
+
+  test('email policy alone permits verified users across tables and blocks unverified spectators', async () => {
+    const fixture = await createFixture({ restrictMultiRoom: false });
+    const firstConnection = await fixture.client();
+    const secondConnection = await fixture.client();
+    await fixture.observe(firstConnection, 'one');
+    await fixture.observe(secondConnection, 'two');
+    expect(await fixture.allowed(firstConnection)).toBe(true);
+    expect(await fixture.allowed(secondConnection)).toBe(true);
+    const unverified = await fixture.client('inactive', false);
+    await fixture.observe(unverified, 'one');
+    expect(await fixture.allowed(unverified)).toBe(false);
+    expect(
+      await fixture.ctx.dispatch(new YGOProStocChatReplayHint(), unverified),
+    ).toBeUndefined();
   });
 
   test('inactive spectators are blocked for regular and compressed replay packets, duelists are not', async () => {

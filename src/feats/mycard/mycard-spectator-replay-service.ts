@@ -11,10 +11,16 @@ type MycardIdentity = Pick<MycardUser, 'username' | 'active'>;
 type ObserverSession = {
   username: string;
   roomName: string;
-  blocked: boolean;
+  blockedByMultipleRooms: boolean;
 };
 
 export class MycardSpectatorReplayService {
+  private restrictMultiRoom = this.ctx.config.getBoolean(
+    'MYCARD_RESTRICT_MULTI_ROOM_SPECTATOR_REPLAY',
+  );
+  private restrictUnverified = this.ctx.config.getBoolean(
+    'MYCARD_RESTRICT_UNVERIFIED_SPECTATOR_REPLAY',
+  );
   private identities = new WeakMap<Client, MycardIdentity>();
   private sessions = new WeakMap<Client, ObserverSession>();
   private observers = new Map<string, Map<string, Set<ObserverSession>>>();
@@ -24,7 +30,7 @@ export class MycardSpectatorReplayService {
   async init() {
     if (
       !this.ctx.config.getBoolean('MYCARD_ENABLED') ||
-      !this.ctx.config.getBoolean('MYCARD_RESTRICT_SPECTATOR_REPLAY')
+      !(this.restrictMultiRoom || this.restrictUnverified)
     ) {
       return;
     }
@@ -82,10 +88,15 @@ export class MycardSpectatorReplayService {
   }
 
   private isReplayBlocked(client: Client) {
-    return (
-      client.pos === NetPlayerType.OBSERVER &&
-      this.sessions.get(client)?.blocked === true
-    );
+    const session = this.sessions.get(client);
+    if (client.pos !== NetPlayerType.OBSERVER || !session) {
+      return false;
+    }
+    const blockedByMultipleRooms =
+      this.restrictMultiRoom && session.blockedByMultipleRooms;
+    const blockedByUnverifiedEmail =
+      this.restrictUnverified && this.identities.get(client)?.active === false;
+    return blockedByMultipleRooms || blockedByUnverifiedEmail;
   }
 
   private observe(client: Client, roomName: string) {
@@ -99,7 +110,7 @@ export class MycardSpectatorReplayService {
       session = {
         username: identity.username,
         roomName,
-        blocked: !identity.active,
+        blockedByMultipleRooms: false,
       };
       this.sessions.set(client, session);
     }
@@ -114,10 +125,10 @@ export class MycardSpectatorReplayService {
       rooms.set(roomName, sessions);
     }
     sessions.add(session);
-    if (rooms.size > 1) {
+    if (this.restrictMultiRoom && rooms.size > 1) {
       for (const roomSessions of rooms.values()) {
         for (const current of roomSessions) {
-          current.blocked = true;
+          current.blockedByMultipleRooms = true;
         }
       }
     }
