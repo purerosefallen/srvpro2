@@ -1,21 +1,28 @@
+import { createCipheriv, createHash } from 'node:crypto';
 import YGOProDeck from 'ygopro-deck-encode';
 
 const UINT32_RANGE = 0x1_0000_0000;
+const SHUFFLE_KEY_LABEL = 'srvpro2-deck-shuffle';
+const KEYSTREAM_CHUNK = Buffer.alloc(1024);
 
 const createSeededRng = (seed: number[]) => {
-  let state = 0x9e37_79b9;
-  for (const value of seed) {
-    state = (Math.imul(state ^ (value >>> 0), 1664525) + 1013904223) >>> 0;
-  }
-  if (state === 0) {
-    state = 1;
-  }
+  const seedBytes = Buffer.alloc(seed.length * 4);
+  seed.forEach((value, i) => seedBytes.writeUInt32LE(value >>> 0, i * 4));
+  const key = createHash('sha256')
+    .update(SHUFFLE_KEY_LABEL)
+    .update(seedBytes)
+    .digest();
+  const cipher = createCipheriv('aes-256-ctr', key, Buffer.alloc(16));
+  let keystream = cipher.update(KEYSTREAM_CHUNK);
+  let offset = 0;
   return () => {
-    state ^= state << 13;
-    state >>>= 0;
-    state ^= state >>> 17;
-    state ^= state << 5;
-    return state >>> 0;
+    if (offset === keystream.length) {
+      keystream = cipher.update(KEYSTREAM_CHUNK);
+      offset = 0;
+    }
+    const value = keystream.readUInt32LE(offset);
+    offset += 4;
+    return value;
   };
 };
 
