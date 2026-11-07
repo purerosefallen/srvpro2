@@ -1467,7 +1467,15 @@ export class Room {
     if (!this.hasTimeLimit || ![0, 1].includes(originalDuelPos)) {
       return;
     }
-    const leftTime = Math.max(0, this.timerState.leftMs[originalDuelPos] || 0);
+    const elapsedMs =
+      this.timerState.runningPos === originalDuelPos &&
+      !this.timerState.awaitingConfirm
+        ? this.timerState.elapsedMs()
+        : 0;
+    const leftTime = Math.max(
+      0,
+      (this.timerState.leftMs[originalDuelPos] || 0) - elapsedMs,
+    );
     const ingameDuelPos = this.getIngameDuelPosByDuelPos(originalDuelPos);
     const msg = new YGOProStocTimeLimit().fromPartial({
       player: ingameDuelPos,
@@ -1512,9 +1520,6 @@ export class Room {
     const leftTime = Math.max(0, this.timerState.leftMs[originalDuelPos] || 0);
     if (sendTimeLimit) {
       await this.sendTimeLimit(originalDuelPos);
-    }
-    if (leftTime <= 0) {
-      return this.onResponseTimeout(originalDuelPos);
     }
     this.timerState.schedule(originalDuelPos, leftTime, awaitingConfirm, () => {
       void this.onResponseTimeout(originalDuelPos).catch((error) => {
@@ -2173,19 +2178,9 @@ export class Room {
       return;
     }
 
-    const elapsedMs = this.timerState.elapsedMs();
     const player = this.timerState.runningPos;
-    if (
-      elapsedMs < 10_000 &&
-      elapsedMs <= this.timerState.compensatorMs[player]
-    ) {
-      this.timerState.compensatorMs[player] -= elapsedMs;
-    } else {
-      this.timerState.leftMs[player] = Math.max(
-        0,
-        this.timerState.leftMs[player] - elapsedMs,
-      );
-    }
+    // Confirmation means the client has finished presenting preceding events.
+    // Start the input bank without soliciting another tokenless acknowledgement.
     this.timerState.awaitingConfirm = false;
     await this.setResponseTimer(player, {
       settlePrevious: false,

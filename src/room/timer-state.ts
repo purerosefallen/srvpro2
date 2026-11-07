@@ -1,4 +1,7 @@
 export class TimerState {
+  // Presentation/network readiness has its own finite deadline. It never spends
+  // the response bank, even when the player has less time than the animation.
+  public static readonly CONFIRM_TIMEOUT_MS = 60_000;
   leftMs: [number, number] = [0, 0];
   compensatorMs: [number, number] = [0, 0];
   backedMs: [number, number] = [0, 0];
@@ -19,7 +22,7 @@ export class TimerState {
       clearTimeout(this.timer);
       this.timer = undefined;
     }
-    if (settleElapsed && this.runningPos != null) {
+    if (settleElapsed && this.runningPos != null && !this.awaitingConfirm) {
       const elapsedMs = this.elapsedMs();
       if (elapsedMs > 0) {
         this.leftMs[this.runningPos] = Math.max(
@@ -49,6 +52,15 @@ export class TimerState {
     this.runningPos = player;
     this.startedAtMs = Date.now();
     this.awaitingConfirm = awaitingConfirm;
-    this.timer = setTimeout(onTimeout, delayMs);
+    // Expire synchronously: a queued response must not rescue a zero bank
+    // before a zero-delay timeout gets its turn on the event loop.
+    if (!awaitingConfirm && delayMs <= 0) {
+      onTimeout();
+      return;
+    }
+    this.timer = setTimeout(
+      onTimeout,
+      awaitingConfirm ? TimerState.CONFIRM_TIMEOUT_MS : Math.max(0, delayMs),
+    );
   }
 }
