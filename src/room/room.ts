@@ -604,6 +604,13 @@ export class Room {
           { duel: i + 1, client: client.name },
           'Replay not ready in time; not sent',
         );
+        // Sent as a replay hint, so that servers which block replays to
+        // players also hide this line.
+        await client.sendChat(
+          `#{replay_not_ready_part1}${i + 1}#{replay_not_ready_part2}`,
+          ChatColor.BABYBLUE,
+          YGOProStocChatReplayHint,
+        );
         continue;
       }
       await client.sendChat(
@@ -721,13 +728,10 @@ export class Room {
       lastDuelRecord.winPosition = duelPos;
       lastDuelRecord.winReason = winMsg.type;
       lastDuelRecord.endTime = new Date();
-      // Start encoding this duel's replay now, during siding, so that it is
-      // usually cached by the time the match ends and the replays are sent.
-      // Best effort: a failure here is retried when the replay is sent.
-      void this.ctx
-        .get(() => ReplayEncodeService)
-        ?.encodePacket(lastDuelRecord, this)
-        .catch(() => undefined);
+      // Encode this duel's replay ahead of time, during siding, so that it is
+      // usually cached by the time the match ends. A prefetch only runs while
+      // no replay is being waited for, so it never delays another room's end.
+      this.ctx.get(() => ReplayEncodeService)?.prefetch(lastDuelRecord, this);
     }
     if (typeof forceWinMatch === 'number') {
       const loseDuelPos = (1 - duelPos) as 0 | 1;
