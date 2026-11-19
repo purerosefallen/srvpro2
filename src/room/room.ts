@@ -132,6 +132,8 @@ declare module 'ygopro-msg-encode' {
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 const DISPOSE_OCGCORE_TIMEOUT_MS = 1 * 60 * 1000;
 const MAX_RESPONSE_LENGTH = 255;
+/** How long the end of a match waits for replays still encoding. */
+const REPLAY_SEND_WAIT_MS = 5 * 1000;
 
 type RoomOcgcoreWorker = WorkerInstance<OcgcoreWorker>;
 
@@ -282,6 +284,7 @@ export class Room {
         'Finalizing room',
       );
       await this.ctx.dispatch(new OnRoomFinalize(this), this.allPlayers[0]);
+      this.replaySendDeadline = Date.now() + REPLAY_SEND_WAIT_MS;
       await this.cleanPlayers(sendReplays);
       while (this.finalizors.length) {
         const finalizor = this.finalizors.pop()!;
@@ -564,20 +567,50 @@ export class Room {
     return score;
   }
 
+  /**
+   * When finalize started waiting for replays; every client's replays share
+   * this one deadline, so a slow encode delays DUEL_END by at most
+   * REPLAY_SEND_WAIT_MS (srvpro v1 waits 5 s for ygopro's replay, likewise).
+   */
+  private replaySendDeadline?: number;
+
   private async sendReplays(client: Client) {
     if (client.isInternal) {
       return;
     }
+    const deadline = this.replaySendDeadline ?? Date.now() + REPLAY_SEND_WAIT_MS;
+    const encoder = this.ctx.get(() => ReplayEncodeService);
     for (let i = 0; i < this.duelRecords.length; i++) {
       const duelRecord = this.duelRecords[i];
+      let cancelTimer = () => {};
+      let replay: Awaited<ReturnType<ReplayEncodeService['encodePacket']>> | undefined;
+      try {
+        replay = await Promise.race([
+          encoder.encodePacket(duelRecord, this),
+          new Promise<undefined>((resolve) => {
+            const timer = setTimeout(resolve, Math.max(0, deadline - Date.now()));
+            cancelTimer = () => clearTimeout(timer);
+          }),
+        ]);
+      } catch (error) {
+        this.logger.warn({ error, duel: i + 1 }, 'Failed to encode replay');
+      } finally {
+        cancelTimer();
+      }
+      if (!replay) {
+        // Not ready in time: leave this duel's replay out rather than hold
+        // the client on a finished duel.
+        this.logger.warn(
+          { duel: i + 1, client: client.name },
+          'Replay not ready in time; not sent',
+        );
+        continue;
+      }
       await client.sendChat(
         `#{replay_hint_part1}${i + 1}#{replay_hint_part2}`,
         ChatColor.BABYBLUE,
         YGOProStocChatReplayHint,
       );
-      const replay = await this.ctx
-        .get(() => ReplayEncodeService)
-        .encodePacket(duelRecord, this);
       await client.send(replay);
     }
   }
@@ -688,6 +721,13 @@ export class Room {
       lastDuelRecord.winPosition = duelPos;
       lastDuelRecord.winReason = winMsg.type;
       lastDuelRecord.endTime = new Date();
+      // Start encoding this duel's replay now, during siding, so that it is
+      // usually cached by the time the match ends and the replays are sent.
+      // Best effort: a failure here is retried when the replay is sent.
+      void this.ctx
+        .get(() => ReplayEncodeService)
+        ?.encodePacket(lastDuelRecord, this)
+        .catch(() => undefined);
     }
     if (typeof forceWinMatch === 'number') {
       const loseDuelPos = (1 - duelPos) as 0 | 1;
