@@ -114,7 +114,12 @@ import { RoomShuffleDeck } from './room-event/room-shuffle-deck';
 import { RoomUseSeed } from './room-event/room-use-seed';
 import cryptoRandomString from 'crypto-random-string';
 import { RoomCurrentFieldInfo, RoomInfo } from './room-info';
-import { ReplayEncodeService, YGOProStocChatReplayHint } from '../replay';
+import pTimeout from 'p-timeout';
+import {
+  ReplayEncodeService,
+  YGOProStocChatReplayHint,
+  YGOProStocReplayCompressed,
+} from '../replay';
 import {
   calculateOcgcoreDeck,
   KoishiFragment,
@@ -573,6 +578,8 @@ export class Room {
    * REPLAY_SEND_WAIT_MS (srvpro v1 waits 5 s for ygopro's replay, likewise).
    */
   private replaySendDeadline?: number;
+  /** Duels already logged as not ready, so one slow encode logs once. */
+  private replayNotReadyLogged = new Set<number>();
 
   private async sendReplays(client: Client) {
     if (client.isInternal) {
@@ -582,28 +589,26 @@ export class Room {
     const encoder = this.ctx.get(() => ReplayEncodeService);
     for (let i = 0; i < this.duelRecords.length; i++) {
       const duelRecord = this.duelRecords[i];
-      let cancelTimer = () => {};
-      let replay: Awaited<ReturnType<ReplayEncodeService['encodePacket']>> | undefined;
+      let replay: YGOProStocReplayCompressed | undefined;
       try {
-        replay = await Promise.race([
+        replay = await pTimeout(
           encoder.encodePacket(duelRecord, this),
-          new Promise<undefined>((resolve) => {
-            const timer = setTimeout(resolve, Math.max(0, deadline - Date.now()));
-            cancelTimer = () => clearTimeout(timer);
-          }),
-        ]);
+          Math.max(0, deadline - Date.now()),
+          () => undefined,
+        );
       } catch (error) {
         this.logger.warn({ error, duel: i + 1 }, 'Failed to encode replay');
-      } finally {
-        cancelTimer();
       }
       if (!replay) {
         // Not ready in time: leave this duel's replay out rather than hold
         // the client on a finished duel.
-        this.logger.warn(
-          { duel: i + 1, client: client.name },
-          'Replay not ready in time; not sent',
-        );
+        if (!this.replayNotReadyLogged.has(i)) {
+          this.replayNotReadyLogged.add(i);
+          this.logger.warn(
+            { duel: i + 1, waitMs: REPLAY_SEND_WAIT_MS },
+            'Replay not ready in time; not sent',
+          );
+        }
         // Sent as a replay hint, so that servers which block replays to
         // players also hide this line.
         await client.sendChat(
