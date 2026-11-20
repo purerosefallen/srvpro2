@@ -54,7 +54,8 @@ function setup({ tournamentMode = true, database = true } = {}) {
       if (token === ClientKeyProvider) {
         return { getClientKey: (client: any) => client.name };
       }
-      if (token === MenuManager || token === ReplayEncodeService) return {};
+      if (token === MenuManager) return {};
+      if (token === ReplayEncodeService) return { prefetch: jest.fn() };
       return undefined;
     },
   };
