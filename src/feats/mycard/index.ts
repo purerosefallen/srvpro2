@@ -5,3 +5,6 @@ export * from './mycard-join-handler';
 export * from './mycard-roomlist-service';
 export * from './mycard-service';
 export * from './password-codec';
+export * from './mycard-user';
+export * from './mycard-events';
+export * from './mycard-spectator-replay-service';

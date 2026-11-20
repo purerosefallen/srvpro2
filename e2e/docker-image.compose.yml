@@ -1,0 +1,93 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: srvpro2
+      POSTGRES_PASSWORD: image-test-password
+      POSTGRES_DB: srvpro2
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U srvpro2 -d srvpro2']
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  srvpro2:
+    image: ${TEST_SRVPRO_IMAGE:?Run npm run test:docker-image}
+    environment:
+      TZ: UTC
+      HOST: 0.0.0.0
+      PORT: '7911'
+      WS_PORT: '0'
+      API_PORT: '0'
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_USER: srvpro2
+      DB_PASS: image-test-password
+      DB_NAME: srvpro2
+      LOG_LEVEL: debug
+      ENABLE_TIPS: '0'
+      ENABLE_WORDS: '0'
+      ENABLE_DIALOGUES: '0'
+      ENABLE_BADWORDS: '0'
+      ENABLE_WINDBOT: '0'
+      ENABLE_CHATGPT: '0'
+      ENABLE_CLOUD_REPLAY: '1'
+      ENABLE_RECOVER: '0'
+      ENABLE_RANDOM_DUEL: '0'
+      ENABLE_MENU: '0'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "const s=require('node:net').connect(7911,'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1));s.setTimeout(3000,()=>process.exit(1))"
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  windbot-a:
+    image: ${TEST_WINDBOT_IMAGE:?Run npm run test:docker-image}
+    profiles: ['duel']
+    entrypoint: ['mono', '/windbot/WindBot.exe']
+    working_dir: /windbot
+    command:
+      - ServerMode=false
+      - Name=WindBot-A
+      - Deck=Burn
+      - Host=srvpro2
+      - Port=7911
+      - HostInfo=${TEST_ROOM}
+      - Version=4962
+      - Hand=1
+      - Chat=false
+      - DbPath=/test-resources/cards.cdb
+    volumes:
+      - ${TEST_RESOURCE_DIR}:/test-resources:ro
+
+  windbot-b:
+    image: ${TEST_WINDBOT_IMAGE:?Run npm run test:docker-image}
+    profiles: ['duel']
+    entrypoint: ['mono', '/windbot/WindBot.exe']
+    working_dir: /windbot
+    command:
+      - ServerMode=false
+      - Name=WindBot-B
+      - Deck=BlueEyes
+      - Host=srvpro2
+      - Port=7911
+      - HostInfo=${TEST_ROOM}
+      - Version=4962
+      - Hand=2
+      - Chat=false
+      - DbPath=/test-resources/cards.cdb
+    volumes:
+      - ${TEST_RESOURCE_DIR}:/test-resources:ro
+
+networks:
+  default:
+    internal: true

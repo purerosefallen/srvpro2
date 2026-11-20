@@ -71,6 +71,7 @@ import { OnRoomLeave } from './room-event/on-room-leave';
 import { OnRoomWin } from './room-event/on-room-win';
 import { OnRoomJoinPlayer } from './room-event/on-room-join-player';
 import { OnRoomJoinObserver } from './room-event/on-room-join-observer';
+import { OnRoomObserverChange } from './room-event/on-room-observer-change';
 import {
   OnRoomLeavePlayer,
   RoomLeavePlayerReason,
@@ -113,7 +114,12 @@ import { RoomShuffleDeck } from './room-event/room-shuffle-deck';
 import { RoomUseSeed } from './room-event/room-use-seed';
 import cryptoRandomString from 'crypto-random-string';
 import { RoomCurrentFieldInfo, RoomInfo } from './room-info';
-import { ReplayEncodeService } from '../replay';
+import pTimeout from 'p-timeout';
+import {
+  ReplayEncodeService,
+  YGOProStocChatReplayHint,
+  YGOProStocReplayCompressed,
+} from '../replay';
 import {
   calculateOcgcoreDeck,
   KoishiFragment,
@@ -131,6 +137,8 @@ declare module 'ygopro-msg-encode' {
 const { OcgcoreScriptConstants } = _OcgcoreConstants;
 const DISPOSE_OCGCORE_TIMEOUT_MS = 1 * 60 * 1000;
 const MAX_RESPONSE_LENGTH = 255;
+/** How long the end of a match waits for replays still encoding. */
+const REPLAY_SEND_WAIT_MS = 5 * 1000;
 
 type RoomOcgcoreWorker = WorkerInstance<OcgcoreWorker>;
 
@@ -281,6 +289,7 @@ export class Room {
         'Finalizing room',
       );
       await this.ctx.dispatch(new OnRoomFinalize(this), this.allPlayers[0]);
+      this.replaySendDeadline = Date.now() + REPLAY_SEND_WAIT_MS;
       await this.cleanPlayers(sendReplays);
       while (this.finalizors.length) {
         const finalizor = this.finalizors.pop()!;
@@ -451,6 +460,10 @@ export class Room {
 
     client.isHost = !this.noHost && isPlayer && !hasPlayerBeforeJoin;
 
+    if (!isPlayer) {
+      await this.ctx.dispatch(new OnRoomObserverChange(this, true), client);
+    }
+
     // send to client
     await client.send(this.joinGameMessage);
     await client.sendTypeChange();
@@ -559,19 +572,57 @@ export class Room {
     return score;
   }
 
+  /**
+   * When finalize started waiting for replays; every client's replays share
+   * this one deadline, so a slow encode delays DUEL_END by at most
+   * REPLAY_SEND_WAIT_MS (srvpro v1 waits 5 s for ygopro's replay, likewise).
+   */
+  private replaySendDeadline?: number;
+  /** Duels already logged as not ready, so one slow encode logs once. */
+  private replayNotReadyLogged = new Set<number>();
+
   private async sendReplays(client: Client) {
     if (client.isInternal) {
       return;
     }
+    const deadline = this.replaySendDeadline ?? Date.now() + REPLAY_SEND_WAIT_MS;
+    const encoder = this.ctx.get(() => ReplayEncodeService);
     for (let i = 0; i < this.duelRecords.length; i++) {
       const duelRecord = this.duelRecords[i];
+      let replay: YGOProStocReplayCompressed | undefined;
+      try {
+        replay = await pTimeout(
+          encoder.encodePacket(duelRecord, this),
+          Math.max(0, deadline - Date.now()),
+          () => undefined,
+        );
+      } catch (error) {
+        this.logger.warn({ error, duel: i + 1 }, 'Failed to encode replay');
+      }
+      if (!replay) {
+        // Not ready in time: leave this duel's replay out rather than hold
+        // the client on a finished duel.
+        if (!this.replayNotReadyLogged.has(i)) {
+          this.replayNotReadyLogged.add(i);
+          this.logger.warn(
+            { duel: i + 1, waitMs: REPLAY_SEND_WAIT_MS },
+            'Replay not ready in time; not sent',
+          );
+        }
+        // Sent as a replay hint, so that servers which block replays to
+        // players also hide this line.
+        await client.sendChat(
+          `#{replay_not_ready_part1}${i + 1}#{replay_not_ready_part2}`,
+          ChatColor.BABYBLUE,
+          YGOProStocChatReplayHint,
+        );
+        continue;
+      }
       await client.sendChat(
         `#{replay_hint_part1}${i + 1}#{replay_hint_part2}`,
         ChatColor.BABYBLUE,
+        YGOProStocChatReplayHint,
       );
-      const replay = await this.ctx
-        .get(() => ReplayEncodeService)
-        .encodePacket(duelRecord, this);
       await client.send(replay);
     }
   }
@@ -682,6 +733,10 @@ export class Room {
       lastDuelRecord.winPosition = duelPos;
       lastDuelRecord.winReason = winMsg.type;
       lastDuelRecord.endTime = new Date();
+      // Encode this duel's replay ahead of time, during siding, so that it is
+      // usually cached by the time the match ends. A prefetch only runs while
+      // no replay is being waited for, so it never delays another room's end.
+      this.ctx.get(() => ReplayEncodeService)?.prefetch(lastDuelRecord, this);
     }
     if (typeof forceWinMatch === 'number') {
       const loseDuelPos = (1 - duelPos) as 0 | 1;
@@ -777,6 +832,7 @@ export class Room {
 
     if (wasObserver) {
       this.watchers.delete(client);
+      await this.ctx.dispatch(new OnRoomObserverChange(this, false), client);
       await Promise.all(
         this.allPlayers.map((p) => p.send(this.watcherSizeMessage)),
       );
@@ -872,6 +928,7 @@ export class Room {
 
     // 添加到观战者
     this.watchers.add(client);
+    await this.ctx.dispatch(new OnRoomObserverChange(this, true), client);
 
     // 发送 TypeChange 给客户端
     await client.sendTypeChange();
@@ -913,6 +970,7 @@ export class Room {
       // 添加到玩家
       this.players[firstEmptyPlayerSlot] = client;
       client.pos = firstEmptyPlayerSlot;
+      await this.ctx.dispatch(new OnRoomObserverChange(this, false), client);
 
       // 发送 PlayerEnter 给所有人
       const enterMsg = client.prepareEnterPacket();

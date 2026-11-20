@@ -14,8 +14,6 @@ import {
   YGOProStocHsPlayerChange,
   PlayerChangeState,
   NetPlayerType,
-  YGOProStocGameMsg,
-  YGOProStocReplay,
 } from 'ygopro-msg-encode';
 import { YGOProProtoPipe } from '../utility/ygopro-proto-pipe';
 import { I18nService } from './i18n';
@@ -33,7 +31,6 @@ import {
   splitColoredMessagesByLine,
 } from '../utility';
 import { RoomManager } from '../room';
-import { summarizeReplayMessage } from '../replay';
 
 const SEND_TIMEOUT_MS = 5000;
 
@@ -170,7 +167,11 @@ export class Client {
     });
   }
 
-  async sendChat(msg: KoishiFragment, type: number = ChatColor.BABYBLUE) {
+  async sendChat(
+    msg: KoishiFragment,
+    type: number = ChatColor.BABYBLUE,
+    ChatMessage: typeof YGOProStocChat = YGOProStocChat,
+  ) {
     if (this.isInternal) {
       return;
     }
@@ -182,7 +183,7 @@ export class Client {
     );
     if (type <= NetPlayerType.OBSERVER) {
       return this.send(
-        new YGOProStocChat().fromPartial({
+        new ChatMessage().fromPartial({
           msg:
             typeof msg === 'string'
               ? msg
@@ -206,7 +207,7 @@ export class Client {
         locale,
       );
       await this.send(
-        new YGOProStocChat().fromPartial({
+        new ChatMessage().fromPartial({
           msg: line,
           player_type: message.color,
         }),

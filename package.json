@@ -30,7 +30,9 @@
     "lint": "eslint --fix .",
     "start": "node dist/index.js",
     "test": "npm run build:test-workers && jest --passWithNoTests",
-    "test:e2e": "jest --config e2e/jest-e2e.json --runInBand"
+    "test:e2e": "jest --config e2e/jest-e2e.json --runInBand",
+    "test:docker-image": "node e2e/docker-image-test.cjs",
+    "test:mycard-spectator-replay": "npm run build && node dist/e2e/mycard-spectator-replay.js"
   },
   "jest": {
     "collectCoverageFrom": [

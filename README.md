@@ -117,6 +117,35 @@ docker compose logs -f srvpro2
 docker compose down
 ```
 
+## Docker 镜像验收
+
+需要本机 Node.js、Docker 和 Docker Compose；测试不需要先安装项目依赖。
+
+```bash
+npm run test:docker-image
+```
+
+入口会构建包含资源及 WASM 的完整 Node 26 镜像，在独立内部网络启动临时 PostgreSQL，
+再使用已有的 `git-registry.moenext.com/nanahira/windbot:master` 镜像，让 Burn 和 BlueEyes
+在同一个 `NF#` 单局房间完整对战。服务端使用镜像自带资源，两个 WindBot 使用从待测
+镜像提取的同一份 `cards.cdb`；不需要本地 WindBot 或其他参考仓库。
+
+只有原生 PostgreSQL 驱动加载成功、数据库初始化成功、双方收到一致的最终结果并正常退出、
+房间清理完成，且数据库有对应的已完成 `duel_record` 和两条胜负、比分一致的
+`duel_record_player`，才会通过。数据库记录还会检查起止时间、结束原因及非空消息和响应数据。
+对战超时为 10 分钟，异步入库等待上限为 30 秒。
+
+可以验收已有的本地镜像，或指定其他已构建的 WindBot 镜像：
+
+```bash
+SRVPRO_IMAGE=my-srvpro2:node26 npm run test:docker-image
+WINDBOT_IMAGE=git-registry.moenext.com/nanahira/windbot:master npm run test:docker-image
+```
+
+完整日志、实际镜像 ID/摘要、运行时版本、数据库查询结果及 `summary.json` 保存在
+`output/docker-image-test/<run-id>/`。测试完成、失败或收到中断信号后都会清理本次容器、
+网络、临时数据库和默认构建的临时镜像；传入的 `SRVPRO_IMAGE` 及拉取的共享镜像会保留。
+
 ## 配置怎么配（重点）
 
 配置入口：

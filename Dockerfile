@@ -1,5 +1,5 @@
 ARG GIT_IMAGE=alpine/git:v2.52.0
-ARG NODE_IMAGE=node:24-alpine
+ARG NODE_IMAGE=node:26-alpine
 ARG OCGCORE_BUILD_IMAGE=debian:bookworm-slim
 ARG NO_RESOURCE=0
 ARG USE_APK_CHINA_MIRROR=0

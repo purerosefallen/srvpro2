@@ -91,7 +91,7 @@ describe('YGOProStocReplayCompressed', () => {
     expect(toPayload).not.toHaveBeenCalled();
   });
 
-  test('Client.send does not log replay payloads', async () => {
+  test('Client.send does not log replay bodies while packet logging is disabled', async () => {
     const debug = jest.fn();
     const ctx: any = {
       createLogger: () => ({

@@ -13,7 +13,13 @@ import BetterLock from 'better-lock';
 import type { SelectQueryBuilder } from 'typeorm';
 import { Context } from '../../app';
 import { Client } from '../../client';
-import { DuelRecord, OnRoomWin, Room, RoomManager } from '../../room';
+import {
+  DuelRecord,
+  OnRoomFinalize,
+  OnRoomWin,
+  Room,
+  RoomManager,
+} from '../../room';
 import { ClientKeyProvider } from '../client-key-provider';
 import { MenuEntry, MenuManager } from '../menu-manager';
 import { DuelRecordEntity } from './duel-record.entity';
@@ -103,19 +109,35 @@ export class CloudReplayService {
   private menuManager = this.ctx.get(() => MenuManager);
   private roomManager = this.ctx.get(() => RoomManager);
   private replayEncodeService = this.ctx.get(() => ReplayEncodeService);
+  private tournamentMode = this.ctx.config.getBoolean('TOURNAMENT_MODE');
   private duelRecordSaveLock = new BetterLock();
+  private tournamentReplayTasks = new Map<string, Promise<void>>();
 
   constructor(private ctx: Context) {}
 
   async init() {
     this.ctx.middleware(OnRoomWin, async (event, _client, next) => {
-      if (event.winMatch) {
-        await this.saveDuelRecordFromWinEvent(event);
-      } else {
-        void this.saveDuelRecordFromWinEvent(event);
+      const task = this.saveDuelRecordFromWinEvent(event);
+      if (event.winMatch && this.tournamentMode) {
+        this.trackTournamentReplayTask(event.room.identifier, task);
       }
       return next();
     });
+
+    this.ctx.middleware(
+      OnRoomFinalize,
+      async (event, _client, next) => {
+        if (!this.tournamentMode) {
+          return next();
+        }
+        const roomIdentifier = event.room.identifier;
+        const result = await next();
+        // Finish saving and sending the ID before Room.finalize cleans players.
+        await this.tournamentReplayTasks.get(roomIdentifier);
+        return result;
+      },
+      true,
+    );
 
     if (this.ctx.config.getBoolean('CLOUD_REPLAY_INSTANT_WRITE')) {
       this.registerInstantDuelRecordHooks();
@@ -209,6 +231,18 @@ export class CloudReplayService {
     );
   }
 
+  private trackTournamentReplayTask(
+    roomIdentifier: string,
+    task: Promise<void>,
+  ) {
+    const trackedTask = task.finally(() => {
+      if (this.tournamentReplayTasks.get(roomIdentifier) === trackedTask) {
+        this.tournamentReplayTasks.delete(roomIdentifier);
+      }
+    });
+    this.tournamentReplayTasks.set(roomIdentifier, trackedTask);
+  }
+
   private saveDuelRecordNonBlocking(
     room: Room,
     options: SaveDuelRecordOptions,
@@ -217,44 +251,56 @@ export class CloudReplayService {
     void this.saveDuelRecordWithLogging(room, options, source);
   }
 
-  private async saveDuelRecordWithLogging(
+  private saveDuelRecordWithLogging(
     room: Room,
     options: SaveDuelRecordOptions,
     source: string,
-  ) {
+  ): Promise<void> {
+    const database = this.ctx.database;
+    if (!database) {
+      return Promise.resolve();
+    }
+
     try {
-      await this.saveDuelRecord(room, options);
+      const snapshot = this.createDuelRecordSnapshot(room, options);
+      if (!snapshot) {
+        return Promise.resolve();
+      }
+      return this.saveDuelRecordSnapshotWithLogging(database, snapshot, source);
     } catch (error: unknown) {
-      this.logger.warn(
-        {
-          source,
-          roomName: room.name,
-          error: (error as Error)?.stack || String(error),
-        },
-        'Failed saving duel record',
-      );
+      this.logDuelRecordSaveError(source, room.name, error);
+      return Promise.resolve();
     }
   }
 
-  private async saveDuelRecord(room: Room, options: SaveDuelRecordOptions) {
-    const database = this.ctx.database;
-    if (!database) {
-      return undefined;
+  private async saveDuelRecordSnapshotWithLogging(
+    database: NonNullable<Context['database']>,
+    snapshot: DuelRecordSnapshot,
+    source: string,
+  ) {
+    try {
+      const record = await this.saveDuelRecordSnapshot(database, snapshot);
+      if (snapshot.winReason != null) {
+        await this.trySendTournamentReplayHint(
+          snapshot.name,
+          snapshot.roomIdentifier,
+          record.id,
+        );
+      }
+    } catch (error: unknown) {
+      this.logDuelRecordSaveError(source, snapshot.name, error);
     }
+  }
 
-    const snapshot = this.createDuelRecordSnapshot(room, options);
-    if (!snapshot) {
-      return undefined;
-    }
-    const shouldSendReplayHint = snapshot.winReason != null;
-
-    const record = await this.saveDuelRecordSnapshot(database, snapshot);
-
-    if (shouldSendReplayHint) {
-      await this.trySendTournamentReplayHint(room, record.id);
-    }
-
-    return record;
+  private logDuelRecordSaveError(
+    source: string,
+    roomName: string,
+    error: unknown,
+  ) {
+    this.logger.warn(
+      { source, roomName, error: (error as Error)?.stack || String(error) },
+      'Failed saving duel record',
+    );
   }
 
   private async saveDuelRecordSnapshot(
@@ -346,8 +392,16 @@ export class CloudReplayService {
     };
   }
 
-  private async trySendTournamentReplayHint(room: Room, replayId: number) {
-    if (!this.ctx.config.getBoolean('TOURNAMENT_MODE')) {
+  private async trySendTournamentReplayHint(
+    roomName: string,
+    roomIdentifier: string,
+    replayId: number,
+  ) {
+    if (!this.tournamentMode) {
+      return;
+    }
+    const room = this.roomManager.findByName(roomName);
+    if (!room || room.identifier !== roomIdentifier) {
       return;
     }
     await room.sendChat(

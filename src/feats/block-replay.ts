@@ -1,5 +1,6 @@
 import { YGOProStocReplay } from 'ygopro-msg-encode';
 import { Context } from '../app';
+import { YGOProStocChatReplayHint } from '../replay';
 
 export class BlockReplay {
   private enabled = this.ctx.config.getBoolean('BLOCK_REPLAY_TO_PLAYER');
@@ -17,5 +18,14 @@ export class BlockReplay {
       }
       return next();
     });
+    this.ctx.middleware(
+      YGOProStocChatReplayHint,
+      async (_msg, client, next) => {
+        if (client.roomName) {
+          return;
+        }
+        return next();
+      },
+    );
   }
 }
