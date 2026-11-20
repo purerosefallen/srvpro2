@@ -11,6 +11,7 @@ import { LegacyRoomIdService } from '../src/legacy-api/legacy-room-id-service';
 import {
   DefaultHostinfo,
   DuelRecord,
+  OnRoomFinalize,
   OnRoomWin,
   RoomManager,
 } from '../src/room';
@@ -218,8 +219,13 @@ describe('cloud replay live save hooks', () => {
 
     await service.init();
 
-    expect(middleware).toHaveBeenCalledTimes(1);
+    expect(middleware).toHaveBeenCalledTimes(2);
     expect(middleware).toHaveBeenCalledWith(OnRoomWin, expect.any(Function));
+    expect(middleware).toHaveBeenCalledWith(
+      OnRoomFinalize,
+      expect.any(Function),
+      true,
+    );
   });
 
   test('registers instant hooks when instant write is enabled', async () => {
@@ -239,51 +245,54 @@ describe('cloud replay live save hooks', () => {
     );
   });
 
-  test('waits for win-match saves before continuing room win flow', async () => {
-    const { ctx, middleware } = makeCtx();
-    const service = new CloudReplayService(ctx);
-    const deferred = createDeferred();
-    const saveFromWin = jest
-      .spyOn(service as any, 'saveDuelRecordFromWinEvent')
-      .mockReturnValue(deferred.promise);
-    const next = jest.fn();
+  test.each([false, true])(
+    'does not wait for win-match saves (tournament: %s)',
+    async (tournamentMode) => {
+      const { ctx, middleware } = makeCtx({ tournamentMode });
+      const service = new CloudReplayService(ctx);
+      const deferred = createDeferred();
+      const saveFromWin = jest
+        .spyOn(service as any, 'saveDuelRecordFromWinEvent')
+        .mockReturnValue(deferred.promise);
+      const next = jest.fn();
 
-    await service.init();
-    const handler = middleware.mock.calls.find(
-      ([eventClass]) => eventClass === OnRoomWin,
-    )?.[1];
-    const handled = handler({ winMatch: true }, undefined, next);
-    await Promise.resolve();
+      await service.init();
+      const handler = middleware.mock.calls.find(
+        ([eventClass]) => eventClass === OnRoomWin,
+      )?.[1];
+      const event = { winMatch: true, room: { identifier: 'room-id' } };
+      await handler(event, undefined, next);
 
-    expect(saveFromWin).toHaveBeenCalledWith({ winMatch: true });
-    expect(next).not.toHaveBeenCalled();
+      expect(saveFromWin).toHaveBeenCalledWith(event);
+      expect(next).toHaveBeenCalledTimes(1);
 
-    deferred.resolve();
-    await handled;
+      deferred.resolve();
+    },
+  );
 
-    expect(next).toHaveBeenCalledTimes(1);
-  });
+  test.each([false, true])(
+    'does not wait for non-match win saves (tournament: %s)',
+    async (tournamentMode) => {
+      const { ctx, middleware } = makeCtx({ tournamentMode });
+      const service = new CloudReplayService(ctx);
+      const deferred = createDeferred();
+      const saveFromWin = jest
+        .spyOn(service as any, 'saveDuelRecordFromWinEvent')
+        .mockReturnValue(deferred.promise);
+      const next = jest.fn();
 
-  test('does not wait for non-match win saves before continuing room win flow', async () => {
-    const { ctx, middleware } = makeCtx();
-    const service = new CloudReplayService(ctx);
-    const deferred = createDeferred();
-    const saveFromWin = jest
-      .spyOn(service as any, 'saveDuelRecordFromWinEvent')
-      .mockReturnValue(deferred.promise);
-    const next = jest.fn();
+      await service.init();
+      const handler = middleware.mock.calls.find(
+        ([eventClass]) => eventClass === OnRoomWin,
+      )?.[1];
+      await handler({ winMatch: false }, undefined, next);
 
-    await service.init();
-    const handler = middleware.mock.calls.find(
-      ([eventClass]) => eventClass === OnRoomWin,
-    )?.[1];
-    await handler({ winMatch: false }, undefined, next);
+      expect(saveFromWin).toHaveBeenCalledWith({ winMatch: false });
+      expect(next).toHaveBeenCalledTimes(1);
 
-    expect(saveFromWin).toHaveBeenCalledWith({ winMatch: false });
-    expect(next).toHaveBeenCalledTimes(1);
-
-    deferred.resolve();
-  });
+      deferred.resolve();
+    },
+  );
 });
 
 describe('cloud replay worker encoding', () => {

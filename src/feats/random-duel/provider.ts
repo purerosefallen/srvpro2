@@ -95,6 +95,8 @@ interface FindOrCreateRandomRoomResult {
   errorMessage?: string;
 }
 
+type RandomDuelScoreResult = 'win' | 'lose' | 'flee';
+
 export class RandomDuelProvider {
   private logger = this.ctx.createLogger(this.constructor.name);
   private roomManager = this.ctx.get(() => RoomManager);
@@ -102,6 +104,7 @@ export class RandomDuelProvider {
   private clientKeyProvider = this.ctx.get(() => ClientKeyProvider);
   private defaultHostInfoProvider = this.ctx.get(() => DefaultHostInfoProvider);
   private hidePlayerName = this.ctx.get(() => HidePlayerNameProvider);
+  private scoreSaveTasks = new Map<string, Promise<void>>();
 
   enabled = this.ctx.config.getBoolean('ENABLE_RANDOM_DUEL');
   noRematchCheck = this.ctx.config.getBoolean('RANDOM_DUEL_NO_REMATCH_CHECK');
@@ -154,7 +157,7 @@ export class RandomDuelProvider {
     });
 
     this.ctx.middleware(OnRoomFinalize, async (event, _client, next) => {
-      await this.recordMatchResult(event.room);
+      this.recordMatchResult(event.room);
       return next();
     });
 
@@ -496,8 +499,8 @@ export class RandomDuelProvider {
       room.randomType === 'M' &&
       !room.randomDuelScoreHandled
     ) {
-      await this.recordFleeResult(room, client);
       room.randomDuelScoreHandled = true;
+      this.recordFleeResult(room, client);
     }
   }
 
@@ -573,18 +576,14 @@ export class RandomDuelProvider {
     );
   }
 
-  private async recordFleeResult(room: Room, loser: Client) {
+  private recordFleeResult(room: Room, loser: Client) {
     const loserName = this.getClientKey(loser);
-    if (loserName) {
-      await this.recordFlee(loserName);
-    }
     const winner = room
       .getOpponents(loser)
       .find((player) => player.pos < NetPlayerType.OBSERVER);
     const winnerName = winner ? this.getClientKey(winner) : '';
-    if (winnerName) {
-      await this.recordWin(winnerName);
-    }
+    this.recordScoreNonBlocking(loserName, 'flee');
+    this.recordScoreNonBlocking(winnerName, 'win');
   }
 
   private async updateOpponentRelation(room: Room, client: Client) {
@@ -823,7 +822,7 @@ export class RandomDuelProvider {
     return this.recordMatchScoresConfigured && !!this.ctx.database;
   }
 
-  private async recordMatchResult(room: Room) {
+  private recordMatchResult(room: Room) {
     if (
       !this.recordMatchScoresEnabled ||
       room.randomType !== 'M' ||
@@ -841,12 +840,12 @@ export class RandomDuelProvider {
       return;
     }
     if (score0 > score1) {
-      await this.recordWin(this.getClientKey(duelPos0Player));
-      await this.recordLose(this.getClientKey(duelPos1Player));
+      this.recordScoreNonBlocking(this.getClientKey(duelPos0Player), 'win');
+      this.recordScoreNonBlocking(this.getClientKey(duelPos1Player), 'lose');
       return;
     }
-    await this.recordWin(this.getClientKey(duelPos1Player));
-    await this.recordLose(this.getClientKey(duelPos0Player));
+    this.recordScoreNonBlocking(this.getClientKey(duelPos1Player), 'win');
+    this.recordScoreNonBlocking(this.getClientKey(duelPos0Player), 'lose');
   }
 
   private getClientKey(client: Client) {
@@ -865,26 +864,28 @@ export class RandomDuelProvider {
     return score;
   }
 
-  private async recordWin(name: string) {
-    if (!name) {
+  private recordScoreNonBlocking(name: string, result: RandomDuelScoreResult) {
+    if (!name || !this.ctx.database) {
       return;
     }
-    const repo = this.ctx.database?.getRepository(RandomDuelScore);
-    if (!repo) {
-      return;
-    }
-    const score = await this.getOrCreateScore(name);
-    if (!score) {
-      return;
-    }
-    score.win();
-    await repo.save(score);
+    const previous = this.scoreSaveTasks.get(name) || Promise.resolve();
+    const task = previous
+      .then(() => this.recordScore(name, result))
+      .catch((error: unknown) => {
+        this.logger.warn(
+          { name, result, error: (error as Error)?.stack || String(error) },
+          'Failed saving random duel score',
+        );
+      })
+      .finally(() => {
+        if (this.scoreSaveTasks.get(name) === task) {
+          this.scoreSaveTasks.delete(name);
+        }
+      });
+    this.scoreSaveTasks.set(name, task);
   }
 
-  private async recordLose(name: string) {
-    if (!name) {
-      return;
-    }
+  private async recordScore(name: string, result: RandomDuelScoreResult) {
     const repo = this.ctx.database?.getRepository(RandomDuelScore);
     if (!repo) {
       return;
@@ -893,23 +894,7 @@ export class RandomDuelProvider {
     if (!score) {
       return;
     }
-    score.lose();
-    await repo.save(score);
-  }
-
-  private async recordFlee(name: string) {
-    if (!name) {
-      return;
-    }
-    const repo = this.ctx.database?.getRepository(RandomDuelScore);
-    if (!repo) {
-      return;
-    }
-    const score = await this.getOrCreateScore(name);
-    if (!score) {
-      return;
-    }
-    score.flee();
+    score[result]();
     await repo.save(score);
   }
 }
