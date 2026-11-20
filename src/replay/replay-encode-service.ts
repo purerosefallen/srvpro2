@@ -10,6 +10,9 @@ type EncodedReplay = {
   summary: ReplayLogSummary;
 };
 
+/** Prefetches beyond this are dropped, oldest first; they are only a head start. */
+const MAX_PREFETCH_QUEUE = 64;
+
 type ReplayWorker = WorkerInstance<ReplayEncodeWorker>;
 type ReplayWorkerPromise = Promise<ReplayWorker>;
 export type ReplayWorkerFactory = () => ReplayWorkerPromise;
@@ -23,8 +26,38 @@ export class ReplayEncodeService {
     DuelRecord,
     Map<string, Promise<EncodedReplay>>
   >();
+  /** Encodes someone is waiting for (players, arena, cloud replay). */
+  private waitedEncodes = 0;
+  private prefetchQueue: {
+    duelRecord: DuelRecord;
+    replayContext: DuelRecordReplayContext;
+  }[] = [];
+  private prefetching = false;
 
   constructor(private ctx: Context) {}
+
+  /**
+   * Encode a finished duel's replay ahead of time, at low priority: it starts
+   * only while no waited encode is running, one at a time, so it delays a
+   * waited encode by at most the one prefetch already on the worker. The
+   * result lands in the same cache the waited calls read.
+   */
+  prefetch(duelRecord: DuelRecord, replayContext: DuelRecordReplayContext) {
+    if (!duelRecord.endTime || this.isCached(duelRecord, replayContext)) {
+      return;
+    }
+    this.prefetchQueue.push({
+      duelRecord,
+      replayContext: {
+        hostinfo: replayContext.hostinfo,
+        isTag: replayContext.isTag,
+      },
+    });
+    if (this.prefetchQueue.length > MAX_PREFETCH_QUEUE) {
+      this.prefetchQueue.shift();
+    }
+    this.pumpPrefetch();
+  }
 
   init() {
     process.once('exit', () => {
@@ -61,12 +94,44 @@ export class ReplayEncodeService {
     }
   }
 
+  private pumpPrefetch() {
+    if (this.prefetching || this.waitedEncodes > 0) {
+      return;
+    }
+    let next: (typeof this.prefetchQueue)[number] | undefined;
+    while ((next = this.prefetchQueue.shift())) {
+      if (!this.isCached(next.duelRecord, next.replayContext)) {
+        break;
+      }
+    }
+    if (!next) {
+      return;
+    }
+    this.prefetching = true;
+    void this.encode(next.duelRecord, next.replayContext, false)
+      .catch(() => undefined)
+      .finally(() => {
+        this.prefetching = false;
+        this.pumpPrefetch();
+      });
+  }
+
+  private isCached(
+    duelRecord: DuelRecord,
+    replayContext: DuelRecordReplayContext,
+  ) {
+    return !!this.completedReplayCache
+      .get(duelRecord)
+      ?.has(this.getCacheKey(replayContext));
+  }
+
   private encode(
     duelRecord: DuelRecord,
     replayContext: DuelRecordReplayContext,
+    waited = true,
   ): Promise<EncodedReplay> {
     if (!duelRecord.endTime) {
-      return this.encodeUncached(duelRecord, replayContext);
+      return this.encodeUncached(duelRecord, replayContext, waited);
     }
 
     const cacheKey = this.getCacheKey(replayContext);
@@ -81,7 +146,11 @@ export class ReplayEncodeService {
       return cached;
     }
 
-    const encoded = this.encodeUncached(duelRecord, replayContext).catch(
+    const encoded = this.encodeUncached(
+      duelRecord,
+      replayContext,
+      waited,
+    ).catch(
       (error) => {
         recordCache!.delete(cacheKey);
         throw error;
@@ -94,13 +163,24 @@ export class ReplayEncodeService {
   private async encodeUncached(
     duelRecord: DuelRecord,
     replayContext: DuelRecordReplayContext,
+    waited = true,
   ): Promise<EncodedReplay> {
     const replay = duelRecord.toYrp(replayContext);
-    const payload = await this.encodeInWorker(replay);
-    return {
-      payload,
-      summary: createReplayLogSummary(replay, payload.byteLength),
-    };
+    if (waited) {
+      this.waitedEncodes += 1;
+    }
+    try {
+      const payload = await this.encodeInWorker(replay);
+      return {
+        payload,
+        summary: createReplayLogSummary(replay, payload.byteLength),
+      };
+    } finally {
+      if (waited) {
+        this.waitedEncodes -= 1;
+        this.pumpPrefetch();
+      }
+    }
   }
 
   private async encodeInWorker(
