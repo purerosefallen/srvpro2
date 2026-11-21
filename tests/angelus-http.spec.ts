@@ -47,7 +47,7 @@ test.each(['', ' ', 'ftp://host', 'missing-host'])(
     try {
       process.env.ANGELUS_ENDPOINT = value;
       expect(() => new ConfigService({} as any)).toThrow(
-        /ygoangelus.*ANGELUS_ENDPOINT/,
+        'Please install and start ygoangelus, then set ANGELUS_ENDPOINT (for example, http://localhost:3001).',
       );
     } finally {
       if (previous == null) delete process.env.ANGELUS_ENDPOINT;

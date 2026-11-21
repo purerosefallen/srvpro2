@@ -8,7 +8,7 @@ export class ConfigService {
       serviceEndpoint(this.config.getString('ANGELUS_ENDPOINT'), 'http');
     } catch {
       throw new Error(
-        '请安装并启动 ygoangelus，配置 ANGELUS_ENDPOINT，例如 http://localhost:3001',
+        'Please install and start ygoangelus, then set ANGELUS_ENDPOINT (for example, http://localhost:3001).',
       );
     }
   }
