@@ -155,3 +155,53 @@ test('a second Undo does not open a connection while verification is pending', a
   open(candidate);
   await first;
 });
+
+test.each([true, false])(
+  'a response arriving during verification is delivered only on rollback (rollback %s)',
+  async (rollback) => {
+    const { room, player, candidate } = fixture();
+    player['roomName'] = 'test-room';
+    const handlers = new Map();
+    const ctx = {
+      get: () => ({ isEnabled: true, findByName: () => room }),
+      createLogger: () => ({ warn: jest.fn() }),
+      middleware(type, handler) {
+        handlers.set(type, handler);
+        return this;
+      },
+      dispatch: jest.fn(),
+    };
+    const service = new RewindService(ctx as any);
+    jest
+      .spyOn(service as any, 'registerKoishiCommand')
+      .mockImplementation(() => {});
+    jest
+      .spyOn(service as any, 'rewindSendToPlayer')
+      .mockResolvedValue(undefined);
+    await service.init();
+    let resume;
+    room.openCandidate.mockReturnValue(
+      new Promise((resolve, reject) => {
+        resume = () =>
+          rollback ? reject(new Error('unavailable')) : resolve(candidate);
+      }),
+    );
+    const operation = service.rewind(room, player as any);
+    const response = new P.YGOProCtosResponse().fromPartial({
+      response: Uint8Array.of(42),
+    });
+    const next = jest.fn();
+    await handlers.get(P.YGOProCtosResponse)(response, player, next);
+    await handlers.get(P.YGOProCtosResponse)(response, player, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(ctx.dispatch).not.toHaveBeenCalled();
+    resume();
+    await operation;
+    expect(ctx.dispatch).toHaveBeenCalledTimes(rollback ? 1 : 0);
+    if (rollback)
+      expect(ctx.dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ response: Uint8Array.of(42) }),
+        player,
+      );
+  },
+);

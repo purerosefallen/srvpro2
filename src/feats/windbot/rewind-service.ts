@@ -38,7 +38,7 @@ declare module '../../room' {
 export class RewindService {
   private koishiContextService = this.ctx.get(() => KoishiContextService);
   private windBotProvider = this.ctx.get(() => WindBotProvider);
-  private rewinds = new Set<string>();
+  private rewinds = new Map<string, { response?: Uint8Array; pos?: number }>();
   private rewindResponseWaiters = new Map<
     string,
     {
@@ -55,7 +55,7 @@ export class RewindService {
     }
     this.registerKoishiCommand();
     this.ctx
-      .middleware(YGOProCtosResponse, async (_message, client, next) => {
+      .middleware(YGOProCtosResponse, async (message, client, next) => {
         const room = this.ctx
           .get(() => RoomManager)
           .findByName(client.roomName);
@@ -66,7 +66,16 @@ export class RewindService {
         }
         const waiter = this.rewindResponseWaiters.get(waitKey);
         if (!waiter) {
-          if (room?.rebuildingAngelus) return;
+          if (room?.rebuildingAngelus) {
+            const rewind = this.rewinds.get(room.identifier);
+            // A bot can answer the live prompt while its opponent requests Undo.
+            // Retain one input for the original duel in case verification fails.
+            if (rewind && !rewind.response && room.responsePlayer === client) {
+              rewind.response = Uint8Array.from(message.response);
+              rewind.pos = client.pos;
+            }
+            return;
+          }
           return next();
         }
         this.rewindResponseWaiters.delete(waitKey);
@@ -296,7 +305,8 @@ export class RewindService {
       room
         .lastDuelRecord!.messages.slice(0, rewindMessageIndex + 1)
         .filter((msg) => msg instanceof YGOProMsgResponseBase).length - 1;
-    this.rewinds.add(room.identifier);
+    const rewind: { response?: Uint8Array; pos?: number } = {};
+    this.rewinds.set(room.identifier, rewind);
     room.rebuildingAngelus = true;
     const timer = room.timerState;
     const running = timer.runningPos;
@@ -351,11 +361,23 @@ export class RewindService {
       );
       if (!committed) {
         candidate?.close();
-        if (running != null && room.angelus === original && original.active)
-          await room.setResponseTimer(running, {
-            settlePrevious: false,
-            awaitingConfirm,
-          });
+        if (room.angelus === original && original.active && !room.finalizing) {
+          if (running != null)
+            await room.setResponseTimer(running, {
+              settlePrevious: false,
+              awaitingConfirm,
+            });
+          room.rebuildingAngelus = false;
+          const player = room.responsePlayer;
+          if (rewind.response && player && player.pos === rewind.pos) {
+            await this.ctx.dispatch(
+              new YGOProCtosResponse().fromPartial({
+                response: rewind.response,
+              }),
+              player,
+            );
+          }
+        }
       }
       return this.asRedError('#{koishi_rewind_failed}');
     } finally {
