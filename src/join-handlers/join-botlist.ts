@@ -1,4 +1,4 @@
-import { YGOProCtosJoinGame } from 'ygopro-msg-encode';
+import { ChatColor, YGOProCtosJoinGame } from 'ygopro-msg-encode';
 import { Context } from '../app';
 import { Client } from '../client';
 import { MenuEntry, MenuManager } from '../feats';
@@ -28,10 +28,12 @@ export class JoinBotlist {
   }
 
   private async openBotListMenu(client: Client) {
-    const bots = this.windbotProvider
-      .getBots()
+    const bots = (await this.windbotProvider.loadBotList())
+      .filter((bot) => !bot.hidden)
       .map((bot) => ({ name: bot.name, deck: bot.deck }));
 
+    if (!bots.length)
+      return client.die('#{windbot_deck_not_found}', ChatColor.RED);
     const menu: MenuEntry[] = bots.map((bot) => ({
       title: `${bot.name} - ${bot.deck}`,
       callback: async (menuClient) => {
@@ -43,8 +45,12 @@ export class JoinBotlist {
   }
 
   private async openBotActionMenu(client: Client, botName: string) {
-    const bot = this.windbotProvider.getBotByNameOrDeck(botName);
-    const botTitle = bot ? `${bot.name} - ${bot.deck}` : botName;
+    const bot = this.windbotProvider.selectBot(
+      await this.windbotProvider.loadBotList(),
+      botName,
+    );
+    if (!bot) return client.die('#{windbot_deck_not_found}', ChatColor.RED);
+    const botTitle = `${bot.name} - ${bot.deck}`;
     const menu: MenuEntry[] = [
       {
         title: botTitle,

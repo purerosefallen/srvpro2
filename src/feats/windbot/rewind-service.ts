@@ -5,12 +5,13 @@ import { KoishiContextService } from '../../koishi';
 import { DuelStage, Room, RoomManager } from '../../room';
 import { KoishiFragment } from '../../utility';
 import { WindBotProvider } from './windbot-provider';
-import { sliceOcgcore } from '../../utility/slice-ocgcore';
+import { replayAngelus } from '../../utility/replay-angelus';
 import { RefreshFieldService } from '../reconnect';
 import {
   YGOProCtosChat,
   YGOProCtosResponse,
   YGOProMsgNewTurn,
+  YGOProMsgReverseDeck,
   YGOProMsgResponseBase,
   YGOProMsgSelectChain,
   YGOProMsgSelectPlace,
@@ -30,13 +31,14 @@ declare module '../../client' {
 
 declare module '../../room' {
   interface Room {
-    rebuildingOcgcore?: boolean;
+    rebuildingAngelus?: boolean;
   }
 }
 
 export class RewindService {
   private koishiContextService = this.ctx.get(() => KoishiContextService);
   private windBotProvider = this.ctx.get(() => WindBotProvider);
+  private rewinds = new Set<string>();
   private rewindResponseWaiters = new Map<
     string,
     {
@@ -57,15 +59,14 @@ export class RewindService {
         const room = this.ctx
           .get(() => RoomManager)
           .findByName(client.roomName);
-        if (room?.rebuildingOcgcore) {
-          return undefined;
-        }
+
         const waitKey = this.getRewindResponseWaitKey(client);
         if (!waitKey) {
           return next();
         }
         const waiter = this.rewindResponseWaiters.get(waitKey);
         if (!waiter) {
+          if (room?.rebuildingAngelus) return;
           return next();
         }
         this.rewindResponseWaiters.delete(waitKey);
@@ -226,12 +227,15 @@ export class RewindService {
       ];
       for (let i = 0; i < messages.length; ++i) {
         const message = messages[i];
-        await client.send(message);
         if (
           message.msg instanceof YGOProMsgResponseBase &&
           i < messages.length - 1
         ) {
-          await this.waitForRewindResponse(client);
+          const received = this.waitForRewindResponse(client);
+          await client.send(message);
+          await received;
+        } else {
+          await client.send(message);
         }
       }
       if (client !== room.responsePlayer) {
@@ -250,6 +254,15 @@ export class RewindService {
     room: Room,
     client: Client,
   ): Promise<KoishiFragment | undefined> {
+    const original = room.angelus;
+    const record = room.lastDuelRecord;
+    if (
+      !original ||
+      !record ||
+      this.rewinds.has(room.identifier) ||
+      !room.lastResponseRequestMsg
+    )
+      return this.asRedError('#{koishi_rewind_failed}');
     let found = false;
     let turnCount = room.turnCount;
     const ingameDuelPos = room.getIngameDuelPos(client);
@@ -275,7 +288,7 @@ export class RewindService {
           return false;
         }
         return true;
-      }) || -1;
+      }) ?? -1;
     if (rewindMessageIndex === -1) {
       return this.asRedError('#{koishi_rewind_no_response_found}');
     }
@@ -283,34 +296,72 @@ export class RewindService {
       room
         .lastDuelRecord!.messages.slice(0, rewindMessageIndex + 1)
         .filter((msg) => msg instanceof YGOProMsgResponseBase).length - 1;
-    room.rebuildingOcgcore = true;
+    this.rewinds.add(room.identifier);
+    room.rebuildingAngelus = true;
+    const timer = room.timerState;
+    const running = timer.runningPos;
+    const awaitingConfirm = timer.awaitingConfirm;
+    timer.clear(true);
+    let candidate: typeof original;
+    let committed = false;
     try {
-      await sliceOcgcore(room, rewindResponseIndex);
-    } catch (e) {
+      candidate = await room.openCandidate();
+      const state = await replayAngelus(candidate, record, rewindResponseIndex);
+      if (
+        !candidate.active ||
+        !original.active ||
+        room.angelus !== original ||
+        room.finalizing
+      )
+        throw new Error('Duel ended during Undo');
+      room.attachAngelus(candidate);
+      committed = true;
+      record.responses.splice(rewindResponseIndex);
+      record.messages.splice(state.pointer);
+      room.turnCount = state.turnCount;
+      room.turnIngamePos = state.turnPlayer;
+      room.phase = state.phase;
+      room.deckReversed =
+        record.messages.filter(
+          (message) => message instanceof YGOProMsgReverseDeck,
+        ).length %
+          2 ===
+        1;
+      room.restoreChoice(state.choice);
+      original.onMessage = undefined;
+      await Promise.all([
+        ...[...room.watchers].map((watcher) =>
+          this.rewindSendToObserver(room, watcher),
+        ),
+        ...room.playingPlayers
+          .filter((player) => player.windbot)
+          .map((player) => this.rewindSendToWindbot(room, player)),
+      ]);
+      room.rebuildingAngelus = false;
+      await Promise.all(
+        room.playingPlayers
+          .filter((player) => !player.windbot)
+          .map((player) => this.rewindSendToPlayer(room, player)),
+      );
+      return '#{koishi_rewind_success}';
+    } catch (error) {
       this.logger.warn(
-        {
-          error: e instanceof Error ? e.stack : e,
-          pos: client.pos,
-          rewindMessageIndex,
-          rewindResponseIndex,
-        },
+        { error: String(error), rewindMessageIndex, rewindResponseIndex },
         'Failed to rewind',
       );
-      await room.finalize();
+      if (!committed) {
+        candidate?.close();
+        if (running != null && room.angelus === original && original.active)
+          await room.setResponseTimer(running, {
+            settlePrevious: false,
+            awaitingConfirm,
+          });
+      }
       return this.asRedError('#{koishi_rewind_failed}');
     } finally {
-      room.rebuildingOcgcore = false;
+      if (committed) original.close();
+      this.rewinds.delete(room.identifier);
+      room.rebuildingAngelus = false;
     }
-    await Promise.all([
-      ...[...room.watchers].map((watcher) =>
-        this.rewindSendToObserver(room, watcher),
-      ),
-      ...room.playingPlayers.map((player) =>
-        player.windbot
-          ? this.rewindSendToWindbot(room, player)
-          : this.rewindSendToPlayer(room, player),
-      ),
-    ]);
-    return '#{koishi_rewind_success}';
   }
 }

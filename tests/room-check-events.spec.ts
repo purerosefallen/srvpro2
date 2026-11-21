@@ -21,7 +21,7 @@ import {
 import { RoomCreateCheck } from '../src/room/room-event/room-create-check';
 import { RoomJoinCheck } from '../src/room/room-event/room-join-check';
 import { RoomCreateError, RoomManager } from '../src/room/room-manager';
-import { YGOProResourceLoader } from '../src/ygopro';
+import { AngelusService } from '../src/angelus';
 
 function createLogger() {
   return {
@@ -54,10 +54,9 @@ function makeRoomManagerCtx(rejectMessage = '') {
     if (token === DefaultHostInfoProvider) {
       return hostInfoProvider;
     }
-    if (token === YGOProResourceLoader) {
+    if (token === AngelusService) {
       return {
-        getCardReader: jest.fn(async () => ({})),
-        getLFLists: async function* () {},
+        lists: jest.fn(async () => []),
       };
     }
     return undefined;

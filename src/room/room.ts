@@ -1,9 +1,12 @@
 import { Awaitable, MayBeArray, ProtoMiddlewareDispatcher } from 'nfkit';
-import type { Subscription } from 'rxjs';
+import { AngelusClient, AngelusService } from '../angelus';
 import { Context } from '../app';
-import BetterLock from 'better-lock';
+
 import {
   HostInfo,
+  OcgcoreScriptConstants,
+  YGOProAngelusStart,
+  YGOProAngelusCoreMessageType,
   NetPlayerType,
   PlayerChangeState,
   YGOProStocDuelStart,
@@ -55,13 +58,6 @@ import {
   YGOProMsgMatchKill,
 } from 'ygopro-msg-encode';
 import { DefaultHostInfoProvider } from './default-hostinfo-provder';
-import {
-  CardReader,
-  OcgcoreMessageType,
-  _OcgcoreConstants,
-} from 'koishipro-core.js';
-import { YGOProResourceLoader } from '../ygopro';
-import { blankLFList } from '../utility/blank-lflist';
 import { Client } from '../client';
 import { RoomMethod } from '../utility/decorators';
 import { YGOProCtosDisconnect } from '../utility/ygopro-ctos-disconnect';
@@ -85,8 +81,6 @@ import { OnRoomGameStart } from './room-event/on-room-game-start';
 import YGOProDeck from 'ygopro-deck-encode';
 import { DuelRecord } from './duel-record';
 import { OnRoomDuelStart } from './room-event/on-room-duel-start';
-import { OcgcoreWorker } from '../ocgcore-worker/ocgcore-worker';
-import { initWorker, type WorkerInstance } from 'yuzuthread';
 import {
   getZoneQueryFlag,
   splitRefreshLocations,
@@ -120,13 +114,7 @@ import {
   YGOProStocChatReplayHint,
   YGOProStocReplayCompressed,
 } from '../replay';
-import {
-  calculateOcgcoreDeck,
-  KoishiFragment,
-  OcgcoreTimeoutError,
-  readCardWithReader,
-  withOcgcoreTimeoutFallback,
-} from '../utility';
+import { KoishiFragment } from '../utility';
 
 declare module 'ygopro-msg-encode' {
   export interface HostInfo {
@@ -134,19 +122,15 @@ declare module 'ygopro-msg-encode' {
   }
 }
 
-const { OcgcoreScriptConstants } = _OcgcoreConstants;
-const DISPOSE_OCGCORE_TIMEOUT_MS = 1 * 60 * 1000;
 const MAX_RESPONSE_LENGTH = 255;
 /** How long the end of a match waits for replays still encoding. */
 const REPLAY_SEND_WAIT_MS = 5 * 1000;
-
-type RoomOcgcoreWorker = WorkerInstance<OcgcoreWorker>;
 
 export type RoomFinalizor = (self: Room) => Awaitable<any>;
 
 type RoomWinOptions = {
   forceWinMatch?: number;
-  killOcgcore?: boolean;
+  engineFailure?: boolean;
 };
 
 export class Room {
@@ -204,46 +188,17 @@ export class Room {
     return [...this.playingPlayers, ...this.watchers];
   }
 
-  private get resourceLoader() {
-    return this.ctx.get(() => YGOProResourceLoader);
+  private get angelusService() {
+    return this.ctx.get(() => AngelusService);
   }
-  private _cardReader?: CardReader;
-  private cardReaderLock = new BetterLock();
-  private async getCardReader() {
-    return this.cardReaderLock.acquire(async () => {
-      if (!this._cardReader) {
-        this._cardReader = await this.resourceLoader.getCardReader();
-      }
-      return this._cardReader;
-    });
-  }
-  lflist = blankLFList;
-
-  private async findLFList() {
-    const isTCG = this.hostinfo.rule === 1 && this.hostinfo.lflist === 0;
-    let index = 0;
-    for await (const lflist of this.resourceLoader.getLFLists()) {
-      if (isTCG) {
-        if (lflist.name?.includes(' TCG')) {
-          return lflist;
-        }
-      } else {
-        if (index === this.hostinfo.lflist) {
-          return lflist;
-        } else if (index > this.hostinfo.lflist) {
-          return undefined;
-        }
-      }
-      ++index;
-    }
-  }
+  lflist?: { name: string; hash: number };
 
   async init() {
-    // Start loading cardReader in background (don't await)
-    this.getCardReader();
-    if (this.hostinfo.lflist >= 0) {
-      this.lflist = (await this.findLFList()) || blankLFList;
-    }
+    const lists = await this.angelusService.lists();
+    this.lflist =
+      this.hostinfo.rule === 1 && this.hostinfo.lflist === 0
+        ? lists.find((list) => list.name.includes(' TCG'))
+        : lists[this.hostinfo.lflist];
     await this.ctx.dispatch(new OnRoomCreate(this), undefined as any);
     return this;
   }
@@ -262,7 +217,7 @@ export class Room {
     ]);
   }
 
-  private finalizors: RoomFinalizor[] = [() => this.disposeOcgcore()];
+  private finalizors: RoomFinalizor[] = [() => this.finishAngelus()];
 
   addFinalizor(finalizor: RoomFinalizor, atEnd = false) {
     if (atEnd) {
@@ -296,7 +251,7 @@ export class Room {
         await finalizor(this);
       }
     } finally {
-      this.cleanupAllOcgcoreRegistrySubscriptions();
+      this.angelus?.close();
     }
   }
 
@@ -304,7 +259,7 @@ export class Room {
     return new YGOProStocJoinGame().fromPartial({
       info: {
         ...this.hostinfo,
-        lflist: this.lflist === blankLFList ? 0 : this.lflist.getHash(),
+        lflist: this.lflist?.hash ?? 0,
         mode:
           this.hostinfo.mode > 2 ? (this.isTag ? 2 : 1) : this.hostinfo.mode,
       },
@@ -585,7 +540,8 @@ export class Room {
     if (client.isInternal) {
       return;
     }
-    const deadline = this.replaySendDeadline ?? Date.now() + REPLAY_SEND_WAIT_MS;
+    const deadline =
+      this.replaySendDeadline ?? Date.now() + REPLAY_SEND_WAIT_MS;
     const encoder = this.ctx.get(() => ReplayEncodeService);
     for (let i = 0; i < this.duelRecords.length; i++) {
       const duelRecord = this.duelRecords[i];
@@ -651,76 +607,41 @@ export class Room {
     return this.duelRecords[this.duelRecords.length - 1];
   }
 
-  private disposingOcgcores = new WeakSet<RoomOcgcoreWorker>();
-  private killedOcgcores = new WeakSet<RoomOcgcoreWorker>();
-  private ocgcoreRegistrySubscriptionSet = new Set<Subscription>();
-
-  private cleanupOcgcoreRegistrySubscription(ocgcore: RoomOcgcoreWorker) {
-    const subscription = this.ocgcoreRegistrySubscriptions.get(ocgcore);
-    if (!subscription) {
-      return;
-    }
-    this.ocgcoreRegistrySubscriptions.delete(ocgcore);
-    this.ocgcoreRegistrySubscriptionSet.delete(subscription);
-    subscription.unsubscribe();
-  }
-
-  private cleanupAllOcgcoreRegistrySubscriptions() {
-    for (const subscription of this.ocgcoreRegistrySubscriptionSet) {
-      subscription.unsubscribe();
-    }
-    this.ocgcoreRegistrySubscriptionSet.clear();
-  }
-
-  private disposeOcgcore(ocgcore = this.ocgcore, kill = false) {
+  private async finishAngelus() {
+    const duel = this.angelus;
+    this.angelus = undefined;
+    if (!duel?.active) return;
     try {
-      if (!ocgcore) {
-        return;
-      }
-      if (ocgcore === this.ocgcore) {
-        this.ocgcore = undefined;
-      }
-      if (kill) {
-        if (this.killedOcgcores.has(ocgcore)) {
-          return;
-        }
-        this.disposingOcgcores.add(ocgcore);
-        this.killedOcgcores.add(ocgcore);
-        this.cleanupOcgcoreRegistrySubscription(ocgcore);
-        void ocgcore.finalize().catch((e) => {
-          this.logger.warn({ error: e }, 'Error force finalizing ocgcore');
-        });
-        return;
-      }
-      if (this.disposingOcgcores.has(ocgcore)) {
-        return;
-      }
-      this.disposingOcgcores.add(ocgcore);
-      void withOcgcoreTimeoutFallback(
-        ocgcore.dispose(),
-        DISPOSE_OCGCORE_TIMEOUT_MS,
-        async () => {
-          this.logger.warn(
-            { timeout: DISPOSE_OCGCORE_TIMEOUT_MS },
-            'OCGCore dispose timed out, forcing finalize',
-          );
-          this.disposeOcgcore(ocgcore, true);
-        },
-      ).catch((e) => {
-        this.logger.warn({ error: e }, 'Error disposing ocgcore');
-      });
-    } catch {}
+      this.registry = await duel.finish();
+    } catch (error) {
+      this.logger.warn(
+        { error: String(error) },
+        'Failed to finish Angelus duel',
+      );
+    }
   }
 
+  private settling = false;
   matchResultDecided = false;
 
   async win(winMsg: Partial<YGOProMsgWin>, options: RoomWinOptions = {}) {
-    if (this.matchResultDecided) {
-      return;
+    if (this.matchResultDecided || this.settling || this.finalizing) return;
+    this.settling = true;
+    try {
+      return await this.settleWin(winMsg, options);
+    } finally {
+      this.settling = false;
     }
-    const { forceWinMatch, killOcgcore = false } = options;
+  }
+
+  private async settleWin(
+    winMsg: Partial<YGOProMsgWin>,
+    { forceWinMatch, engineFailure }: RoomWinOptions,
+  ) {
     this.resetResponseState();
-    this.disposeOcgcore(this.ocgcore, killOcgcore);
+    if (engineFailure)
+      await this.sendChat('#{draw_due_to_error}', ChatColor.RED);
+    await this.finishAngelus();
     const wasSwapped = this.isPosSwapped;
     const duelPos = this.getIngameDuelPosByDuelPos(winMsg.player!);
     const lastDuelRecord = this.lastDuelRecord;
@@ -1082,63 +1003,73 @@ export class Room {
       side: msg.deck.side,
     });
     // we have to distinguish main and extra deck cards
-    const cardReader = await this.getCardReader();
-    for (const card of msg.deck.main) {
-      const cardEntry = readCardWithReader(cardReader, card);
-      if (
-        cardEntry?.type &&
-        cardEntry.type & OcgcoreCommonConstants.TYPES_EXTRA_DECK
-      ) {
-        deck.extra.push(card);
-      } else {
-        deck.main.push(card);
+    try {
+      const extra = await this.angelusService.extraCards(msg.deck.main);
+      for (const code of msg.deck.main) {
+        (extra.has(code) ? deck.extra : deck.main).push(code);
       }
-    }
 
-    // Check deck based on stage
-    if (this.duelStage === DuelStage.Begin) {
-      // Begin stage: check deck validity (lflist, etc.) if no_check_deck is false
-      const sendDeckError = async (deckErrorCode: number) => {
-        // 先发送 PlayerChange NotReady 给自己 (client.deck 未设置，自动为 NOTREADY)
-        await client.send(client.prepareChangePacket());
-        // 然后发送错误消息给自己
-        await client.send(
-          new YGOProStocErrorMsg().fromPartial({
-            msg: ErrorMessageType.DECKERROR,
-            code: deckErrorCode,
-          }),
+      // Check deck based on stage
+      if (this.duelStage === DuelStage.Begin) {
+        // Begin stage: check deck validity (lflist, etc.) if no_check_deck is false
+        const sendDeckError = async (deckErrorCode: number) => {
+          // 先发送 PlayerChange NotReady 给自己 (client.deck 未设置，自动为 NOTREADY)
+          await client.send(client.prepareChangePacket());
+          // 然后发送错误消息给自己
+          await client.send(
+            new YGOProStocErrorMsg().fromPartial({
+              msg: ErrorMessageType.DECKERROR,
+              code: deckErrorCode,
+            }),
+          );
+          return;
+        };
+
+        const deckErrorContainer = await this.ctx.dispatch(
+          new RoomCheckDeck(this, client, deck),
+          client,
         );
-        return;
-      };
+        if (deckErrorContainer?.value) {
+          return sendDeckError(deckErrorContainer.value.toPayload());
+        }
+      } else if (this.duelStage === DuelStage.Siding) {
+        // Siding stage: ALWAYS check if cards match original deck (无条件检查)
+        if (!client.startDeck) {
+          return;
+        }
 
-      const deckErrorContainer = await this.ctx.dispatch(
-        new RoomCheckDeck(this, client, deck, cardReader),
-        client,
-      );
-      if (deckErrorContainer?.value) {
-        return sendDeckError(deckErrorContainer.value.toPayload());
-      }
-    } else if (this.duelStage === DuelStage.Siding) {
-      // Siding stage: ALWAYS check if cards match original deck (无条件检查)
-      if (!client.startDeck) {
-        return;
-      }
-
-      const sideErrorContainer = await this.ctx.dispatch(
-        new RoomSideCheck(this, client, deck, client.startDeck, cardReader),
-        client,
-      );
-      if (sideErrorContainer && !sideErrorContainer.isValid) {
-        await client.send(
-          new YGOProStocErrorMsg().fromPartial({
-            msg: ErrorMessageType.SIDEERROR,
-            code: 0,
-          }),
+        const sideErrorContainer = await this.ctx.dispatch(
+          new RoomSideCheck(this, client, deck, client.startDeck),
+          client,
         );
-        return;
+        if (sideErrorContainer && !sideErrorContainer.isValid) {
+          await client.send(
+            new YGOProStocErrorMsg().fromPartial({
+              msg: ErrorMessageType.SIDEERROR,
+              code: 0,
+            }),
+          );
+          return;
+        }
       }
+    } catch (error) {
+      this.logger.warn(
+        { error: String(error), pos: client.pos },
+        'Failed to check deck',
+      );
+      await client.send(client.prepareChangePacket());
+      await client.sendChat('#{check_deck_failed}', ChatColor.RED);
+      await client.send(
+        new YGOProStocErrorMsg().fromPartial({
+          msg:
+            this.duelStage === DuelStage.Siding
+              ? ErrorMessageType.SIDEERROR
+              : ErrorMessageType.DECKERROR,
+          code: 0,
+        }),
+      );
+      return;
     }
-
     // Save deck
     client.deck = deck;
 
@@ -1444,11 +1375,8 @@ export class Room {
     return true;
   }
 
-  ocgcore?: RoomOcgcoreWorker;
-  private ocgcoreRegistrySubscriptions = new WeakMap<
-    RoomOcgcoreWorker,
-    Subscription
-  >();
+  angelus?: AngelusClient;
+  private startBody?: Uint8Array;
   private registry: Record<string, string> = {};
   turnCount = 0;
   turnIngamePos = 0;
@@ -1589,15 +1517,44 @@ export class Room {
     }
   }
 
-  async createOcgcore(duelRecord: DuelRecord) {
-    const oldOcgcore = this.ocgcore;
-    const extraScriptPaths = [
-      './script/patches/entry.lua',
-      './script/special.lua',
-      './script/init.lua',
-      ...this.resourceLoader.extraScriptPaths,
-    ];
+  async openCandidate() {
+    if (!this.startBody) throw new Error('Missing Angelus START');
+    return this.angelusService.open(
+      new YGOProAngelusStart().fromPayload(this.startBody),
+    );
+  }
 
+  attachAngelus(duel: AngelusClient) {
+    this.angelus = duel;
+    const owner = new WeakRef(this);
+    duel.onFailure = (error) => {
+      const room = owner.deref();
+      if (room?.angelus === duel && room.canAdvance())
+        void room
+          .handleAngelusError(error, duel)
+          .catch((failure) =>
+            room.logger.error(
+              { error: String(failure) },
+              'Failed to settle Angelus error',
+            ),
+          );
+    };
+    duel.onMessage = (message) => owner.deref()?.showCoreMessage(message);
+  }
+
+  private showCoreMessage(message: {
+    type: YGOProAngelusCoreMessageType;
+    message: string;
+  }) {
+    this.logger.info(message, 'Angelus core message');
+    if (
+      message.type !== YGOProAngelusCoreMessageType.DebugMessage ||
+      this.ctx.config.getBoolean('OCGCORE_DEBUG_LOG')
+    )
+      void this.sendChat('Debug: ' + message.message, ChatColor.RED);
+  }
+
+  private async startAngelus(duelRecord: DuelRecord) {
     const isMatchMode = this.hostinfoWinMatchCount > 1;
     const duelMode = this.isTag ? 'tag' : isMatchMode ? 'match' : 'single';
     const registry: Record<string, string> = {
@@ -1617,57 +1574,49 @@ export class Room {
       registry[`player_name_${i}`] = player.name;
     });
 
-    this.logger.debug(
-      { seed: duelRecord.seed, registry, hostinfo: this.hostinfo },
-      'Initializing OCGCoreWorker',
-    );
-
-    const cardStorage = await this.resourceLoader.getCardStorage();
-    const cardReader = await this.getCardReader();
-    const ocgcoreWasmBinary = await this.resourceLoader.getOcgcoreWasmBinary();
-
     try {
-      const ocgcore = await initWorker(OcgcoreWorker, {
-        seed: duelRecord.seed,
-        hostinfo: this.hostinfo,
-        ygoproPaths: this.resourceLoader.ygoproPaths,
-        extraScriptPaths,
-        cardStorage,
-        ocgcoreWasmBinary,
-        registry,
-        decks: duelRecord
-          .toSwappedPlayers()
-          .map((p) => calculateOcgcoreDeck(p.deck, this.hostinfo, cardReader)),
-      });
-      ocgcore.message$.subscribe((msg) => {
-        this.logger.info(
-          { message: msg.message, type: msg.type },
-          'Received message from OCGCoreWorker',
+      const players = duelRecord.toSwappedPlayers();
+      const decks = players.map((p) => new YGOProDeck(p.deck));
+      if (this.hostinfo.sideins) {
+        const extra = await this.angelusService.extraCards(
+          decks.flatMap((d) => d.side),
         );
-        if (
-          msg.type === OcgcoreMessageType.DebugMessage &&
-          !this.ctx.config.getBoolean('OCGCORE_DEBUG_LOG')
-        ) {
-          return;
+        for (const deck of decks) {
+          deck.extra.push(...deck.side.filter((code) => extra.has(code)));
+          // ingameDeck is also the input for database recovery. Move each
+          // side-in once; the submitted/start decks retain their complete Side.
+          deck.side = deck.side.filter((code) => !extra.has(code));
         }
-        this.sendChat(`Debug: ${msg.message}`, ChatColor.RED);
-      });
-      const registrySubscription = ocgcore.registry$.subscribe((registry) => {
-        this.logger.debug(
-          { registry },
-          'Received registry update from OCGCoreWorker',
-        );
-        Object.assign(this.registry, registry);
-      });
-      this.ocgcoreRegistrySubscriptions.set(ocgcore, registrySubscription);
-      this.ocgcoreRegistrySubscriptionSet.add(registrySubscription);
-      this.ocgcore = ocgcore;
-      if (oldOcgcore) {
-        this.disposeOcgcore(oldOcgcore, true);
       }
+      players.forEach((player, index) => {
+        player.deck = decks[index];
+      });
+      const start = new YGOProAngelusStart()
+        .fromPartial({
+          seed: duelRecord.seed,
+          duelRule: this.hostinfo.duel_rule,
+          flags: (this.isTag ? 1 : 0) | (this.hostinfo.no_shuffle_deck ? 2 : 0),
+          startLp: this.hostinfo.start_lp,
+          startHand: this.hostinfo.start_hand,
+          drawCount: this.hostinfo.draw_count,
+        })
+        .setDecks(decks)
+        .setRegistry(registry);
+      this.startBody = start.toPayload().slice();
+      const duel = await this.angelusService.open(start, (message) =>
+        this.showCoreMessage(message),
+      );
+      if (this.finalizing || !duel.active) {
+        duel.close();
+        return false;
+      }
+      this.attachAngelus(duel);
       return true;
-    } catch (e) {
-      this.logger.error({ error: e }, 'Failed to initialize OCGCoreWorker');
+    } catch (error) {
+      this.logger.warn(
+        { error: String(error) },
+        'Failed to start Angelus duel',
+      );
       return false;
     }
   }
@@ -1716,7 +1665,7 @@ export class Room {
       playersInShuffleOrder[index].deck = deck;
     });
 
-    if (!(await this.createOcgcore(duelRecord))) {
+    if (!(await this.startAngelus(duelRecord))) {
       this.finalize(true);
       return;
     }
@@ -1732,19 +1681,19 @@ export class Room {
       player1DeckCount,
       player1ExtraCount,
     ] = await Promise.all([
-      this.ocgcore.queryFieldCount({
+      this.angelus.queryFieldCount({
         player: 0,
         location: OcgcoreScriptConstants.LOCATION_DECK,
       }),
-      this.ocgcore.queryFieldCount({
+      this.angelus.queryFieldCount({
         player: 0,
         location: OcgcoreScriptConstants.LOCATION_EXTRA,
       }),
-      this.ocgcore.queryFieldCount({
+      this.angelus.queryFieldCount({
         player: 1,
         location: OcgcoreScriptConstants.LOCATION_DECK,
       }),
-      this.ocgcore.queryFieldCount({
+      this.angelus.queryFieldCount({
         player: 1,
         location: OcgcoreScriptConstants.LOCATION_EXTRA,
       }),
@@ -1814,6 +1763,15 @@ export class Room {
 
   private acceptResponse = false;
 
+  restoreChoice(message: YGOProMsgResponseBase) {
+    this.matchKilled = this.lastDuelRecord.messages.some(
+      (msg) => msg instanceof YGOProMsgMatchKill,
+    );
+    const clock = this.lastDuelRecord.choiceClocks.get(message);
+    if (clock) this.timerState.restore(clock);
+    this.setLastResponseRequestMsg(message);
+  }
+
   setLastResponseRequestMsg(message: YGOProMsgResponseBase) {
     this.lastResponseRequestMsg = message;
     this.isRetrying = false;
@@ -1877,10 +1835,10 @@ export class Room {
   ) {
     const locations = splitRefreshLocations(refresh.location);
     for (const location of locations) {
-      if (!this.ocgcore) {
+      if (!this.angelus) {
         return;
       }
-      const { cards } = await this.ocgcore.queryFieldCard({
+      const { cards } = await this.angelus.queryFieldCard({
         player: refresh.player,
         location,
         queryFlag: options.queryFlag ?? getZoneQueryFlag(location),
@@ -1901,12 +1859,12 @@ export class Room {
     refresh: RequireQueryCardLocation,
     options: { queryFlag?: number; sendToClient?: MayBeArray<Client> } = {},
   ) {
-    if (!this.ocgcore) {
+    if (!this.angelus) {
       return;
     }
     const locations = splitRefreshLocations(refresh.location);
     for (const location of locations) {
-      const { card } = await this.ocgcore.queryCard({
+      const { card } = await this.angelus.queryCard({
         player: refresh.player,
         location,
         sequence: refresh.sequence,
@@ -2015,6 +1973,7 @@ export class Room {
 
     if (message instanceof YGOProMsgResponseBase) {
       this.setLastResponseRequestMsg(message);
+      this.lastDuelRecord.choiceClocks.set(message, this.timerState.snapshot());
       await this.sendWaitingToNonOperator(message.responsePlayer());
       await this.setResponseTimer(this.responsePos!);
       return;
@@ -2125,25 +2084,19 @@ export class Room {
   }
 
   canAdvance() {
-    return this.duelStage === DuelStage.Dueling && !!this.ocgcore;
+    return this.duelStage === DuelStage.Dueling && !!this.angelus;
   }
 
-  private async handleOcgcoreDuelError(error: unknown, action: string) {
-    const killOcgcore = OcgcoreTimeoutError.is(error);
-    this.logger.warn(
-      {
-        error: (error as Error)?.stack || error?.toString?.() || error,
-        roomName: this.name,
-        killOcgcore,
-      },
-      `Error while ${action}`,
-    );
+  private async handleAngelusError(error: unknown, duel: AngelusClient) {
+    if (duel !== this.angelus || this.settling || this.finalizing) return;
+    this.angelus = undefined;
+    duel.close();
+    this.logger.warn({ error: String(error) }, 'Angelus duel failed');
     const drawGame = new YGOProMsgWin().fromPartial({
       type: 0x11,
       player: 2,
     });
-    await this.sendChat('#{draw_due_to_error}', ChatColor.RED);
-    return this.win(drawGame, { killOcgcore });
+    return this.win(drawGame, { engineFailure: true });
   }
 
   private async advance() {
@@ -2151,32 +2104,11 @@ export class Room {
       return;
     }
 
+    const duel = this.angelus;
     try {
-      for await (const {
-        status,
-        message,
-        encodeError,
-      } of this.ocgcore!.advance()) {
-        if (!this.canAdvance()) {
-          // If not in Dueling stage, that means duel got ended
-          return;
-        }
-        if (encodeError) {
-          this.logger.error(
-            { encodeError, status },
-            'Failed to decode game message in worker transport',
-          );
-        }
-        if (!message) {
-          this.logger.warn({ message }, 'Received empty message from ocgcore');
-          if (status) {
-            throw new Error(
-              'Cannot continue ocgcore because received empty message with non-advancing status ' +
-                status,
-            );
-          }
-        }
-
+      for await (const { message, raw } of duel.advance()) {
+        if (!this.canAdvance() || this.angelus !== duel) return;
+        this.lastDuelRecord.messageBytes.set(message, raw);
         if (message instanceof YGOProMsgUpdateCard) {
           await this.refreshSingle({
             player: message.controller,
@@ -2199,7 +2131,7 @@ export class Room {
         await this.routeGameMsg(handled);
       }
     } catch (e) {
-      return this.handleOcgcoreDuelError(e, 'advancing ocgcore');
+      return this.handleAngelusError(e, duel);
     }
   }
 
@@ -2250,11 +2182,12 @@ export class Room {
     if (
       this.responsePos == null ||
       client !== this.responsePlayer ||
-      !this.ocgcore || // || this.timerState.awaitingConfirm
+      !this.angelus || // || this.timerState.awaitingConfirm
       !this.acceptResponse
     ) {
       return;
     }
+    const duel = this.angelus;
     const responsePos = this.responsePos;
     const responseRequestMsg = this.lastResponseRequestMsg;
     const rawResponse = Buffer.from(msg.response);
@@ -2280,9 +2213,10 @@ export class Room {
     this.isRetrying = false;
     await this.ctx.dispatch(new OnRoomReceiveResponse(this, response), client);
     try {
-      await this.ocgcore.setResponse(response);
+      if (this.angelus !== duel) return;
+      await duel.setResponse(response);
     } catch (e) {
-      return this.handleOcgcoreDuelError(e, 'setting response in ocgcore');
+      return this.handleAngelusError(e, duel);
     }
     return this.advance();
   }
@@ -2299,10 +2233,10 @@ export class Room {
   }
 
   async getCurrentFieldInfo(): Promise<RoomCurrentFieldInfo> {
-    if (!this.ocgcore) {
+    if (!this.angelus) {
       return undefined;
     }
-    const fieldInfo = await this.ocgcore.queryFieldInfo();
+    const fieldInfo = await this.angelus.queryFieldInfo();
     const players = fieldInfo?.field?.players;
     if (!players?.length) {
       return undefined;

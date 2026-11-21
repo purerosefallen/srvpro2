@@ -1,9 +1,5 @@
 import YGOProDeck from 'ygopro-deck-encode';
 import { ChatColor } from 'ygopro-msg-encode';
-import {
-  YGOProLFListError,
-  YGOProLFListErrorReason,
-} from 'ygopro-lflist-encode';
 import { Context } from '../../app';
 import { OnRoomGameStart, Room, RoomCheckDeck } from '../../room';
 import { PlayerName } from '../../utility';
@@ -17,16 +13,6 @@ export type AthleticCheckResult = {
   athletic?: number;
   message: string | null;
 };
-
-class AthleticDeckBadError extends YGOProLFListError {
-  constructor() {
-    super(YGOProLFListErrorReason.LFLIST, 0);
-  }
-
-  toPayload() {
-    return 0;
-  }
-}
 
 export class AthleticChecker {
   private logger = this.ctx.createLogger(this.constructor.name);
@@ -62,7 +48,7 @@ export class AthleticChecker {
           `#{banned_athletic_deck_part1}${this.banCount}#{banned_athletic_deck_part2}`,
           ChatColor.RED,
         );
-        return msg.use(new AthleticDeckBadError());
+        return msg.reject();
       }
       return next();
     });

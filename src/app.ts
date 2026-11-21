@@ -7,7 +7,6 @@ import { AragamiService } from './services/aragami';
 import { TransportModule } from './client/transport-module';
 import { JoinHandlerModule } from './join-handlers/join-handler-module';
 import { RoomModule } from './room/room-module';
-import { SqljsFactory, SqljsLoader } from './services/sqljs';
 import { FeatsModule } from './feats/feats-module';
 import { MiddlewareRx } from './services/middleware-rx';
 import { TypeormFactory, TypeormLoader } from './services/typeorm';
@@ -38,10 +37,6 @@ const core = createAppContext()
   })
   .provide(KoaService, {
     merge: ['router', 'koa'],
-  })
-  .provide(SqljsLoader, {
-    useFactory: SqljsFactory,
-    merge: ['SQL'],
   })
   .provide(TypeormLoader, {
     useFactory: TypeormFactory,

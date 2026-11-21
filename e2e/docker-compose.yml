@@ -43,7 +43,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - "node -e \"fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+        - 'node -e "fetch(''http://127.0.0.1:3000/'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"'
       interval: 3s
       timeout: 5s
       retries: 40
@@ -74,17 +74,34 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - "node -e \"fetch('http://127.0.0.1:3000/api/tournament/0').then(()=>process.exit(0)).catch(()=>process.exit(1))\""
+        - 'node -e "fetch(''http://127.0.0.1:3000/api/tournament/0'').then(()=>process.exit(0)).catch(()=>process.exit(1))"'
       interval: 3s
       timeout: 5s
       retries: 50
 
+  angelus:
+    build: ../../ygoangelus
+    ports:
+      - '127.0.0.1:${ANGELUS_HOST_PORT}:3001'
+    volumes:
+      - ../../ygopro/cards.cdb:/app/ygopro/cards.cdb:ro
+      - ../../ygopro/lflist.conf:/app/ygopro/lflist.conf:ro
+      - ../../ygopro/script:/app/ygopro/script:ro
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3001/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
   srvpro2:
     build:
       context: ..
-      args:
-        NO_RESOURCE: '1'
-        USE_MAT_CACHER: '1'
     environment:
       HOST: 0.0.0.0
       PORT: '7911'
@@ -116,7 +133,7 @@ services:
       TOURNAMENT_MODE: '1'
       TOURNAMENT_MODE_CHECK_DECK: '1'
       HOSTINFO_LFLIST: '${HOSTINFO_LFLIST}'
-      YGOPRO_PATH: ./ygopro
+      ANGELUS_ENDPOINT: http://angelus:3001
     ports:
       - '127.0.0.1:${SRVPRO_API_HOST_PORT}:7922'
       - '127.0.0.1:${SRVPRO_TCP_HOST_PORT}:7911'
@@ -126,10 +143,9 @@ services:
       - mkdir -p /usr/src/app/data && cp /e2e-fixtures/admin_user.json /usr/src/app/data/admin_user.json && npm start
     volumes:
       - ./fixtures/admin_user.json:/e2e-fixtures/admin_user.json:ro
-      - ../../ygopro/cards.cdb:/usr/src/app/ygopro/cards.cdb:ro
-      - ../../ygopro/lflist.conf:/usr/src/app/ygopro/lflist.conf:ro
-      - ../../ygopro/script:/usr/src/app/ygopro/script:ro
     depends_on:
+      angelus:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -139,7 +155,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - "node -e \"fetch('http://127.0.0.1:7922/api/get_decks?username=e2e&password=e2e-pass').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+        - 'node -e "fetch(''http://127.0.0.1:7922/api/get_decks?username=e2e&password=e2e-pass'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"'
       interval: 3s
       timeout: 5s
       retries: 60
@@ -150,6 +166,8 @@ services:
       context: ../../ygopro/windbot
       args:
         NO_RESOURCE: '1'
+        # The tournament tests assert chat messages printed by Logger.DebugWriteLine.
+        BUILD_CONFIGURATION: Debug
     volumes:
       - ../../ygopro/cards.cdb:/windbot/cards.cdb:ro
       - ./fixtures/AI_BE2025_2025_10.ydk:/windbot/Decks/AI_BE2025_2025_10.ydk:ro

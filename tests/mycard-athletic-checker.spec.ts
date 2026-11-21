@@ -63,7 +63,7 @@ describe('AthleticChecker RoomCheckDeck integration', () => {
     const room: any = { mycardArena: 'entertain' };
     const client: any = { name: 'player', sendChat: jest.fn() };
     const deck = new YGOProDeck({ main: [1], extra: [2], side: [3] });
-    const event = new RoomCheckDeck(room, client, deck, {} as any);
+    const event = new RoomCheckDeck(room, client, deck);
 
     await handler(event, client, jest.fn());
 
@@ -103,7 +103,6 @@ describe('AthleticChecker RoomCheckDeck integration', () => {
       {} as any,
       client,
       new YGOProDeck({ main: [1] }),
-      {} as any,
     );
 
     await handler(event, client, next);

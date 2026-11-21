@@ -13,6 +13,40 @@ services:
       timeout: 5s
       retries: 60
 
+  angelus:
+    image: ${TEST_ANGELUS_IMAGE:?Run npm run test:docker-image}
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3001/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  windbot:
+    image: ${TEST_WINDBOT_IMAGE:?Run npm run test:docker-image}
+    healthcheck:
+      test:
+        ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:2399/bots']
+      interval: 1s
+      retries: 30
+    command:
+      ['ServerMode=true', 'ServerPort=2399', 'DbPath=/test-resources/cards.cdb']
+    volumes:
+      - ${TEST_RESOURCE_DIR}:/test-resources:ro
+
+  undo-player:
+    image: ${TEST_SRVPRO_IMAGE:?Run npm run test:docker-image}
+    command: ['node', 'undo-player.cjs']
+    volumes:
+      - ./packet-reader.cjs:/usr/src/app/packet-reader.cjs:ro
+      - ./undo-player.cjs:/usr/src/app/undo-player.cjs:ro
+      - ./fixtures/AI_BE2025_2025_10.ydk:/fixture.ydk:ro
+
   srvpro2:
     image: ${TEST_SRVPRO_IMAGE:?Run npm run test:docker-image}
     environment:
@@ -31,13 +65,19 @@ services:
       ENABLE_WORDS: '0'
       ENABLE_DIALOGUES: '0'
       ENABLE_BADWORDS: '0'
-      ENABLE_WINDBOT: '0'
+      ANGELUS_ENDPOINT: http://angelus:3001
+      ENABLE_WINDBOT: '1'
+      WINDBOT_ENDPOINT: ws://windbot:2399
       ENABLE_CHATGPT: '0'
       ENABLE_CLOUD_REPLAY: '1'
       ENABLE_RECOVER: '0'
       ENABLE_RANDOM_DUEL: '0'
       ENABLE_MENU: '0'
+    volumes:
+      - ./fixtures/undo-seed.cjs:/usr/src/app/dist/plugins/undo-seed.cjs:ro
     depends_on:
+      angelus:
+        condition: service_healthy
       postgres:
         condition: service_healthy
     healthcheck:
@@ -77,7 +117,7 @@ services:
     command:
       - ServerMode=false
       - Name=WindBot-B
-      - Deck=BlueEyes
+      - Deck=Blue-Eyes
       - Host=srvpro2
       - Port=7911
       - HostInfo=${TEST_ROOM}

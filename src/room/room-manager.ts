@@ -78,7 +78,15 @@ export class RoomManager {
       for (const finalizor of this.finalizors) {
         room.addFinalizor(finalizor);
       }
-      await room.init();
+      try {
+        await room.init();
+      } catch (error) {
+        this.logger.warn(
+          { room: name, error: String(error) },
+          'Room initialization failed',
+        );
+        return new RoomCreateError('#{create_room_failed}');
+      }
       this.rooms.set(name, room);
       this.logger.info(
         { room: name, roomCount: this.rooms.size },

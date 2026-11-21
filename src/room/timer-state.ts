@@ -1,3 +1,9 @@
+export interface DuelClock {
+  leftMs: [number, number];
+  compensatorMs: [number, number];
+  backedMs: [number, number];
+}
+
 export class TimerState {
   leftMs: [number, number] = [0, 0];
   compensatorMs: [number, number] = [0, 0];
@@ -6,6 +12,21 @@ export class TimerState {
   startedAtMs = 0;
   awaitingConfirm = false;
   private timer?: ReturnType<typeof setTimeout>;
+
+  snapshot(): DuelClock {
+    return {
+      leftMs: [...this.leftMs],
+      compensatorMs: [...this.compensatorMs],
+      backedMs: [...this.backedMs],
+    };
+  }
+
+  restore(clock: DuelClock) {
+    this.clear();
+    this.leftMs = [...clock.leftMs];
+    this.compensatorMs = [...clock.compensatorMs];
+    this.backedMs = [...clock.backedMs];
+  }
 
   reset(initialMs: number) {
     this.leftMs = [initialMs, initialMs];

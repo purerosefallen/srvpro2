@@ -132,12 +132,12 @@ describe('srvpro2 full upload and tournament harness', () => {
       await stack.runWindbot('时の雨', 'legacy-fullwidth', '成功使用卡组');
       await stack.runWindbot(
         'Team',
-        'legacy-multiple-invalid',
+        'legacy-multi-bad',
         '没有找到您的报名信息',
       );
       await stack.runWindbot(
         'Team+A+00000004',
-        'legacy-multiple-exact',
+        'legacy-multi-exact',
         '成功使用卡组',
       );
 

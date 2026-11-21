@@ -1,4 +1,3 @@
-import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { connect, Socket } from 'node:net';
 import {
@@ -14,27 +13,8 @@ import {
   YGOProStocTypeChange,
 } from 'ygopro-msg-encode';
 
-/** Retains incomplete TCP frames between reads, including unknown packet types. */
-export class PacketReader {
-  private pending = Buffer.alloc(0);
-
-  constructor(private onPacket: (packet: Buffer) => void) {}
-
-  receive(data: Buffer) {
-    this.pending = Buffer.concat([this.pending, data]);
-    while (this.pending.length >= 2) {
-      const length = this.pending.readUInt16LE(0);
-      assert.ok(length > 0, 'protocol packet must include an identifier');
-      const frameLength = length + 2;
-      if (this.pending.length < frameLength) {
-        return;
-      }
-      const packet = this.pending.subarray(0, frameLength);
-      this.pending = this.pending.subarray(frameLength);
-      this.onPacket(packet);
-    }
-  }
-}
+import { PacketReader } from './packet-reader.cjs';
+export { PacketReader };
 
 export async function waitUntil(
   description: string,

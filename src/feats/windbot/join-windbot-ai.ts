@@ -46,10 +46,9 @@ export class JoinWindbotAi {
     }
 
     const requestedBotName = this.parseRequestedBotName(normalizedPass);
-    if (
-      requestedBotName &&
-      !this.windbotProvider.getBotByNameOrDeck(requestedBotName)
-    ) {
+    const list = await this.windbotProvider.loadBotList();
+    const first = this.windbotProvider.selectBot(list, requestedBotName);
+    if (!first) {
       await client.die('#{windbot_deck_not_found}', ChatColor.RED);
       return true;
     }
@@ -86,7 +85,9 @@ export class JoinWindbotAi {
     for (let i = 0; i < requestCount; i += 1) {
       const requestOk = await this.windbotProvider.requestWindbotJoin(
         room,
-        requestedBotName,
+        i === 0
+          ? first
+          : this.windbotProvider.selectBot(list, requestedBotName),
         windbotOptions,
       );
       if (!requestOk) {

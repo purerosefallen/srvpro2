@@ -1,13 +1,12 @@
 {
   "name": "srvpro2",
   "version": "1.0.0",
-  "description": "Next-generation YGOPro server with direct ocgcore control via WASM and modern TypeScript architecture",
+  "description": "YGOPro game server powered by the Angelus duel service",
   "keywords": [
     "ygopro",
     "yugioh",
     "ocgcore",
     "server",
-    "wasm",
     "typescript"
   ],
   "homepage": "https://code.moenext.com/nanahira/srvpro2",
@@ -32,7 +31,8 @@
     "test": "npm run build:test-workers && jest --passWithNoTests",
     "test:e2e": "jest --config e2e/jest-e2e.json --runInBand",
     "test:docker-image": "node e2e/docker-image-test.cjs",
-    "test:mycard-spectator-replay": "npm run build && node dist/e2e/mycard-spectator-replay.js"
+    "test:mycard-spectator-replay": "npm run build && node dist/e2e/mycard-spectator-replay.js",
+    "gen:angelus-client": "node scripts/gen-angelus-client.mjs && prettier --write src/angelus/generated"
   },
   "jest": {
     "collectCoverageFrom": [
@@ -61,8 +61,8 @@
     "http-proxy-agent": "^7.0.2",
     "https-proxy-agent": "^7.0.6",
     "ipaddr.js": "^2.3.0",
+    "jszip": "^3.10.1",
     "koishi": "^4.18.10",
-    "koishipro-core.js": "2.0.0-0",
     "nfkit": "^1.0.37",
     "p-queue": "6.6.2",
     "p-timeout": "4.1.0",
@@ -73,18 +73,16 @@
     "rxjs": "^7.8.2",
     "tiktoken": "^1.0.22",
     "typed-reflector": "^1.0.14",
-    "typed-struct": "^2.7.1",
     "typeorm": "^0.3.28",
     "ws": "^8.19.0",
     "yaml": "^2.8.2",
-    "ygopro-cdb-encode": "^1.1.1",
     "ygopro-deck-encode": "^1.0.15",
-    "ygopro-lflist-encode": "^1.0.3",
-    "ygopro-msg-encode": "^1.3.0",
+    "ygopro-msg-encode": "1.4.0",
     "ygopro-yrp-encode": "^1.0.8",
     "yuzuthread": "^1.0.10"
   },
   "devDependencies": {
+    "@hey-api/openapi-ts": "0.99.0",
     "@types/formidable": "^3.5.1",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.2.3",

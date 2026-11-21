@@ -31,6 +31,7 @@ export const TRANSLATIONS = {
     windbot_deck_not_found: 'Oops, AI or Deck not found',
     windbot_name_too_long:
       'Error occurs, please create a new game and enter /ai to summon an AI.',
+    check_deck_failed: 'Failed to check deck',
     create_room_failed: 'Game creation failed, please try again later.',
     loading_user_info: 'Loading user info...',
     load_user_info_fail: 'Failed loading your user info.',
@@ -259,6 +260,7 @@ export const TRANSLATIONS = {
     reconnect_kicked: '你的账号已经在其他设备登录，你被迫下线。',
     windbot_deck_not_found: '未找到该AI角色或卡组',
     windbot_name_too_long: 'AI房间名过长，请在建立房间后输入 /ai 来添加AI',
+    check_deck_failed: '检查卡组失败',
     create_room_failed: '建立房间失败，请重试',
     loading_user_info: '正在读取用户信息...',
     load_user_info_fail: '读取用户信息失败。',

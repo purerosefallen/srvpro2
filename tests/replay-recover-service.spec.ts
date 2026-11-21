@@ -299,8 +299,10 @@ describe('ReplayRecoverService create checks', () => {
   test('loads legacy v0 recover responses when the room is created', async () => {
     const response = Buffer.from([9, 8]);
     const record = makeRecord({
-      responses: Buffer.concat([Buffer.from([response.length]), response])
-        .toString('base64'),
+      responses: Buffer.concat([
+        Buffer.from([response.length]),
+        response,
+      ]).toString('base64'),
     });
     const { ctx, middlewares } = makeCtx(record);
     await initRecoverService(ctx);
@@ -458,7 +460,6 @@ describe('ReplayRecoverService deck recovery seats', () => {
       room,
       client,
       new YGOProDeck({ main: [1], extra: [], side: [] }),
-      {} as any,
     );
 
     await middlewares.get(RoomCheckDeck)![0](event, client, jest.fn());
@@ -575,7 +576,7 @@ describe('ReplayRecoverService deck recovery seats', () => {
       pos: 0,
       sendChat: jest.fn(),
     };
-    const event = new RoomCheckDeck(room, client, startDeck, {} as any);
+    const event = new RoomCheckDeck(room, client, startDeck);
 
     await middlewares.get(RoomCheckDeck)![0](event, client, jest.fn());
 
@@ -599,7 +600,7 @@ describe('ReplayRecoverService deck recovery seats', () => {
       pos: 2,
       sendChat: jest.fn(),
     };
-    const event = new RoomCheckDeck(room, client, deck, {} as any);
+    const event = new RoomCheckDeck(room, client, deck);
 
     await middlewares.get(RoomCheckDeck)![0](event, client, jest.fn());
 
@@ -633,7 +634,7 @@ describe('ReplayRecoverService deck recovery seats', () => {
       pos: 1,
       sendChat: jest.fn(),
     };
-    const event = new RoomCheckDeck(room, client, deck, {} as any);
+    const event = new RoomCheckDeck(room, client, deck);
 
     await middlewares.get(RoomCheckDeck)![0](event, client, jest.fn());
 

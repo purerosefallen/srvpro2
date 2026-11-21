@@ -15,3 +15,9 @@ export const DefaultHostinfo: HostInfo = {
   no_watch: 0,
   auto_death: 0,
 };
+
+declare module 'ygopro-msg-encode' {
+  interface HostInfo {
+    sideins?: number;
+  }
+}

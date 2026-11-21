@@ -1,6 +1,7 @@
 import cryptoRandomString from 'crypto-random-string';
 import * as fs from 'node:fs/promises';
 import { h } from 'koishi';
+import { serviceEndpoint } from '../../utility/service-endpoint';
 import { ChatColor } from 'ygopro-msg-encode';
 import WebSocket from 'ws';
 import { Context } from '../../app';
@@ -38,7 +39,6 @@ export class WindBotProvider {
   public version = this.ctx.config.getInt('YGOPRO_VERSION');
   public botlistPath = this.ctx.config.getString('WINDBOT_BOTLIST');
 
-  private bots: WindbotData[] = [];
   private tokenDataMap = new Map<string, WindbotJoinTokenData>();
   private roomTokenMap = new Map<string, Set<string>>();
   private clientHandler = this.ctx.get(() => ClientHandler);
@@ -69,7 +69,6 @@ export class WindBotProvider {
         },
         true,
       );
-    await this.loadBotList();
   }
 
   private registerKoishiCommand() {
@@ -110,13 +109,9 @@ export class WindBotProvider {
       }
 
       const botName = (name || '').trim() || undefined;
-      if (botName && !this.getBotByNameOrDeck(botName)) {
-        return this.asRedError('#{windbot_deck_not_found}');
-      }
-      if (!botName && !this.getRandomBot()) {
-        return this.asRedError('#{windbot_deck_not_found}');
-      }
-      await this.requestWindbotJoin(room, botName);
+      const bot = this.selectBot(await this.loadBotList(), botName);
+      if (!bot) return this.asRedError('#{windbot_deck_not_found}');
+      await this.requestWindbotJoin(room, bot);
     });
   }
 
@@ -124,21 +119,10 @@ export class WindBotProvider {
     return this.enabled;
   }
 
-  getRandomBot() {
-    const visibleBots = this.bots.filter((bot) => !bot.hidden);
-    if (!visibleBots.length) {
-      return undefined;
-    }
-    const index = Math.floor(Math.random() * visibleBots.length);
-    return visibleBots[index];
-  }
-
-  getBotByNameOrDeck(name: string) {
-    return this.bots.find((bot) => bot.name === name || bot.deck === name);
-  }
-
-  getBots() {
-    return this.bots.filter((bot) => !bot.hidden);
+  selectBot(bots: WindbotData[], name?: string) {
+    if (name) return bots.find((bot) => bot.name === name || bot.deck === name);
+    const visible = bots.filter((bot) => !bot.hidden);
+    return visible[Math.floor(Math.random() * visible.length)];
   }
 
   issueJoinToken(roomName: string, windbot: WindbotData) {
@@ -203,15 +187,9 @@ export class WindBotProvider {
 
   async requestWindbotJoin(
     room: Room,
-    botname?: string,
+    bot: WindbotData,
     options: RequestWindbotJoinOptions = {},
   ) {
-    const bot =
-      (botname && this.getBotByNameOrDeck(botname)) || this.getRandomBot();
-    if (!bot) {
-      await room.sendChat('#{windbot_deck_not_found}', ChatColor.RED);
-      return false;
-    }
     if (!room.windbot) {
       room.windbot = {
         name: '',
@@ -376,33 +354,25 @@ export class WindBotProvider {
     }
   }
 
-  private async loadBotList() {
+  async loadBotList(): Promise<WindbotData[]> {
     try {
-      const text = await fs.readFile(this.botlistPath, 'utf-8');
-      const parsed = JSON.parse(text) as {
-        windbots?: WindbotData[];
-      };
-      const loadedBots = parsed?.windbots;
-      if (!Array.isArray(loadedBots)) {
-        this.logger.warn(
-          { botlistPath: this.botlistPath },
-          'Windbot botlist format invalid',
-        );
-        return;
-      }
-      this.bots = loadedBots.filter(
-        (bot) =>
+      const data = this.botlistPath
+        ? JSON.parse(await fs.readFile(this.botlistPath, 'utf8'))
+        : (
+            await this.ctx.http.get(
+              new URL('bots', serviceEndpoint(this.endpoint, 'http')).href,
+              { timeout: 10000 },
+            )
+          ).data;
+      if (!Array.isArray(data?.windbots))
+        throw new Error('Invalid WindBot list');
+      return data.windbots.filter(
+        (bot: WindbotData) =>
           bot && typeof bot.name === 'string' && typeof bot.deck === 'string',
       );
-      this.logger.info(
-        { count: this.bots.length, botlistPath: this.botlistPath },
-        'Loaded windbot botlist',
-      );
     } catch (error) {
-      this.logger.warn(
-        { botlistPath: this.botlistPath, error: (error as Error).toString() },
-        'Failed to load windbot botlist',
-      );
+      this.logger.warn({ error: String(error) }, 'Failed to load WindBot list');
+      return [];
     }
   }
 }

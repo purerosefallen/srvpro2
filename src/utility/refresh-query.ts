@@ -1,6 +1,4 @@
-import { _OcgcoreConstants } from 'koishipro-core.js';
-
-const { OcgcoreScriptConstants } = _OcgcoreConstants;
+import { OcgcoreScriptConstants } from 'ygopro-msg-encode';
 
 export function splitRefreshLocations(location: number) {
   const bits = [

@@ -1,6 +1,6 @@
 import { AppContext, createAppContext } from 'nfkit';
 import { ContextState } from '../app';
-import { YGOProResourceLoader } from '../ygopro';
+import { AngelusService } from '../angelus';
 import { DefaultHostInfoProvider } from './default-hostinfo-provder';
 import { RoomManager } from './room-manager';
 import { DefaultDeckChecker } from './default-deck-checker';
@@ -13,7 +13,7 @@ import { ReplayEncodeService } from '../replay';
 
 export const RoomModule = createAppContext<ContextState>()
   .provide(DefaultHostInfoProvider)
-  .provide(YGOProResourceLoader)
+  .provide(AngelusService)
   .provide(RoomManager)
   .provide(DefaultDeckChecker)
   .provide(DefaultDeckShuffler)

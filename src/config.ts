@@ -58,12 +58,10 @@ export const defaultConfig = {
   // Proxy URL for outbound HTTP(S) requests.
   // Format: proxy URL string (e.g. http://127.0.0.1:7890). Empty means no proxy.
   USE_PROXY: '',
-  // YGOPro resource directory (scripts, DB, etc.). Format: filesystem path string.
-  YGOPRO_PATH: './ygopro',
-  // YGOPro resource refresh interval. Format: integer string in minutes.
-  YGOPRO_RESOURCE_REFRESH_MINUTES: '10',
-  // Extra script directory. Format: filesystem path string. Empty means disabled.
-  EXTRA_SCRIPT_PATH: '',
+  // Angelus service base URL, for example http://localhost:3001.
+  ANGELUS_ENDPOINT: '',
+  // Optional x-server-token for Angelus HTTP and WebSocket requests.
+  ANGELUS_TOKEN: '',
   // Main deck minimum size. Format: integer string.
   DECK_MAIN_MIN: '40',
   // Main deck maximum size. Format: integer string.
@@ -77,8 +75,6 @@ export const defaultConfig = {
   // Enable ocgcore debug logs.
   // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.
   OCGCORE_DEBUG_LOG: '0',
-  // OCGCore wasm file path. Format: filesystem path string. Empty means use default wasm loading.
-  OCGCORE_WASM_PATH: '',
   // Welcome message sent when players join. Format: plain string.
   WELCOME: '',
   // Enable tips feature.
@@ -117,8 +113,8 @@ export const defaultConfig = {
   // Enable windbot feature.
   // Boolean parse rule (default true): only '0'/'false'/'null' => false, otherwise true.
   ENABLE_WINDBOT: '0',
-  // Windbot bot list path. Format: filesystem path string.
-  WINDBOT_BOTLIST: './windbot/bots.json',
+  // Optional bot list file. Empty reads GET /bots from WINDBOT_ENDPOINT on demand.
+  WINDBOT_BOTLIST: '',
   // Spawn built-in windbot server mode process.
   // Effective only when ENABLE_WINDBOT is true.
   // Boolean parse rule (default false): ''/'0'/'false'/'null' => false, otherwise true.

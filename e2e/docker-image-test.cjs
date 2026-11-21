@@ -13,9 +13,18 @@ const room = `NF#${randomBytes(6).toString('hex')}`;
 const artifacts = path.join(root, 'output', 'docker-image-test', runId);
 const resources = fs.mkdtempSync(path.join(os.tmpdir(), 'srvpro2-image-'));
 const image = process.env.SRVPRO_IMAGE || `srvpro2-image-test:${runId}`;
-const windbot =
-  process.env.WINDBOT_IMAGE ||
-  'git-registry.moenext.com/nanahira/windbot:master';
+const windbot = process.env.WINDBOT_IMAGE || `srvpro2-windbot-test:${runId}`;
+const angelus = process.env.ANGELUS_IMAGE || `srvpro2-angelus-test:${runId}`;
+const builds = [
+  [image, '.', process.env.SRVPRO_IMAGE, []],
+  [angelus, '../ygoangelus', process.env.ANGELUS_IMAGE, []],
+  [
+    windbot,
+    '../ygopro/windbot',
+    process.env.WINDBOT_IMAGE,
+    ['--build-arg', 'NO_RESOURCE=1'],
+  ],
+];
 const abort = new AbortController();
 const startedAt = Date.now();
 const summary = {
@@ -33,6 +42,7 @@ const envFile = path.join(artifacts, 'empty.env');
 fs.writeFileSync(envFile, '');
 const env = {
   ...process.env,
+  TEST_ANGELUS_IMAGE: angelus,
   TEST_SRVPRO_IMAGE: image,
   TEST_WINDBOT_IMAGE: windbot,
   TEST_RESOURCE_DIR: resources,
@@ -163,19 +173,29 @@ async function imageProbe() {
         }),
       );
     } else {
+      let room = process.argv[3];
+      if (process.argv[2] === 'player') {
+        const result = await client.query(
+          'SELECT r.name FROM duel_record r JOIN duel_record_player p ON p."duelRecordId"=r.id WHERE p.name=$1 AND r."deleteTime" IS NULL',
+          [room],
+        );
+        assert.equal(result.rowCount, 1);
+        room = result.rows[0].name;
+      }
       const records = await client.query(
         `SELECT id, name, "roomIdentifier", "duelCount", "winReason", "startTime", "endTime", "hostInfo", "schemaVersion",
           octet_length(decode(messages, 'base64')) AS "messageBytes",
           octet_length(decode(responses, 'base64')) AS "responseBytes",
-          octet_length(decode(seed, 'base64')) AS "seedBytes"
+          octet_length(decode(seed, 'base64')) AS "seedBytes",
+          encode(decode(seed, 'base64'), 'hex') AS "seedHex"
          FROM duel_record WHERE name = $1 AND "deleteTime" IS NULL ORDER BY id`,
-        [process.argv[3]],
+        [room],
       );
       const players = await client.query(
         `SELECT p.id, p.name, p.pos, p.winner, p.score, p."isFirst", p."duelRecordId", p."startDeckMainc", p."ingameDeckMainc"
          FROM duel_record_player p JOIN duel_record r ON r.id = p."duelRecordId"
          WHERE r.name = $1 AND r."deleteTime" IS NULL AND p."deleteTime" IS NULL ORDER BY p.pos`,
-        [process.argv[3]],
+        [room],
       );
       console.log(
         JSON.stringify({ records: records.rows, players: players.rows }),
@@ -186,19 +206,19 @@ async function imageProbe() {
   }
 }
 
-async function probe(action) {
+async function probe(action, lookup = room) {
   const source = `(${imageProbe.toString()})().catch(error => { console.error(error); process.exitCode = 1; });`;
   const result = await compose(
-    ['exec', '-T', 'srvpro2', 'node', '-', action, room],
+    ['exec', '-T', 'srvpro2', 'node', '-', action, lookup],
     { input: source, label: action },
   );
   return JSON.parse(result);
 }
 
-function checkRecords(data, results) {
+function checkRecords(data, results, expectedRoom = room) {
   assert.equal(data.records.length, 1, 'Expected exactly one duel record');
   const record = data.records[0];
-  assert.equal(record.name, room);
+  assert.equal(record.name, expectedRoom);
   assert.equal(record.duelCount, 1);
   assert.notEqual(record.winReason, null, 'Duel must be finished');
   const start = Date.parse(record.startTime);
@@ -227,29 +247,26 @@ function checkRecords(data, results) {
 async function main() {
   console.log(`Docker image acceptance: ${artifacts}`);
   try {
-    if (!process.env.SRVPRO_IMAGE) {
-      console.log('Building the complete Node 26 image (see build log)...');
-      await docker(
-        [
-          'build',
-          '--pull',
-          '--progress=plain',
-          '--build-arg',
-          'NO_RESOURCE=0',
-          '-t',
-          image,
-          '.',
-        ],
-        { timeout: 30 * 60_000, label: 'build' },
-      );
+    for (const [tag, context, override, args] of builds) {
+      if (!override)
+        await docker(
+          ['build', '--progress=plain', ...args, '-t', tag, context],
+          {
+            timeout: 30 * 60_000,
+            label: 'build-' + path.basename(path.resolve(context)),
+          },
+        );
     }
-    console.log('Pulling PostgreSQL and the existing WindBot image...');
-    await compose(['pull', 'postgres', 'windbot-a', 'windbot-b'], {
-      timeout: 10 * 60_000,
-      label: 'pull',
-    });
+    await compose(['pull', 'postgres'], { timeout: 600000 });
     summary.images = JSON.parse(
-      await docker(['image', 'inspect', image, windbot, 'postgres:17-alpine']),
+      await docker([
+        'image',
+        'inspect',
+        image,
+        angelus,
+        windbot,
+        'postgres:17-alpine',
+      ]),
     ).map(({ Id, RepoTags, RepoDigests, Architecture, Os }) => ({
       Id,
       RepoTags,
@@ -273,7 +290,7 @@ async function main() {
     );
     await compose([
       'cp',
-      'srvpro2:/usr/src/app/ygopro/cards.cdb',
+      'angelus:/app/ygopro/cards.cdb',
       path.join(resources, 'cards.cdb'),
     ]);
     summary.cardsSha256 = createHash('sha256')
@@ -330,8 +347,7 @@ async function main() {
     }
     assert.ok(
       (results['WindBot-A'] === 'Win' && results['WindBot-B'] === 'Lose') ||
-        (results['WindBot-A'] === 'Lose' && results['WindBot-B'] === 'Win') ||
-        (results['WindBot-A'] === 'Draw' && results['WindBot-B'] === 'Draw'),
+        (results['WindBot-A'] === 'Lose' && results['WindBot-B'] === 'Win'),
       'WindBot results disagree',
     );
     summary.results = results;
@@ -361,6 +377,86 @@ async function main() {
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
+    await compose(['up', '-d', '--wait', 'windbot']);
+    const catalog = JSON.parse(
+      await compose([
+        'exec',
+        '-T',
+        'srvpro2',
+        'node',
+        '-e',
+        "fetch('http://windbot:2399/bots').then(r=>r.text()).then(console.log)",
+      ]),
+    );
+    const opponent = catalog.windbots.find((bot) => bot.deck === 'Burn').name;
+    for (const name of ['HumanPlayer', 'UndoPlayer']) {
+      let results;
+      if (name === 'HumanPlayer') {
+        const log = await compose(
+          [
+            'run',
+            '--rm',
+            '--no-deps',
+            'windbot-b',
+            'ServerMode=false',
+            'Name=' + name,
+            'Deck=Blue-Eyes',
+            'Host=srvpro2',
+            'Port=7911',
+            'HostInfo=AI#Burn',
+            'Version=4962',
+            'Hand=1',
+            'Chat=false',
+            'DbPath=/test-resources/cards.cdb',
+          ],
+          { timeout: 600000, label: name },
+        );
+        const outcome = log.match(
+          /Duel finished against (.*), result: (Win|Lose)/,
+        );
+        assert.ok(
+          log.includes('Duel started:') && outcome,
+          'Human versus bot duel did not finish',
+        );
+        assert.equal(outcome[1], opponent);
+        results = {
+          [name]: outcome[2],
+          [opponent]: outcome[2] === 'Win' ? 'Lose' : 'Win',
+        };
+      } else {
+        await compose(['run', '--rm', '--no-deps', 'undo-player'], {
+          timeout: 60000,
+          label: name,
+        });
+        results = { [name]: 'Lose', [opponent]: 'Win' };
+      }
+      const deadline = Date.now() + 30000;
+      for (;;) {
+        try {
+          const data = await probe('player', name);
+          assert.match(data.records[0].name, /^AI(?:,ROCK)?#/);
+          checkRecords(data, results, data.records[0].name);
+          if (name === 'UndoPlayer') {
+            const seed = Buffer.alloc(32);
+            for (let i = 0; i < 8; ++i) seed.writeUInt32LE(i + 1, i * 4);
+            assert.equal(data.records[0].seedHex, seed.toString('hex'));
+            assert.equal(data.records[0].winReason, 0);
+          }
+          const logs = await compose(['logs', '--no-color', 'srvpro2']);
+          const finalized = logs
+            .split('Room finalized and removed')
+            .slice(1)
+            .some((part) => part.slice(0, 500).includes(data.records[0].name));
+          assert.ok(finalized, 'AI room was not finalized');
+          summary[name] = data;
+          saveJson(name + '.json', data);
+          break;
+        } catch (error) {
+          if (Date.now() >= deadline) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      }
+    }
     summary.status = 'passed';
     console.log(
       `PASS: ${JSON.stringify(results)}, completed duel record ${summary.database.records[0].id}`,
@@ -385,9 +481,10 @@ async function main() {
         }
       }
     }
-    if (!process.env.SRVPRO_IMAGE) {
+    for (const [tag, , override] of builds) {
+      if (override) continue;
       try {
-        await docker(['image', 'rm', image], {
+        await docker(['image', 'rm', tag], {
           cleanup: true,
           label: 'image-cleanup',
         });

@@ -1,5 +1,7 @@
 import { HostInfo } from 'ygopro-msg-encode';
-import { OcgcoreDuelOptionFlag } from 'koishipro-core.js';
+// YRP option bits from ocgcore/common.h.
+const DUEL_PSEUDO_SHUFFLE = 0x10;
+const DUEL_TAG_MODE = 0x20;
 
 /**
  * Calculate duel options from HostInfo
@@ -12,11 +14,11 @@ export function calculateDuelOptions(hostinfo: HostInfo): number {
   let opt = hostinfo.duel_rule << 16;
 
   if (hostinfo.no_shuffle_deck) {
-    opt |= OcgcoreDuelOptionFlag.PseudoShuffle;
+    opt |= DUEL_PSEUDO_SHUFFLE;
   }
 
   if (hostinfo.mode & 0x2) {
-    opt |= OcgcoreDuelOptionFlag.TagMode;
+    opt |= DUEL_TAG_MODE;
   }
 
   return opt;

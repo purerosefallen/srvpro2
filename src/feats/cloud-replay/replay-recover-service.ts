@@ -11,10 +11,6 @@ import {
   YGOProMsgRetry,
   YGOProStocGameMsg,
 } from 'ygopro-msg-encode';
-import {
-  YGOProLFListError,
-  YGOProLFListErrorReason,
-} from 'ygopro-lflist-encode';
 import { Context } from '../../app';
 import { Client } from '../../client';
 import {
@@ -87,16 +83,6 @@ const PHASE_VALUES: Record<ReplayRecoverPhaseCode, number> = {
   EP: OcgcoreCommonConstants.PHASE_END,
 };
 const TAG_MODE_BIT = 0x2;
-
-class RecoverDeckBadError extends YGOProLFListError {
-  constructor() {
-    super(YGOProLFListErrorReason.LFLIST, 0);
-  }
-
-  toPayload() {
-    return 0;
-  }
-}
 
 export class ReplayRecoverService {
   private logger = this.ctx.createLogger(this.constructor.name);
@@ -215,7 +201,7 @@ export class ReplayRecoverService {
       );
       if (!recordPlayer) {
         await client.sendChat('#{deck_incorrect_reconnect}', ChatColor.RED);
-        return event.use(new RecoverDeckBadError());
+        return event.reject();
       }
 
       return current;

@@ -1,4 +1,3 @@
-import { CardReader } from 'koishipro-core.js';
 import YGOProDeck from 'ygopro-deck-encode';
 import { Client } from '../../client';
 import { ValueContainer } from '../../utility/value-container';
@@ -10,7 +9,6 @@ export class RoomSideCheck extends ValueContainer<boolean> {
     public client: Client,
     public deck: YGOProDeck,
     public startDeck: YGOProDeck,
-    public cardReader: CardReader,
   ) {
     super(false);
   }

@@ -67,7 +67,7 @@ export class RefreshFieldService {
       return;
     }
     await client.send(field);
-    if (!this.hasOcgcore(room)) {
+    if (!this.hasAngelus(room)) {
       return;
     }
     await this.sendRefreshMessages(client, room);
@@ -81,10 +81,10 @@ export class RefreshFieldService {
     }
 
     for (let igp = 0; igp < 2; ++igp) {
-      if (!this.hasOcgcore(room)) {
+      if (!this.hasAngelus(room)) {
         return;
       }
-      const deckQuery = await room.ocgcore.queryFieldCard({
+      const deckQuery = await room.angelus.queryFieldCard({
         player: igp,
         location: OcgcoreScriptConstants.LOCATION_DECK,
         queryFlag:
@@ -209,10 +209,10 @@ export class RefreshFieldService {
   private async requestField(
     room: Room,
   ): Promise<YGOProStocGameMsg | undefined> {
-    if (!room.ocgcore) {
+    if (!room.angelus) {
       return undefined;
     }
-    const info = await room.ocgcore.queryFieldInfo();
+    const info = await room.angelus.queryFieldInfo();
     return new YGOProStocGameMsg().fromPartial({
       msg: info.field,
     });
@@ -235,7 +235,7 @@ export class RefreshFieldService {
 
     for (const location of locations) {
       for (const player of players) {
-        if (!this.hasOcgcore(room)) {
+        if (!this.hasAngelus(room)) {
           return;
         }
         await room.refreshLocations(
@@ -246,8 +246,8 @@ export class RefreshFieldService {
     }
   }
 
-  private hasOcgcore(room: Room) {
-    return !!room.ocgcore;
+  private hasAngelus(room: Room) {
+    return !!room.angelus;
   }
 
   private findLastHintForClient(

@@ -1,3 +1,4 @@
+import type { DuelClock } from './timer-state';
 import YGOProDeck from 'ygopro-deck-encode';
 import { YGOProYrp, ReplayHeader } from 'ygopro-yrp-encode';
 import {
@@ -35,6 +36,8 @@ export class DuelRecord {
   winReason?: number;
   responses: Buffer[] = [];
   messages: YGOProMsgBase[] = [];
+  readonly choiceClocks = new WeakMap<YGOProMsgResponseBase, DuelClock>();
+  readonly messageBytes = new WeakMap<YGOProMsgBase, Uint8Array>();
 
   toSwappedPlayers() {
     if (!this.isSwapped) {

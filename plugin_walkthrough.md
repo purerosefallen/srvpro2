@@ -35,7 +35,7 @@
 
 ## 概述
 
-SRVPro2 是 SRVPro（YGOPro 网络对战服务器）的下一代实现。与上一代「夹在客户端和 ygopro server 之间」的代理模式不同，SRVPro2 **直接通过 WASM 操作 ocgcore**，同时保留了相似的功能框架。
+SRVPro2 是 SRVPro（YGOPro 网络对战服务器）的下一代实现。与上一代「夹在客户端和 ygopro server 之间」的代理模式不同，SRVPro2 **通过 Angelus 的 HTTP 和 WebSocket 接口使用游戏资源与决斗内核**，同时保留了相似的功能框架。
 
 核心技术栈：
 
@@ -44,7 +44,7 @@ SRVPro2 是 SRVPro（YGOPro 网络对战服务器）的下一代实现。与上�
 | **nfkit** | IoC 容器、事件触发器、中间件调度 |
 | **typed-reflector** | 装饰器元数据 |
 | **ygopro-msg-encode** | YGOPro 协议编解码 |
-| **koishipro-core.js** | OCGCore WASM 绑定 |
+| **AngelusService** | 资源 HTTP 接口与单盘 WS 客户端 |
 | **yuzuthread** | 多线程 Worker |
 | **koishi** | 聊天框架（用于 i18n 和 h 函数） |
 | **TypeORM** | 数据库 ORM |
@@ -265,7 +265,6 @@ export class MyPlugin extends BasePlugin {
 | `this.ctx.aragami` | `AragamiService` | Aragami 实例 |
 | `this.ctx.router` | `KoaService` | Koa Router（HTTP API） |
 | `this.ctx.koa` | `KoaService` | Koa 应用实例 |
-| `this.ctx.SQL` | `SqljsLoader` | SQL.js 实例 |
 | `this.ctx.database` | `TypeormLoader` | TypeORM DataSource |
 
 ---
@@ -488,7 +487,7 @@ const room = await roomManager.findOrCreateByName(name, hostinfo?);
 | `OnRoomSidingReady` | 换副完成 | — |
 | `OnRoomWin` | 单局胜负判定后 | `winMsg`, `winMatch`, `wasSwapped` |
 | `OnRoomFinalize` | 房间即将销毁 | — |
-| `RoomCheckDeck` | 检查卡组合法性 | `client`, `deck`, `cardReader`（`ValueContainer`） |
+| `RoomCheckDeck` | 检查卡组合法性 | `client`, `deck`（`ValueContainer`） |
 
 ---
 
@@ -1017,7 +1016,6 @@ logger.error({ error }, 'Error');
 | `RoomManager` | `this.ctx.get(() => RoomManager)` | 房间管理器 |
 | `KoaService` | `this.ctx.router / this.ctx.koa` | HTTP API |
 | `TypeormLoader` | `this.ctx.database` | 数据库 |
-| `SqljsLoader` | `this.ctx.SQL` | SQL.js |
 | `I18nService` | `this.ctx.get(() => I18nService)` | 国际化 |
 | `FileResourceService` | `this.ctx.get(() => FileResourceService)` | 文件资源 |
 | `YGOProResourceLoader` | `this.ctx.get(() => YGOProResourceLoader)` | YGOPro 资源（卡片数据库、脚本等） |

@@ -25,16 +25,14 @@ altVersions:
   - 2330
   - 2331
 useProxy: ""
-ygoproPath: ./ygopro
-ygoproResourceRefreshMinutes: 10
-extraScriptPath: ""
+angelusEndpoint: ""
+angelusToken: ""
 deckMainMin: 40
 deckMainMax: 60
 deckExtraMax: 15
 deckSideMax: 15
 deckMaxCopies: 3
 ocgcoreDebugLog: 0
-ocgcoreWasmPath: ""
 welcome: ""
 enableTips: 1
 tipsGet: ""
@@ -51,7 +49,7 @@ dialoguesGetCustom: ""
 enableBadwords: 1
 badwordsGet: ""
 enableWindbot: 0
-windbotBotlist: ./windbot/bots.json
+windbotBotlist: ""
 windbotSpawn: 0
 windbotEndpoint: http://127.0.0.1:2399
 windbotMyIp: 127.0.0.1

@@ -1,10 +1,8 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { pbkdf2Sync } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { createServer, connect } from 'node:net';
 import { join } from 'node:path';
 import { Client } from 'pg';
-import { YGOProLFList } from 'ygopro-lflist-encode';
 
 export const COMPOSE_FILE = join(__dirname, 'docker-compose.yml');
 export const OWNER_USERNAME = 'srvpro2_owner';
@@ -13,21 +11,8 @@ export const LEGACY_USERNAME = 'e2e';
 export const LEGACY_PASSWORD = 'e2e-pass';
 const E2E_LFLIST_NAME = '2025.10';
 
-function findLFListIndex(name: string): number {
-  const source = readFileSync(
-    join(__dirname, '../../ygopro/lflist.conf'),
-    'utf-8',
-  );
-  const index = new YGOProLFList()
-    .fromText(source)
-    .items.findIndex((item) => item.name === name);
-  if (index < 0) {
-    throw new Error(`YGOPro LFList ${JSON.stringify(name)} was not found`);
-  }
-  return index;
-}
-
 type Ports = {
+  angelus: number;
   postgres: number;
   redis: number;
   accounts: number;
@@ -58,13 +43,14 @@ export class E2EStack {
   private challongeApiKey = '';
   private challongeTournamentId = '';
   private windbotSequence = 0;
-  private readonly lflistIndex = findLFListIndex(E2E_LFLIST_NAME);
+  private lflistIndex = 0;
 
   async up() {
     const ports = await Promise.all(
-      Array.from({ length: 6 }, () => reserveFreePort()),
+      Array.from({ length: 7 }, () => reserveFreePort()),
     );
     this.ports = {
+      angelus: ports[6],
       postgres: ports[0],
       redis: ports[1],
       accounts: ports[2],
@@ -78,11 +64,21 @@ export class E2EStack {
       '-d',
       '--build',
       '--wait',
+      'angelus',
       'postgres',
       'redis',
       'accounts',
       'tabulator',
     ]);
+    const response = await fetch(
+      'http://127.0.0.1:' + this.ports.angelus + '/lflists',
+    );
+    const body = await response.json();
+    this.lflistIndex = body.data.lists.findIndex(
+      (list) => list.name === E2E_LFLIST_NAME,
+    );
+    if (this.lflistIndex < 0)
+      throw new Error('Missing tournament banlist ' + E2E_LFLIST_NAME);
     await this.seedOwner();
   }
 
@@ -231,6 +227,7 @@ export class E2EStack {
   private composeEnv(): NodeJS.ProcessEnv {
     return {
       ...process.env,
+      ANGELUS_HOST_PORT: String(this.ports.angelus),
       PG_HOST_PORT: String(this.ports.postgres),
       REDIS_HOST_PORT: String(this.ports.redis),
       ACCOUNT_HOST_PORT: String(this.ports.accounts),
