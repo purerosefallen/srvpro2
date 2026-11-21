@@ -1,8 +1,8 @@
 # SRVPro2
 
-SRVPro2 管理 YGOPro 玩家的连接、房间、比赛和录像。develop 版通过 HTTP 调用 Angelus 查询卡片、选择禁限卡表和验卡，每盘开局时通过独立 WebSocket 驱动远端内核。
+SRVPro2 管理 YGOPro 玩家的连接、房间、比赛和录像。它通过 Angelus 的 HTTP 接口查询卡片、选择禁限卡表和验卡，每盘开局时建立独立的 WebSocket 连接来驱动决斗内核。
 
-## 使用 Docker Compose 启动 develop 版
+## 使用 Docker Compose 启动 SRVPro2
 
 下面的单服示例使用 `git-registry.moenext.com/nanahira/ygoangelus` 提供内核和默认游戏资源、WindBot 提供人机、PostgreSQL 保存录像。玩家连接宿主机的 TCP 7911。Angelus 与 WindBot 只需在 Compose 网络内可达。
 
@@ -18,7 +18,7 @@ cd srvpro2
 ```yaml
 services:
   angelus:
-    image: git-registry.moenext.com/nanahira/ygoangelus:develop
+    image: git-registry.moenext.com/nanahira/ygoangelus:latest
     restart: always
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
@@ -28,7 +28,7 @@ services:
 
   windbot:
     restart: always
-    image: git-registry.moenext.com/nanahira/windbot:develop
+    image: git-registry.moenext.com/nanahira/windbot:latest
 
   postgres:
     restart: always
@@ -42,7 +42,7 @@ services:
 
   srvpro2:
     restart: always
-    image: git-registry.moenext.com/nanahira/srvpro2:develop
+    image: git-registry.moenext.com/nanahira/srvpro2:latest
     depends_on:
       angelus:
         condition: service_healthy
@@ -125,7 +125,7 @@ docker compose down
 2. 增加上例的 Angelus 服务。默认镜像已含资源；有自定义资源时，把旧服务上相应的 CDB、`lflist.conf`、Lua、expansions 和 WASM 只读挂到 Angelus。其默认根目录为 `/app/ygopro`。配置多套资源时，在 Angelus 上设置 `YGOPRO_PATH` 并保留原来的搜索顺序，同时迁移 `EXTRA_SCRIPT_PATH`、`YGOPRO_RESOURCE_REFRESH_MINUTES`、`OCGCORE_WASM_PATH` 及对应路径。玩家数据、证书和数据库连接仍配置在 srvpro2。
 3. 在 srvpro2 填写必需的 `ANGELUS_ENDPOINT`，例如 `http://angelus:3001`。容器间连接使用服务名。可填 HTTP(S) 或 WS(S) 基础地址，srvpro2 会保留路径前缀并派生三个资源 API 和 `/duel`。
 4. 私有 Compose 网络可保持匿名。如果 Angelus 设置了 `SERVER_TOKEN`，在 srvpro2 设置相同的 `ANGELUS_TOKEN`，HTTP 请求和 WS 握手都会携带 `x-server-token`。
-5. 人机建议使用支持 `GET /bots` 的 WindBot develop，保持 `WINDBOT_BOTLIST` 为空。打开列表或召唤时 srvpro2 都向 2399 取最新列表。若有自维护名单，单独挂载文件并指定 `WINDBOT_BOTLIST`。WindBot 服务启动时读取自己的 `bots.json`，替换其文件后重启 WindBot。
+5. 人机建议使用支持 `GET /bots` 的 WindBot 镜像，保持 `WINDBOT_BOTLIST` 为空。打开列表或召唤时 srvpro2 都向 2399 取最新列表。若有自维护名单，单独挂载文件并指定 `WINDBOT_BOTLIST`。WindBot 服务启动时读取自己的 `bots.json`，替换其文件后重启 WindBot。
 6. 启动后用客户端建房、交牌，并用 `AI#Burn` 加入人机房验证开局。Angelus 的 `GET /readyz` 用于检查资源就绪。TLS 在本示例里关闭，启用时把证书挂到 srvpro2 的 SSL 目录。
 
 ## Docker 镜像验收
