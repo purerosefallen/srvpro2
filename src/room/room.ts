@@ -1371,7 +1371,7 @@ export class Room {
     if (![DuelStage.Begin, DuelStage.Siding].includes(this.duelStage)) {
       return false;
     }
-    if (this.playingPlayers.some((p) => !p.deck)) {
+    if (this.players.findIndex((player) => !player?.deck) >= 0) {
       return false;
     }
 
