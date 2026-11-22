@@ -63,6 +63,7 @@ function makeRoomManagerCtx(rejectMessage = '') {
     if (token === AngelusService) {
       return {
         lists: jest.fn(async () => []),
+        extraCards: jest.fn(async () => new Set<number>()),
       };
     }
     return undefined;
