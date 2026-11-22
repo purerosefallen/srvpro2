@@ -1,7 +1,11 @@
 import {
   ChatColor,
   NetPlayerType,
+  YGOProCtosHsStart,
   YGOProCtosHsToObserver,
+  YGOProCtosUpdateDeck,
+  YGOProStocDuelStart,
+  YGOProStocHsPlayerChange,
 } from 'ygopro-msg-encode';
 import YGOProDeck from 'ygopro-deck-encode';
 import {
@@ -10,8 +14,10 @@ import {
   DefaultFirstgo,
   DefaultSeeder,
   DuelRecord,
+  DuelStage,
   NoWatchGuard,
   OnRoomGameStart,
+  OnRoomMatchStart,
   Room,
   RoomDecideFirst,
   RoomDecideFirstgo,
@@ -388,6 +394,133 @@ describe('DefaultFirstgo', () => {
     await middlewares.get(RoomDecideFirstgo)(event, undefined, jest.fn());
 
     expect(event.value).toBeUndefined();
+  });
+});
+
+describe('Room start readiness', () => {
+  const deck = new YGOProDeck({ main: [], extra: [], side: [] });
+
+  function makePlayer(pos: number, ready = true) {
+    return {
+      pos,
+      name: `Player ${pos}`,
+      isHost: pos === 0,
+      deck: ready ? deck : undefined,
+      startDeck: deck,
+      send: jest.fn(),
+      prepareChangePacket: () => new YGOProStocHsPlayerChange(),
+    };
+  }
+
+  test.each([
+    { mode: 0, occupiedSlots: [0], lastSlot: 1 },
+    { mode: 2, occupiedSlots: [0, 2, 3], lastSlot: 1 },
+  ])(
+    'waits for the last seat in mode $mode',
+    async ({ mode, occupiedSlots, lastSlot }) => {
+      const { ctx, dispatch } = makeRoomManagerCtx();
+      const room = new Room(ctx, 'room', { mode, lflist: -1 });
+      const players = occupiedSlots.map((pos) => makePlayer(pos));
+      for (const player of players) {
+        room.players[player.pos] = player as any;
+      }
+      const observer = makePlayer(NetPlayerType.OBSERVER, false);
+      room.watchers.add(observer as any);
+      const start = new YGOProCtosHsStart();
+
+      await (room as any).onHsStart(players[0], start);
+
+      expect(room.duelStage).toBe(DuelStage.Begin);
+      expect(dispatch).not.toHaveBeenCalled();
+      for (const client of [...players, observer]) {
+        expect(client.send).not.toHaveBeenCalled();
+      }
+
+      room.players[lastSlot] = makePlayer(lastSlot) as any;
+      await (room as any).onHsStart(players[0], start);
+
+      expect(room.duelStage).toBe(DuelStage.Finger);
+      expect(observer.send).toHaveBeenCalledWith(
+        expect.any(YGOProStocDuelStart),
+      );
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.any(OnRoomMatchStart),
+        players[0],
+      );
+    },
+  );
+
+  test('waits for an occupied seat to become ready', async () => {
+    const { ctx, dispatch } = makeRoomManagerCtx();
+    const room = new Room(ctx, 'room', { lflist: -1 });
+    const host = makePlayer(0);
+    room.players[0] = host as any;
+    room.players[1] = makePlayer(1, false) as any;
+
+    await expect(room.startGame()).resolves.toBe(false);
+
+    expect(room.duelStage).toBe(DuelStage.Begin);
+    expect(host.send).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  test('starts a no-host room when the last player submits a deck', async () => {
+    const { ctx, dispatch } = makeRoomManagerCtx();
+    const room = new Room(ctx, 'room', { lflist: -1 });
+    room.noHost = true;
+    const first = makePlayer(0, false);
+    const second = makePlayer(1, false);
+    room.players[0] = first as any;
+    const update = new YGOProCtosUpdateDeck().fromPartial({ deck });
+
+    await (room as any).onUpdateDeck(first, update);
+
+    expect(room.duelStage).toBe(DuelStage.Begin);
+    expect(first.send).not.toHaveBeenCalledWith(
+      expect.any(YGOProStocDuelStart),
+    );
+
+    room.players[1] = second as any;
+    await (room as any).onUpdateDeck(second, update);
+
+    expect(room.duelStage).toBe(DuelStage.Finger);
+    expect(first.send).toHaveBeenCalledWith(expect.any(YGOProStocDuelStart));
+    expect(dispatch).toHaveBeenCalledWith(expect.any(OnRoomGameStart), first);
+  });
+
+  test('waits for every seat to submit a deck during siding', async () => {
+    const { ctx, dispatch } = makeRoomManagerCtx();
+    const room = new Room(ctx, 'room', { mode: 1, lflist: -1 });
+    const first = makePlayer(0, false);
+    const second = makePlayer(1, false);
+    room.duelStage = DuelStage.Siding;
+    room.duelRecords.push(
+      new DuelRecord(
+        [1],
+        [first, second].map(({ name }) => ({ name, deck })),
+        false,
+      ),
+    );
+    room.players[0] = first as any;
+    const update = new YGOProCtosUpdateDeck().fromPartial({ deck });
+
+    await (room as any).onUpdateDeck(first, update);
+
+    expect(room.duelStage).toBe(DuelStage.Siding);
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.any(OnRoomGameStart),
+      first,
+    );
+
+    room.players[1] = second as any;
+    await (room as any).onUpdateDeck(second, update);
+
+    expect(room.duelStage).toBe(DuelStage.Finger);
+    expect(dispatch).toHaveBeenCalledWith(expect.any(OnRoomGameStart), first);
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.any(OnRoomMatchStart),
+      first,
+    );
   });
 });
 
