@@ -113,7 +113,10 @@ export class RefreshFieldService {
         }
       }
     }
-    await room.sendTimeLimit(1 - room.getDuelPos(client), client);
+    const activeDuelPos = room.responsePos ?? room.getDuelPos(client);
+    // TIME_LIMIT also identifies the active bank. Replay it last for an
+    // opponent or Tag teammate reconnecting during somebody else's prompt.
+    await room.sendTimeLimit(1 - activeDuelPos, client);
 
     if (client === room.responsePlayer) {
       const lastHint = this.findLastHintForClient(client, room);
@@ -133,7 +136,9 @@ export class RefreshFieldService {
             ),
           }),
         );
-        await room.setResponseTimer(room.getDuelPos(client));
+        // Replaying the prompt must not extend either an existing readiness
+        // watchdog or an already-running response deadline.
+        await room.sendTimeLimit(activeDuelPos, client);
       }
     } else {
       await client.send(
@@ -141,7 +146,7 @@ export class RefreshFieldService {
           msg: new YGOProMsgWaiting(),
         }),
       );
-      await room.sendTimeLimit(room.getDuelPos(client), client);
+      await room.sendTimeLimit(activeDuelPos, client);
     }
   }
 

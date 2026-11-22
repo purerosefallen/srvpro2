@@ -1508,7 +1508,6 @@ export class Room {
       maxTimeMs,
       this.timerState.leftMs[originalDuelPos] + 1000,
     );
-    this.timerState.compensatorMs[originalDuelPos] += 1000;
     this.timerState.backedMs[originalDuelPos] -= 1000;
   }
 
@@ -1516,7 +1515,7 @@ export class Room {
     if (!this.hasTimeLimit || ![0, 1].includes(originalDuelPos)) {
       return;
     }
-    const leftTime = Math.max(0, this.timerState.leftMs[originalDuelPos] || 0);
+    const leftTime = this.timerState.remainingMs(originalDuelPos);
     const ingameDuelPos = this.getIngameDuelPosByDuelPos(originalDuelPos);
     const msg = new YGOProStocTimeLimit().fromPartial({
       player: ingameDuelPos,
@@ -1561,9 +1560,6 @@ export class Room {
     const leftTime = Math.max(0, this.timerState.leftMs[originalDuelPos] || 0);
     if (sendTimeLimit) {
       await this.sendTimeLimit(originalDuelPos);
-    }
-    if (leftTime <= 0) {
-      return this.onResponseTimeout(originalDuelPos);
     }
     this.timerState.schedule(originalDuelPos, leftTime, awaitingConfirm, () => {
       void this.onResponseTimeout(originalDuelPos).catch((error) => {
@@ -1830,7 +1826,6 @@ export class Room {
     const recoverMs = Math.max(0, this.hostinfo.time_limit) * 1000;
     for (const player of [0, 1] as const) {
       this.timerState.leftMs[player] = recoverMs;
-      this.timerState.compensatorMs[player] = recoverMs;
       this.timerState.backedMs[player] = recoverMs;
     }
   }
@@ -2222,22 +2217,10 @@ export class Room {
       return;
     }
 
-    const elapsedMs = this.timerState.elapsedMs();
     const player = this.timerState.runningPos;
-    if (
-      elapsedMs < 10_000 &&
-      elapsedMs <= this.timerState.compensatorMs[player]
-    ) {
-      this.timerState.compensatorMs[player] -= elapsedMs;
-    } else {
-      this.timerState.leftMs[player] = Math.max(
-        0,
-        this.timerState.leftMs[player] - elapsedMs,
-      );
-    }
-    this.timerState.awaitingConfirm = false;
+    // Settle the bounded readiness allowance before starting the decision
+    // clock. Do not solicit another tokenless acknowledgement.
     await this.setResponseTimer(player, {
-      settlePrevious: false,
       sendTimeLimit: false,
       awaitingConfirm: false,
     });
@@ -2250,7 +2233,7 @@ export class Room {
     if (
       this.responsePos == null ||
       client !== this.responsePlayer ||
-      !this.ocgcore || // || this.timerState.awaitingConfirm
+      !this.ocgcore ||
       !this.acceptResponse
     ) {
       return;
@@ -2265,6 +2248,15 @@ export class Room {
       rawResponse.length > MAX_RESPONSE_LENGTH
         ? rawResponse.subarray(0, MAX_RESPONSE_LENGTH)
         : rawResponse;
+    if (
+      this.hasTimeLimit &&
+      this.timerState.runningPos === responsePos &&
+      this.timerState.remainingMs(responsePos) <= 0
+    ) {
+      // A response can be queued before the timeout callback, or arrive without
+      // an ACK. Neither may bypass the server's deadline or earn a time refund.
+      return this.onResponseTimeout(responsePos);
+    }
     this.acceptResponse = false;
     this.lastDuelRecord.responses.push(response);
     if (this.hasTimeLimit) {
