@@ -1,6 +1,6 @@
 import type { DuelClock } from './timer-state';
 import YGOProDeck from 'ygopro-deck-encode';
-import { YGOProYrp, ReplayHeader } from 'ygopro-yrp-encode';
+import { YGOProYrp, ReplayHeader, ShuffleVersion } from 'ygopro-yrp-encode';
 import {
   HostInfo,
   NetPlayerType,
@@ -79,6 +79,9 @@ export class DuelRecord {
     header.id = REPLAY_ID_YRP2;
     header.version = PRO_VERSION;
     header.flag = REPLAY_COMPRESSED | REPLAY_UNIFORM;
+    header.shuffleVersion = room.hostinfo.no_shuffle_deck
+      ? ShuffleVersion.None
+      : ShuffleVersion.Other;
     if (isTag) {
       header.flag |= REPLAY_TAG;
     }
