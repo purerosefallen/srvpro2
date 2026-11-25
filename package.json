@@ -77,7 +77,7 @@
     "ws": "^8.19.0",
     "yaml": "^2.8.2",
     "ygopro-deck-encode": "^1.0.15",
-    "ygopro-msg-encode": "1.4.0",
+    "ygopro-msg-encode": "1.4.1",
     "ygopro-yrp-encode": "1.0.10",
     "yuzuthread": "^1.0.10"
   },
